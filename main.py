@@ -21,7 +21,7 @@ app.add_middleware(
 )
 
 BINANCE_BASE_URL = "https://data-api.binance.vision"
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 price_cache = {"data": None, "updated_at": 0}
 chart_cache = {"data": None, "updated_at": 0}
