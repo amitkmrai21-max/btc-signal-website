@@ -56,52 +56,185 @@
     </section>
 
     <section class="card chart-card">
-      <div class="chart-toolbar">
-        <h2>BTC Chart</h2>
+      <div class="chart-and-analyser-grid">
+        <div class="chart-panel">
+          <div class="chart-toolbar">
+            <h2>BTC Chart</h2>
 
-        <div class="timeframe-buttons" aria-label="BTC chart timeframe">
-          <button class="timeframe-btn" type="button" data-timeframe="1W">
-            Weekly
+            <div class="timeframe-buttons" aria-label="BTC chart timeframe">
+              <button class="timeframe-btn" type="button" data-timeframe="1W">
+                Weekly
+              </button>
+
+              <button
+                class="timeframe-btn active"
+                type="button"
+                data-timeframe="1D"
+              >
+                Daily
+              </button>
+
+              <button class="timeframe-btn" type="button" data-timeframe="1H">
+                Hourly
+              </button>
+
+              <button class="timeframe-btn" type="button" data-timeframe="15M">
+                15 Min
+              </button>
+            </div>
+
+            <div class="chart-controls" aria-label="Chart zoom controls">
+              <button id="zoomInBtn" class="chart-control-btn" type="button">
+                Zoom In
+              </button>
+
+              <button id="zoomOutBtn" class="chart-control-btn" type="button">
+                Zoom Out
+              </button>
+
+              <button id="resetZoomBtn" class="chart-control-btn" type="button">
+                Reset View
+              </button>
+            </div>
+          </div>
+
+          <p class="chart-help">
+            Mouse wheel or pinch to zoom. Drag to zoom-select. After zooming,
+            drag left/right to explore the chart.
+          </p>
+
+          <canvas id="btcChart"></canvas>
+        </div>
+
+        <aside class="chart-analyser-panel">
+          <div class="chart-analyser-heading">
+            <h2>AI Chart Analyser</h2>
+            <p>
+              Upload a BTC/crypto chart screenshot for educational Gemini AI
+              analysis.
+            </p>
+          </div>
+
+          <label class="chart-upload-label" for="chartImageInput">
+            Upload Chart Screenshot
+          </label>
+
+          <input
+            id="chartImageInput"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+          />
+
+          <img
+            id="chartImagePreview"
+            class="chart-image-preview"
+            alt="Selected chart preview"
+            hidden
+          />
+
+          <button id="analyseChartBtn" class="analyse-chart-btn" type="button">
+            Analyse with Gemini AI
+          </button>
+
+          <p id="chartAnalyseStatus" class="chart-analyse-status">
+            Upload PNG, JPG, or WEBP chart image. Maximum 8 MB.
+          </p>
+
+          <div id="chartAnalysisResult" class="chart-analysis-result" hidden>
+            <div class="chart-analysis-signal-row">
+              <span id="uploadedChartSignal" class="uploaded-chart-signal">
+                HOLD
+              </span>
+
+              <span
+                id="uploadedChartConfidence"
+                class="uploaded-chart-confidence"
+              >
+                Confidence: --%
+              </span>
+            </div>
+
+            <p><span>Risk</span><strong id="uploadedChartRisk">--</strong></p>
+            <p><span>Trend</span><strong id="uploadedChartTrend">--</strong></p>
+            <p><span>Pattern</span><strong id="uploadedChartPattern">--</strong></p>
+            <p><span>Support</span><strong id="uploadedChartSupport">--</strong></p>
+            <p><span>Resistance</span><strong id="uploadedChartResistance">--</strong></p>
+
+            <div class="uploaded-chart-copy">
+              <h3>AI Reason</h3>
+              <p id="uploadedChartReason">--</p>
+            </div>
+
+            <div class="uploaded-chart-copy">
+              <h3>Educational Entry Idea</h3>
+              <p id="uploadedChartEntry">--</p>
+            </div>
+
+            <div class="uploaded-chart-copy">
+              <h3>Invalidation Idea</h3>
+              <p id="uploadedChartInvalidation">--</p>
+            </div>
+
+            <p id="uploadedChartWarning" class="uploaded-chart-warning">
+              --
+            </p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="card rrg-card">
+      <div class="section-heading">
+        <div>
+          <h2>RRG-Style Relative Rotation</h2>
+          <p>
+            BTC benchmark vs ETH and SOL. Relative strength and momentum view,
+            not an official JdK RRG.
+          </p>
+        </div>
+
+        <div class="rrg-controls">
+          <button
+            id="rrg1hBtn"
+            class="rrg-timeframe-btn"
+            type="button"
+            data-rrg-timeframe="1h"
+          >
+            1 Hour
           </button>
 
           <button
-            class="timeframe-btn active"
+            id="rrg1dBtn"
+            class="rrg-timeframe-btn active"
             type="button"
-            data-timeframe="1D"
+            data-rrg-timeframe="1d"
           >
-            Daily
+            1 Day
           </button>
 
-          <button class="timeframe-btn" type="button" data-timeframe="1H">
-            Hourly
-          </button>
-
-          <button class="timeframe-btn" type="button" data-timeframe="15M">
-            15 Min
-          </button>
-        </div>
-
-        <div class="chart-controls" aria-label="Chart zoom controls">
-          <button id="zoomInBtn" class="chart-control-btn" type="button">
-            Zoom In
-          </button>
-
-          <button id="zoomOutBtn" class="chart-control-btn" type="button">
-            Zoom Out
-          </button>
-
-          <button id="resetZoomBtn" class="chart-control-btn" type="button">
+          <button id="rrgResetBtn" class="chart-control-btn" type="button">
             Reset View
           </button>
         </div>
       </div>
 
-      <p class="chart-help">
-        Mouse wheel/pinch to zoom. Drag on the chart to select a zoom area.
-        Hold Shift and drag to pan left or right.
+      <p id="rrgStatus" class="status-line">
+        Loading RRG-style rotation data...
       </p>
 
-      <canvas id="btcChart"></canvas>
+      <div class="rrg-chart-wrap">
+        <canvas id="rrgChart"></canvas>
+      </div>
+
+      <div class="rrg-legend">
+        <span class="rrg-legend-item btc-legend">BTC benchmark</span>
+        <span class="rrg-legend-item eth-legend">ETH</span>
+        <span class="rrg-legend-item sol-legend">SOL</span>
+        <span class="rrg-legend-note">
+          Leading: +RS/+Momentum · Weakening: +RS/-Momentum ·
+          Lagging: -RS/-Momentum · Improving: -RS/+Momentum
+        </span>
+      </div>
     </section>
 
     <section class="card ai-analysis-card">
@@ -154,7 +287,8 @@
         <div>
           <h2>Multi-Timeframe Signals</h2>
           <p>
-            Signal = action now. Trend = market direction, not a guaranteed entry.
+            Signal = action now. Trend = market direction, not a guaranteed
+            entry.
           </p>
         </div>
       </div>
@@ -238,7 +372,8 @@
         <div>
           <h2>Virtual Paper Trading (INR)</h2>
           <p>
-            Practice only. No real money, payment, bank, wallet or exchange order.
+            Practice only. No real money, payment, bank, wallet or exchange
+            order.
           </p>
         </div>
 
@@ -310,8 +445,8 @@
 
     <section class="disclaimer-card">
       <p id="disclaimerText">
-        Educational market analysis only. Not financial advice or an
-        automated trading instruction.
+        Educational market analysis only. Not financial advice or an automated
+        trading instruction.
       </p>
     </section>
   </main>
