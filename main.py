@@ -25,7 +25,7 @@ BINANCE_BASE_URL = "https://data-api.binance.vision"
 GEMINI_MODEL = "gemini-3.6-flash"
 
 price_cache = {"data": None, "updated_at": 0}
-chart_cache = {"data": None, "updated_at": 0}
+chart_cache = {"data": {}, "updated_at": 0}
 ai_signal_cache = {"data": None, "updated_at": 0}
 
 
@@ -132,11 +132,12 @@ def macd(values, fast=12, slow=26, signal=9):
         for fast_value, slow_value in zip(fast_series, slow_series)
         if fast_value is not None and slow_value is not None
     ]
-    signal_line_series = ema_series(macd_line_series, signal)
 
+    signal_line_series = ema_series(macd_line_series, signal)
     macd_line = macd_line_series[-1]
     signal_line = signal_line_series[-1]
     histogram = macd_line - signal_line
+
     previous_histogram = (
         macd_line_series[-2] - signal_line_series[-2]
         if len(macd_line_series) > 1
@@ -559,10 +560,12 @@ def safe_hold_signal(reason):
             "15m": {
                 "signal": "HOLD",
                 "summary": "Analysis unavailable.",
+                "key_level": "--",
             },
             "1h": {
                 "signal": "HOLD",
                 "summary": "Analysis unavailable.",
+                "key_level": "--",
             },
         },
         "disclaimer": (
@@ -586,8 +589,11 @@ def health():
 def btc_price():
     now = time.time()
 
-    if price_cache["data"] and now - price_cache["updated_at"] < 30:
-        return price_cache["data"]
+    if price_cache["data"] and now - price_cache["updated_at"] < 15:
+        return {
+            **price_cache["data"],
+            "cached": True,
+        }
 
     try:
         ticker = get_btc_ticker()
@@ -623,34 +629,61 @@ def btc_price():
 
 
 @app.get("/api/btc/chart")
-def btc_chart(days: int = 7):
+def btc_chart(days: int = 7, interval: str = "1h"):
     now = time.time()
 
-    if chart_cache["data"] and now - chart_cache["updated_at"] < 300:
-        return chart_cache["data"]
+    allowed_intervals = {"15m", "1h", "1d", "1w"}
+
+    if interval not in allowed_intervals:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported chart interval.",
+        )
+
+    safe_days = max(1, min(days, 3650))
+    cache_key = f"{interval}:{safe_days}"
+
+    candles_needed = {
+        "15m": min(max(safe_days * 96, 48), 1000),
+        "1h": min(max(safe_days * 24, 24), 1000),
+        "1d": min(max(safe_days, 7), 1000),
+        "1w": min(max(math.ceil(safe_days / 7), 8), 1000),
+    }[interval]
+
+    cached_chart = chart_cache["data"].get(cache_key)
+
+    if cached_chart and now - cached_chart["updated_at"] < 60:
+        return {
+            **cached_chart,
+            "cached": True,
+        }
 
     try:
-        hours = max(24, min(days * 24, 1000))
-        candles = get_btc_klines(interval="1h", limit=hours)
+        candles = get_btc_klines(
+            interval=interval,
+            limit=candles_needed,
+        )
 
         result = {
             "prices": [
                 [int(candle[0]), float(candle[4])]
                 for candle in candles
             ],
+            "interval": interval,
+            "days": safe_days,
             "source": "Binance",
             "cached": False,
             "updated_at": int(now),
         }
 
-        chart_cache["data"] = result
+        chart_cache["data"][cache_key] = result
         chart_cache["updated_at"] = now
         return result
 
     except requests.exceptions.RequestException as error:
-        if chart_cache["data"]:
+        if cached_chart:
             return {
-                **chart_cache["data"],
+                **cached_chart,
                 "cached": True,
                 "warning": (
                     "Live chart feed is temporarily unavailable. "
