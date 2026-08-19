@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import requests
+import time
 
 app = FastAPI(title="BTC Signal Website")
 
@@ -14,47 +15,126 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-COINGECKO_URL = "https://api.coingecko.com/api/v3"
+BINANCE_BASE_URL = "https://data-api.binance.vision"
+
+price_cache = {
+    "data": None,
+    "updated_at": 0,
+}
+
+chart_cache = {
+    "data": None,
+    "updated_at": 0,
+}
+
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "message": "BTC Signal Website backend running"}
+    return {
+        "status": "ok",
+        "message": "BTC Signal Website backend running",
+        "market_data_source": "Binance",
+    }
+
 
 @app.get("/api/btc/price")
 def btc_price():
+    now = time.time()
+
+    # Refresh Binance data only once per 30 seconds.
+    if price_cache["data"] and now - price_cache["updated_at"] < 30:
+        return price_cache["data"]
+
     try:
         response = requests.get(
-            f"{COINGECKO_URL}/simple/price",
-            params={
-                "ids": "bitcoin",
-                "vs_currencies": "usd",
-                "include_24hr_change": "true"
-            },
-            timeout=15
+            f"{BINANCE_BASE_URL}/api/v3/ticker/24hr",
+            params={"symbol": "BTCUSDT"},
+            timeout=15,
         )
         response.raise_for_status()
-        return response.json()
+        ticker = response.json()
+
+        result = {
+            "bitcoin": {
+                "usd": float(ticker["lastPrice"]),
+                "usd_24h_change": float(ticker["priceChangePercent"]),
+            },
+            "source": "Binance",
+            "cached": False,
+            "updated_at": int(now),
+        }
+
+        price_cache["data"] = result
+        price_cache["updated_at"] = now
+        return result
+
     except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch BTC price: {str(e)}")
+        if price_cache["data"]:
+            return {
+                **price_cache["data"],
+                "cached": True,
+                "warning": "Live market feed is temporarily unavailable. Showing last saved price.",
+            }
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch BTC price from Binance: {str(e)}",
+        )
+
 
 @app.get("/api/btc/chart")
 def btc_chart(days: int = 7):
+    now = time.time()
+
+    # 7-day hourly chart changes slowly; refresh at most once per 5 minutes.
+    if chart_cache["data"] and now - chart_cache["updated_at"] < 300:
+        return chart_cache["data"]
+
     try:
+        hours = max(24, min(days * 24, 1000))
+
         response = requests.get(
-            f"{COINGECKO_URL}/coins/bitcoin/market_chart",
+            f"{BINANCE_BASE_URL}/api/v3/klines",
             params={
-                "vs_currency": "usd",
-                "days": days,
-                "interval": "hourly"
+                "symbol": "BTCUSDT",
+                "interval": "1h",
+                "limit": hours,
             },
-            timeout=15
+            timeout=15,
         )
         response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch BTC chart: {str(e)}")
+        candles = response.json()
 
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+        result = {
+            "prices": [
+                [int(candle[0]), float(candle[4])]
+                for candle in candles
+            ],
+            "source": "Binance",
+            "cached": False,
+            "updated_at": int(now),
+        }
+
+        chart_cache["data"] = result
+        chart_cache["updated_at"] = now
+        return result
+
+    except requests.exceptions.RequestException as e:
+        if chart_cache["data"]:
+            return {
+                **chart_cache["data"],
+                "cached": True,
+                "warning": "Live chart feed is temporarily unavailable. Showing last saved chart.",
+            }
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch BTC chart from Binance: {str(e)}",
+        )
+
+
+app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
+
 
 @app.get("/")
 def home():
