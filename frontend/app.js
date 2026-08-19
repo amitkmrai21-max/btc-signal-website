@@ -24,6 +24,18 @@ const timeframeSettings = {
   }
 };
 
+function getElement(id) {
+  return document.getElementById(id);
+}
+
+function setText(id, value) {
+  const element = getElement(id);
+
+  if (element) {
+    element.textContent = value ?? "--";
+  }
+}
+
 function formatDateForSignal() {
   return new Date().toLocaleDateString("en-IN", {
     day: "2-digit",
@@ -32,93 +44,251 @@ function formatDateForSignal() {
   });
 }
 
-function setSignal(signal, signalText, signalColor) {
-  const signalBox = document.getElementById("signalBox");
-  const signalAction = document.getElementById("signal-action");
-  const aiSignalText = document.getElementById("aiSignalText");
+function formatPrice(value) {
+  const price = Number(value);
 
-  signalBox.textContent = signal;
-  signalBox.style.color = signalColor;
+  if (!Number.isFinite(price)) {
+    return "--";
+  }
 
-  signalAction.textContent = signal;
-  signalAction.style.color = signal === "BUY"
-    ? "#fef08a"
-    : signal === "HOLD"
-      ? "#fef3c7"
-      : "#fecaca";
+  return `$${price.toLocaleString("en-US", {
+    maximumFractionDigits: 2
+  })}`;
+}
 
-  aiSignalText.textContent = signalText;
+function getSignalColor(signal) {
+  if (signal === "BUY") {
+    return "#22c55e";
+  }
+
+  if (signal === "SELL") {
+    return "#ef4444";
+  }
+
+  return "#facc15";
+}
+
+function setSignal(signal, signalText) {
+  const normalizedSignal = ["BUY", "SELL", "HOLD"].includes(signal)
+    ? signal
+    : "HOLD";
+
+  const signalColor = getSignalColor(normalizedSignal);
+  const signalBox = getElement("signalBox");
+  const signalAction = getElement("signal-action");
+
+  if (signalBox) {
+    signalBox.textContent = normalizedSignal;
+    signalBox.style.color = signalColor;
+  }
+
+  if (signalAction) {
+    signalAction.textContent = normalizedSignal;
+    signalAction.style.color = signalColor;
+  }
+
+  setText("aiSignalText", signalText);
+}
+
+function setMiniSignal(id, signal) {
+  const element = getElement(id);
+
+  if (!element) {
+    return;
+  }
+
+  const normalizedSignal = ["BUY", "SELL", "HOLD"].includes(signal)
+    ? signal
+    : "HOLD";
+
+  element.textContent = normalizedSignal;
+  element.style.color = getSignalColor(normalizedSignal);
+  element.style.borderColor = getSignalColor(normalizedSignal);
+}
+
+function setRiskBadge(risk) {
+  const badge = getElement("riskBadge");
+
+  if (!badge) {
+    return;
+  }
+
+  const normalizedRisk = ["LOW", "MEDIUM", "HIGH"].includes(risk)
+    ? risk
+    : "HIGH";
+
+  badge.textContent = `Risk: ${normalizedRisk}`;
+  badge.className = `risk-badge risk-${normalizedRisk.toLowerCase()}`;
+}
+
+function formatUpdatedAt(timestamp) {
+  if (!timestamp) {
+    return "Analysis update time unavailable";
+  }
+
+  return new Date(timestamp * 1000).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+function updatePrice(priceData) {
+  const btc = priceData?.bitcoin;
+  const price = Number(btc?.usd);
+  const change = Number(btc?.usd_24h_change || 0);
+
+  if (!Number.isFinite(price)) {
+    throw new Error("Live BTC price was not received.");
+  }
+
+  setText(
+    "btcPrice",
+    `$${price.toLocaleString("en-US", {
+      maximumFractionDigits: 2
+    })}`
+  );
+
+  const btcChange = getElement("btcChange");
+
+  if (btcChange) {
+    btcChange.textContent =
+      `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
+    btcChange.style.color = change >= 0 ? "#22c55e" : "#ef4444";
+  }
+}
+
+function updateAiAnalysis(aiData) {
+  setSignal(aiData.signal, aiData.reason);
+  setText("aiConfidence", `${Number(aiData.confidence || 0)}%`);
+  setText("entryIdea", aiData.entry_idea);
+  setText("stopLossIdea", aiData.stop_loss_idea);
+  setText("disclaimerText", aiData.disclaimer);
+  setText(
+    "analysisUpdatedAt",
+    `Last analysis: ${formatUpdatedAt(aiData.updated_at)}${
+      aiData.cached ? " (cached)" : ""
+    }`
+  );
+
+  setRiskBadge(aiData.risk);
+
+  const analysis15m = aiData?.timeframes?.["15m"] || {};
+  const analysis1h = aiData?.timeframes?.["1h"] || {};
+
+  setMiniSignal("signal15m", analysis15m.signal);
+  setMiniSignal("signal1h", analysis1h.signal);
+
+  setText("summary15m", analysis15m.summary);
+  setText("summary1h", analysis1h.summary);
+  setText("keyLevel15m", analysis15m.key_level);
+  setText("keyLevel1h", analysis1h.key_level);
+
+  const market15m = aiData?.market_data?.timeframes?.["15m"] || {};
+  const market1h = aiData?.market_data?.timeframes?.["1h"] || {};
+
+  updateIndicators(market15m, market1h);
+}
+
+function updateIndicators(market15m, market1h) {
+  setText("trend15m", market15m.trend);
+  setText("rsi15m", market15m.rsi_14);
+  setText("macd15m", market15m?.macd?.state);
+  setText(
+    "adx15m",
+    `${market15m?.adx?.adx_14 ?? "--"} (${market15m?.adx?.trend_strength ?? "--"})`
+  );
+  setText(
+    "momentum15m",
+    `${market15m?.momentum_percent ?? "--"}%`
+  );
+
+  setText("trend1h", market1h.trend);
+  setText("rsi1h", market1h.rsi_14);
+  setText("macd1h", market1h?.macd?.state);
+  setText(
+    "adx1h",
+    `${market1h?.adx?.adx_14 ?? "--"} (${market1h?.adx?.trend_strength ?? "--"})`
+  );
+  setText(
+    "momentum1h",
+    `${market1h?.momentum_percent ?? "--"}%`
+  );
+
+  setText(
+    "volume15m",
+    `x${market15m?.volume?.volume_ratio ?? "--"}`
+  );
+  setText(
+    "volume1h",
+    `x${market1h?.volume?.volume_ratio ?? "--"}`
+  );
+  setText("pattern15m", market15m.candle_pattern);
+  setText("pattern1h", market1h.candle_pattern);
+  setText("breakout15m", market15m.breakout_status);
+
+  setText(
+    "support15m",
+    formatPrice(market15m?.support_resistance?.support_20)
+  );
+  setText(
+    "resistance15m",
+    formatPrice(market15m?.support_resistance?.resistance_20)
+  );
+  setText(
+    "support1h",
+    formatPrice(market1h?.support_resistance?.support_20)
+  );
+  setText(
+    "resistance1h",
+    formatPrice(market1h?.support_resistance?.resistance_20)
+  );
+  setText("structure1h", market1h.market_structure);
 }
 
 async function loadBTCData() {
   const selected = timeframeSettings[activeTimeframe];
+  const refreshButton = getElement("refreshBtn");
+
+  if (refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.textContent = "Updating...";
+  }
+
+  setText("aiSignalText", "Updating live BTC data and Gemini AI analysis...");
+  setText("analysisUpdatedAt", "Updating analysis...");
 
   try {
-    document.getElementById("aiSignalText").textContent =
-      "Updating live BTC market data...";
-
-    const priceRes = await fetch("/api/btc/price", {
-      cache: "no-store"
-    });
+    const [priceRes, chartRes, aiRes] = await Promise.all([
+      fetch("/api/btc/price", { cache: "no-store" }),
+      fetch(`/api/btc/chart?days=${selected.days}`, {
+        cache: "no-store"
+      }),
+      fetch("/api/ai-signal", { cache: "no-store" })
+    ]);
 
     if (!priceRes.ok) {
       throw new Error("Price API could not be loaded.");
     }
 
-    const priceData = await priceRes.json();
-
-    const chartRes = await fetch(
-      `/api/btc/chart?days=${selected.days}`,
-      { cache: "no-store" }
-    );
-
     if (!chartRes.ok) {
       throw new Error("Chart API could not be loaded.");
     }
 
-    const chartData = await chartRes.json();
-
-    const btc = priceData.bitcoin;
-
-    if (!btc || typeof btc.usd !== "number") {
-      throw new Error("Live BTC price was not received.");
+    if (!aiRes.ok) {
+      throw new Error("AI signal API could not be loaded.");
     }
 
-    const price = btc.usd;
-    const change = Number(btc.usd_24h_change || 0);
+    const [priceData, chartData, aiData] = await Promise.all([
+      priceRes.json(),
+      chartRes.json(),
+      aiRes.json()
+    ]);
 
-    document.getElementById("btcPrice").textContent =
-      `$${price.toLocaleString("en-US", {
-        maximumFractionDigits: 2
-      })}`;
-
-    const btcChange = document.getElementById("btcChange");
-    btcChange.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
-    btcChange.style.color = change >= 0 ? "#22c55e" : "#ef4444";
-
-    let signal = "HOLD";
-    let signalText = "Market is neutral. Wait for confirmation.";
-    let signalColor = "#facc15";
-
-    if (change > 1) {
-      signal = "BUY";
-      signalText =
-        "AI signal: bullish momentum is active. Buy zone may be possible.";
-      signalColor = "#22c55e";
-    } else if (change < -1) {
-      signal = "SELL";
-      signalText =
-        "AI signal: bearish pressure is high. Avoid fresh entries or consider selling.";
-      signalColor = "#ef4444";
-    }
-
-    setSignal(signal, signalText, signalColor);
-
-    const signalDate = document.getElementById("signal-date");
-
-    if (signalDate) {
-      signalDate.textContent = formatDateForSignal();
-    }
+    updatePrice(priceData);
+    updateAiAnalysis(aiData);
 
     const rawPrices = Array.isArray(chartData.prices)
       ? chartData.prices
@@ -137,7 +307,6 @@ async function loadBTCData() {
           : 13;
 
     const step = Math.max(1, Math.ceil(rawPrices.length / maxPoints));
-
     const chartPoints = rawPrices.filter((_, index) => {
       return index % step === 0 || index === rawPrices.length - 1;
     });
@@ -155,19 +324,22 @@ async function loadBTCData() {
   } catch (error) {
     console.error(error);
 
-    document.getElementById("aiSignalText").textContent =
-      "Error loading live BTC data. Please press Refresh again.";
-
-    const signalDate = document.getElementById("signal-date");
-
-    if (signalDate && signalDate.textContent === "Loading...") {
-      signalDate.textContent = formatDateForSignal();
+    setSignal(
+      "HOLD",
+      "Live market analysis temporarily unavailable. Please refresh again."
+    );
+    setText("analysisUpdatedAt", "Analysis could not be loaded.");
+    setRiskBadge("HIGH");
+  } finally {
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.textContent = "Refresh Analysis";
     }
   }
 }
 
 function renderChart(labels, data, timeframeLabel) {
-  const canvas = document.getElementById("btcChart");
+  const canvas = getElement("btcChart");
 
   if (!canvas) {
     return;
@@ -182,10 +354,10 @@ function renderChart(labels, data, timeframeLabel) {
   btcChart = new Chart(ctx, {
     type: "line",
     data: {
-      labels: labels,
+      labels,
       datasets: [{
         label: `BTC/USD • ${timeframeLabel}`,
-        data: data,
+        data,
         borderColor: "#22c55e",
         backgroundColor: "rgba(34, 197, 94, 0.15)",
         borderWidth: 2,
@@ -245,43 +417,43 @@ function renderChart(labels, data, timeframeLabel) {
 }
 
 function setupPaperTrading() {
-  const btn = document.getElementById("calcTradeBtn");
+  const button = getElement("calcTradeBtn");
 
-  if (!btn) {
+  if (!button) {
     return;
   }
 
-  btn.addEventListener("click", () => {
-    const capital = parseFloat(
-      document.getElementById("capitalInput").value
-    );
-
-    const priceText = document
-      .getElementById("btcPrice")
-      .textContent
+  button.addEventListener("click", () => {
+    const capital = parseFloat(getElement("capitalInput")?.value);
+    const priceText = getElement("btcPrice")?.textContent
       .replace(/[$,]/g, "");
-
     const btcPrice = parseFloat(priceText);
 
     if (!capital || !btcPrice) {
-      document.getElementById("tradeResult").textContent =
-        "Please enter capital and load BTC price first.";
+      setText(
+        "tradeResult",
+        "Please enter capital and load BTC price first."
+      );
       return;
     }
 
     const usdInr = 83;
     const btcPriceInr = btcPrice * usdInr;
-    const qty = capital / btcPriceInr;
+    const quantity = capital / btcPriceInr;
 
-    document.getElementById("tradeResult").textContent =
-      `With ₹${capital.toLocaleString()}, you can paper trade about ${qty.toFixed(6)} BTC at approx ₹${btcPriceInr.toLocaleString("en-IN", {
+    setText(
+      "tradeResult",
+      `With ₹${capital.toLocaleString()}, you can paper trade about ` +
+      `${quantity.toFixed(6)} BTC at approx ` +
+      `₹${btcPriceInr.toLocaleString("en-IN", {
         maximumFractionDigits: 0
-      })} per BTC.`;
+      })} per BTC.`
+    );
   });
 }
 
 function setupUpload() {
-  const input = document.getElementById("fileInput");
+  const input = getElement("fileInput");
 
   if (!input) {
     return;
@@ -291,8 +463,7 @@ function setupUpload() {
     const file = event.target.files[0];
 
     if (file) {
-      document.getElementById("uploadStatus").textContent =
-        `Uploaded file: ${file.name}`;
+      setText("uploadStatus", `Selected file: ${file.name}`);
     }
   });
 }
@@ -320,18 +491,13 @@ function setupTimeframeButtons() {
   });
 }
 
-const refreshButton = document.getElementById("refreshBtn");
+const refreshButton = getElement("refreshBtn");
 
 if (refreshButton) {
   refreshButton.addEventListener("click", loadBTCData);
 }
 
-const signalDate = document.getElementById("signal-date");
-
-if (signalDate) {
-  signalDate.textContent = formatDateForSignal();
-}
-
+setText("signal-date", formatDateForSignal());
 setupPaperTrading();
 setupUpload();
 setupTimeframeButtons();
