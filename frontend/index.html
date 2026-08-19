@@ -7,6 +7,8 @@
 
   <link rel="stylesheet" href="/frontend/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
 </head>
 
 <body>
@@ -20,7 +22,7 @@
 
       <div class="brand-text">
         <h1>BTC AI Signal</h1>
-        <p>Live market analysis, paper trading and Gemini AI signals</p>
+        <p>Live market analysis, virtual paper trading and Gemini AI signals</p>
       </div>
     </div>
 
@@ -47,6 +49,10 @@
           <strong id="signalBox">Loading...</strong>
         </div>
       </div>
+
+      <p id="marketUpdatedAt" class="status-line">
+        Updating live market price...
+      </p>
     </section>
 
     <section class="card chart-card">
@@ -74,7 +80,26 @@
             15 Min
           </button>
         </div>
+
+        <div class="chart-controls" aria-label="Chart zoom controls">
+          <button id="zoomInBtn" class="chart-control-btn" type="button">
+            Zoom In
+          </button>
+
+          <button id="zoomOutBtn" class="chart-control-btn" type="button">
+            Zoom Out
+          </button>
+
+          <button id="resetZoomBtn" class="chart-control-btn" type="button">
+            Reset View
+          </button>
+        </div>
       </div>
+
+      <p class="chart-help">
+        Mouse wheel/pinch to zoom. Drag on the chart to select a zoom area.
+        Hold Shift and drag to pan left or right.
+      </p>
 
       <canvas id="btcChart"></canvas>
     </section>
@@ -128,7 +153,9 @@
       <div class="section-heading">
         <div>
           <h2>Multi-Timeframe Signals</h2>
-          <p>15-minute setup and 1-hour confirmation</p>
+          <p>
+            Signal = action now. Trend = market direction, not a guaranteed entry.
+          </p>
         </div>
       </div>
 
@@ -162,8 +189,8 @@
     <section class="card">
       <div class="section-heading">
         <div>
-          <h2>Live Technical Snapshot</h2>
-          <p>Calculated from Binance 15m and 1h candles</p>
+          <h2>Trend & Indicator Snapshot</h2>
+          <p>Trend direction and immediate entry signal can differ.</p>
         </div>
       </div>
 
@@ -206,34 +233,79 @@
       </div>
     </section>
 
-    <section class="card">
-      <h2>Paper Trading (INR)</h2>
+    <section class="card paper-trading-card">
+      <div class="section-heading">
+        <div>
+          <h2>Virtual Paper Trading (INR)</h2>
+          <p>
+            Practice only. No real money, payment, bank, wallet or exchange order.
+          </p>
+        </div>
 
-      <div class="trade-box">
-        <label for="capitalInput">Capital (INR)</label>
-
-        <input
-          type="number"
-          id="capitalInput"
-          placeholder="Enter amount in INR"
-          min="0"
-          step="100"
-        />
-
-        <button id="calcTradeBtn" type="button">Calculate</button>
-
-        <p id="tradeResult">Result will appear here.</p>
+        <button id="resetPaperBtn" class="reset-paper-btn" type="button">
+          Reset Demo
+        </button>
       </div>
-    </section>
 
-    <section class="card">
-      <h2>Upload Chart Data</h2>
+      <div class="paper-metrics">
+        <div class="paper-metric">
+          <span>Virtual Cash</span>
+          <strong id="paperCash">₹--</strong>
+        </div>
 
-      <input type="file" id="fileInput" accept=".csv" />
+        <div class="paper-metric">
+          <span>BTC Holding</span>
+          <strong id="paperBtcHolding">0 BTC</strong>
+        </div>
 
-      <p id="uploadStatus">
-        Upload CSV with date and close columns.
-      </p>
+        <div class="paper-metric">
+          <span>Average Buy Price</span>
+          <strong id="paperAvgPrice">₹--</strong>
+        </div>
+
+        <div class="paper-metric">
+          <span>Portfolio Value</span>
+          <strong id="paperPortfolioValue">₹--</strong>
+        </div>
+
+        <div class="paper-metric">
+          <span>Profit / Loss</span>
+          <strong id="paperPnl">₹--</strong>
+        </div>
+      </div>
+
+      <div class="paper-trade-form">
+        <label for="paperAmountInput">Virtual amount to trade (INR)</label>
+
+        <div class="paper-action-row">
+          <input
+            id="paperAmountInput"
+            type="number"
+            min="100"
+            step="100"
+            placeholder="Example: 10000"
+          />
+
+          <button id="paperBuyBtn" class="paper-buy-btn" type="button">
+            Virtual Buy BTC
+          </button>
+
+          <button id="paperSellBtn" class="paper-sell-btn" type="button">
+            Virtual Sell BTC
+          </button>
+        </div>
+
+        <p id="paperTradeStatus" class="paper-status">
+          Load live price, then enter a virtual INR amount.
+        </p>
+      </div>
+
+      <div class="paper-history-wrap">
+        <h3>Virtual Trade History</h3>
+        <div id="paperTradeHistory" class="paper-history">
+          No virtual trades yet.
+        </div>
+      </div>
     </section>
 
     <section class="disclaimer-card">
