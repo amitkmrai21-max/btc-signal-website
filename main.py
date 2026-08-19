@@ -4,7 +4,7 @@ import os
 import time
 
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,23 +27,28 @@ GEMINI_MODEL = "gemini-3.6-flash"
 price_cache = {"data": None, "updated_at": 0}
 chart_cache = {"data": {}, "updated_at": 0}
 ai_signal_cache = {"data": None, "updated_at": 0}
+rrg_cache = {"data": {}, "updated_at": 0}
 
 
-def get_btc_ticker():
+def get_ticker(symbol="BTCUSDT"):
     response = requests.get(
         f"{BINANCE_BASE_URL}/api/v3/ticker/24hr",
-        params={"symbol": "BTCUSDT"},
+        params={"symbol": symbol},
         timeout=15,
     )
     response.raise_for_status()
     return response.json()
 
 
-def get_btc_klines(interval="1h", limit=250):
+def get_btc_ticker():
+    return get_ticker("BTCUSDT")
+
+
+def get_klines(symbol="BTCUSDT", interval="1h", limit=250):
     response = requests.get(
         f"{BINANCE_BASE_URL}/api/v3/klines",
         params={
-            "symbol": "BTCUSDT",
+            "symbol": symbol,
             "interval": interval,
             "limit": limit,
         },
@@ -51,6 +56,10 @@ def get_btc_klines(interval="1h", limit=250):
     )
     response.raise_for_status()
     return response.json()
+
+
+def get_btc_klines(interval="1h", limit=250):
+    return get_klines("BTCUSDT", interval, limit)
 
 
 def average(values):
@@ -575,6 +584,97 @@ def safe_hold_signal(reason):
     }
 
 
+def build_rrg_data(interval):
+    settings = {
+        "1h": {"limit": 220, "lookback": 60, "tail": 10},
+        "1d": {"limit": 220, "lookback": 30, "tail": 10},
+    }
+
+    if interval not in settings:
+        raise ValueError("Unsupported RRG interval.")
+
+    config = settings[interval]
+    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    candle_sets = {
+        symbol: get_klines(symbol, interval, config["limit"])
+        for symbol in symbols
+    }
+
+    close_sets = {
+        symbol: [float(candle[4]) for candle in candle_sets[symbol]]
+        for symbol in symbols
+    }
+    timestamps = [int(candle[0]) for candle in candle_sets["BTCUSDT"]]
+    benchmark = close_sets["BTCUSDT"]
+    lookback = config["lookback"]
+    tail = config["tail"]
+
+    trails = []
+
+    for symbol in symbols:
+        closes = close_sets[symbol]
+        ratios = [
+            (asset_close / btc_close) * 100
+            for asset_close, btc_close in zip(closes, benchmark)
+        ]
+        ratio_sma = [
+            average(ratios[index - lookback + 1:index + 1])
+            if index >= lookback - 1
+            else None
+            for index in range(len(ratios))
+        ]
+        ratio_index = [
+            (ratios[index] / ratio_sma[index]) * 100
+            if ratio_sma[index]
+            else None
+            for index in range(len(ratios))
+        ]
+        momentum_sma = [
+            average(
+                [value for value in ratio_index[index - 9:index + 1]
+                 if value is not None]
+            )
+            if index >= lookback + 8 and ratio_index[index] is not None
+            else None
+            for index in range(len(ratio_index))
+        ]
+        momentum_index = [
+            (ratio_index[index] / momentum_sma[index]) * 100
+            if momentum_sma[index]
+            else None
+            for index in range(len(ratio_index))
+        ]
+
+        valid_points = [
+            {
+                "x": round_value(ratio_index[index], 2),
+                "y": round_value(momentum_index[index], 2),
+                "timestamp": timestamps[index],
+            }
+            for index in range(len(ratio_index))
+            if ratio_index[index] is not None
+            and momentum_index[index] is not None
+        ]
+
+        trails.append({
+            "symbol": symbol,
+            "points": valid_points[-tail:],
+        })
+
+    return {
+        "benchmark": "BTCUSDT",
+        "interval": interval,
+        "tail_points": tail,
+        "trails": trails,
+        "source": "Binance market data",
+        "updated_at": int(time.time()),
+        "disclaimer": (
+            "RRG-style normalized relative-strength visualization only. "
+            "It is not official JdK RRG and is not financial advice."
+        ),
+    }
+
+
 @app.get("/api/health")
 def health():
     return {
@@ -694,6 +794,44 @@ def btc_chart(days: int = 7, interval: str = "1h"):
         raise HTTPException(
             status_code=502,
             detail=f"Failed to fetch BTC chart from Binance: {str(error)}",
+        )
+
+
+@app.get("/api/rrg")
+def rrg(interval: str = "1d"):
+    now = time.time()
+
+    if interval not in {"1h", "1d"}:
+        raise HTTPException(
+            status_code=400,
+            detail="RRG interval must be 1h or 1d.",
+        )
+
+    cached_data = rrg_cache["data"].get(interval)
+    cache_ttl = 300 if interval == "1h" else 900
+
+    if cached_data and now - cached_data["updated_at"] < cache_ttl:
+        return {
+            **cached_data,
+            "cached": True,
+        }
+
+    try:
+        result = build_rrg_data(interval)
+        rrg_cache["data"][interval] = result
+        rrg_cache["updated_at"] = now
+        return result
+    except requests.exceptions.RequestException as error:
+        if cached_data:
+            return {
+                **cached_data,
+                "cached": True,
+                "warning": "RRG feed unavailable. Showing cached data.",
+            }
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to build RRG data: {str(error)}",
         )
 
 
@@ -861,9 +999,143 @@ DECISION RULES:
         )
 
 
+@app.post("/api/chart-analyser")
+async def chart_analyser(file: UploadFile = File(...)):
+    allowed_types = {
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+    }
+    max_file_size = 8 * 1024 * 1024
+
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Upload a PNG, JPG, or WEBP chart image only.",
+        )
+
+    image_bytes = await file.read()
+
+    if not image_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded chart image is empty.",
+        )
+
+    if len(image_bytes) > max_file_size:
+        raise HTTPException(
+            status_code=413,
+            detail="Chart image is too large. Maximum size is 8 MB.",
+        )
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini API key is not configured on the server.",
+        )
+
+    prompt = """
+You are a cautious technical-analysis assistant for an educational
+BTC/crypto chart screenshot analyser.
+
+Analyze only visible information in the uploaded chart image.
+Do not invent exact prices, indicators, symbols, timeframes, or levels
+that cannot be read clearly from the image.
+
+Return only a JSON object in simple Hinglish.
+
+Rules:
+1. Output BUY only if a clear bullish setup and visible confirmation
+   are present.
+2. Output SELL only if a clear bearish setup and visible confirmation
+   are present.
+3. Output HOLD if the chart is unclear, cropped, has insufficient
+   context, is sideways, or confirmation is missing.
+4. Never promise profit, certainty, or guaranteed targets.
+5. This is educational analysis only, never an automated trade order.
+6. Clearly say "Not visible" when required chart information is absent.
+"""
+
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "signal": {
+                "type": "string",
+                "enum": ["BUY", "SELL", "HOLD"],
+            },
+            "confidence": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+            },
+            "risk": {
+                "type": "string",
+                "enum": ["LOW", "MEDIUM", "HIGH"],
+            },
+            "trend": {"type": "string"},
+            "pattern": {"type": "string"},
+            "support": {"type": "string"},
+            "resistance": {"type": "string"},
+            "reason": {"type": "string"},
+            "entry_idea": {"type": "string"},
+            "invalidation_idea": {"type": "string"},
+            "warning": {"type": "string"},
+        },
+        "required": [
+            "signal",
+            "confidence",
+            "risk",
+            "trend",
+            "pattern",
+            "support",
+            "resistance",
+            "reason",
+            "entry_idea",
+            "invalidation_idea",
+            "warning",
+        ],
+    }
+
+    try:
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[
+                prompt,
+                types.Part.from_bytes(
+                    data=image_bytes,
+                    mime_type=file.content_type,
+                ),
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_json_schema=response_schema,
+            ),
+        )
+
+        result = json.loads(response.text)
+        result["source"] = "Uploaded chart screenshot + Gemini AI analysis"
+        result["disclaimer"] = (
+            "Educational chart analysis only. Not financial advice "
+            "or an automated trading instruction."
+        )
+        return result
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Chart analysis is temporarily unavailable: "
+                f"{type(error).__name__}: {str(error)}"
+            ),
+        )
+
+
 app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 
 
 @app.get("/")
 def home():
     return FileResponse("frontend/index.html")
+
