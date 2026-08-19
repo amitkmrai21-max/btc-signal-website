@@ -248,6 +248,8 @@ Use simple Hindi-English (Hinglish) in the text fields.
             model=GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
+                
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True), 
                 response_mime_type="application/json",
                 response_schema={
                     "type": "object",
@@ -305,10 +307,10 @@ Use simple Hindi-English (Hinglish) in the text fields.
             f"Market or AI analysis is temporarily unavailable. {str(e)}"
         )
 
-    except Exception:
-        return safe_hold_signal(
-            "AI analysis is temporarily unavailable. Showing safe HOLD until the next refresh."
-        )
+   except Exception as e:
+    return safe_hold_signal(
+        f"AI analysis is temporarily unavailable: {type(e).__name__}: {str(e)}"
+    ) 
 
 
 app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
