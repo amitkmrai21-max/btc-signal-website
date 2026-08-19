@@ -248,8 +248,7 @@ Use simple Hindi-English (Hinglish) in the text fields.
             model=GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
-                
-        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True), 
+                 
                 response_mime_type="application/json",
                 response_schema={
                     "type": "object",
