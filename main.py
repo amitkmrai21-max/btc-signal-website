@@ -23,20 +23,9 @@ app.add_middleware(
 BINANCE_BASE_URL = "https://data-api.binance.vision"
 GEMINI_MODEL = "gemini-2.5-flash"
 
-price_cache = {
-    "data": None,
-    "updated_at": 0,
-}
-
-chart_cache = {
-    "data": None,
-    "updated_at": 0,
-}
-
-ai_signal_cache = {
-    "data": None,
-    "updated_at": 0,
-}
+price_cache = {"data": None, "updated_at": 0}
+chart_cache = {"data": None, "updated_at": 0}
+ai_signal_cache = {"data": None, "updated_at": 0}
 
 
 def get_btc_ticker():
@@ -68,13 +57,14 @@ def calculate_market_indicators(candles):
     volumes = [float(candle[5]) for candle in candles]
 
     if len(closes) < 30:
-        raise ValueError("Not enough Binance candle data for analysis.")
+        raise ValueError("Not enough candle data for analysis.")
 
     ema_20 = sum(closes[-20:]) / 20
-    ema_50 = sum(closes[-50:]) / 50 if len(closes) >= 50 else sum(closes) / len(closes)
+    ema_50 = sum(closes[-50:]) / 50
 
     changes = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
     recent_changes = changes[-14:]
+
     gains = [change for change in recent_changes if change > 0]
     losses = [-change for change in recent_changes if change < 0]
 
@@ -84,8 +74,8 @@ def calculate_market_indicators(candles):
     if avg_loss == 0:
         rsi_14 = 100.0
     else:
-        relative_strength = avg_gain / avg_loss
-        rsi_14 = 100 - (100 / (1 + relative_strength))
+        rs = avg_gain / avg_loss
+        rsi_14 = 100 - (100 / (1 + rs))
 
     return {
         "last_close": round(closes[-1], 2),
@@ -105,8 +95,11 @@ def safe_hold_signal(reason):
         "reason": reason,
         "risk": "HIGH",
         "entry_idea": "Wait for a clearer setup.",
-        "stop_loss_idea": "Do not open a position based on this unavailable analysis.",
-        "disclaimer": "Educational market analysis only. Not financial advice or an automated trading instruction.",
+        "stop_loss_idea": "Do not open a position based on unavailable analysis.",
+        "disclaimer": (
+            "Educational market analysis only. Not financial advice "
+            "or an automated trading instruction."
+        ),
     }
 
 
@@ -149,7 +142,10 @@ def btc_price():
             return {
                 **price_cache["data"],
                 "cached": True,
-                "warning": "Live market feed is temporarily unavailable. Showing last saved price.",
+                "warning": (
+                    "Live market feed is temporarily unavailable. "
+                    "Showing last saved price."
+                ),
             }
 
         raise HTTPException(
@@ -188,7 +184,10 @@ def btc_chart(days: int = 7):
             return {
                 **chart_cache["data"],
                 "cached": True,
-                "warning": "Live chart feed is temporarily unavailable. Showing last saved chart.",
+                "warning": (
+                    "Live chart feed is temporarily unavailable. "
+                    "Showing last saved chart."
+                ),
             }
 
         raise HTTPException(
@@ -210,7 +209,7 @@ def ai_signal():
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return safe_hold_signal(
-            "Gemini API key is not configured on the server. Add GEMINI_API_KEY in Render Environment Variables."
+            "Gemini API key is not configured on the server."
         )
 
     try:
@@ -221,25 +220,25 @@ def ai_signal():
         market_data = {
             "symbol": "BTCUSDT",
             "current_price_usdt": round(float(ticker["lastPrice"]), 2),
-            "price_change_24h_percent": round(float(ticker["priceChangePercent"]), 2),
+            "price_change_24h_percent": round(
+                float(ticker["priceChangePercent"]), 2
+            ),
             "high_24h_usdt": round(float(ticker["highPrice"]), 2),
             "low_24h_usdt": round(float(ticker["lowPrice"]), 2),
-            "quote_volume_24h_usdt": round(float(ticker["quoteVolume"]), 2),
+            "quote_volume_24h_usdt": round(
+                float(ticker["quoteVolume"]), 2
+            ),
             "indicators_1h": indicators,
         }
 
         prompt = f"""
 You are a cautious Bitcoin market-analysis assistant for an educational dashboard.
 
-Analyze only the BTCUSDT Binance market snapshot below. Do not claim certainty,
-do not promise profits, and do not instruct automatic trading. A HOLD result is
-preferred when signals conflict or market conditions are unclear.
-
-Market snapshot:
+Analyze only this BTCUSDT Binance market snapshot:
 {json.dumps(market_data, indent=2)}
 
-Return exactly one JSON object matching the requested schema.
-Use simple Hindi-English (Hinglish) in the text fields.
+Return a JSON object only. Use simple Hindi-English (Hinglish).
+Never promise profit. Choose HOLD if market signals are unclear or conflicting.
 """
 
         client = genai.Client(api_key=api_key)
@@ -248,7 +247,6 @@ Use simple Hindi-English (Hinglish) in the text fields.
             model=GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
-                 
                 response_mime_type="application/json",
                 response_schema={
                     "type": "object",
@@ -262,19 +260,13 @@ Use simple Hindi-English (Hinglish) in the text fields.
                             "minimum": 0,
                             "maximum": 100,
                         },
-                        "reason": {
-                            "type": "string",
-                        },
+                        "reason": {"type": "string"},
                         "risk": {
                             "type": "string",
                             "enum": ["LOW", "MEDIUM", "HIGH"],
                         },
-                        "entry_idea": {
-                            "type": "string",
-                        },
-                        "stop_loss_idea": {
-                            "type": "string",
-                        },
+                        "entry_idea": {"type": "string"},
+                        "stop_loss_idea": {"type": "string"},
                     },
                     "required": [
                         "signal",
@@ -294,22 +286,18 @@ Use simple Hindi-English (Hinglish) in the text fields.
         result["cached"] = False
         result["updated_at"] = int(now)
         result["disclaimer"] = (
-            "Educational market analysis only. Not financial advice or an automated trading instruction."
+            "Educational market analysis only. Not financial advice "
+            "or an automated trading instruction."
         )
 
         ai_signal_cache["data"] = result
         ai_signal_cache["updated_at"] = now
         return result
 
-    except (requests.exceptions.RequestException, ValueError, json.JSONDecodeError) as e:
+    except Exception as e:
         return safe_hold_signal(
-            f"Market or AI analysis is temporarily unavailable. {str(e)}"
+            f"AI analysis is temporarily unavailable: {type(e).__name__}: {str(e)}"
         )
-
-   except Exception as e:
-    return safe_hold_signal(
-        f"AI analysis is temporarily unavailable: {type(e).__name__}: {str(e)}"
-    ) 
 
 
 app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
