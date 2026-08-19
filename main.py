@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -22,31 +22,37 @@ def health():
 
 @app.get("/api/btc/price")
 def btc_price():
-    response = requests.get(
-        f"{COINGECKO_URL}/simple/price",
-        params={
-            "ids": "bitcoin",
-            "vs_currencies": "usd",
-            "include_24hr_change": "true"
-        },
-        timeout=15
-    )
-    response.raise_for_status()
-    return response.json()
+    try:
+        response = requests.get(
+            f"{COINGECKO_URL}/simple/price",
+            params={
+                "ids": "bitcoin",
+                "vs_currencies": "usd",
+                "include_24hr_change": "true"
+            },
+            timeout=15
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch BTC price: {str(e)}")
 
 @app.get("/api/btc/chart")
 def btc_chart(days: int = 7):
-    response = requests.get(
-        f"{COINGECKO_URL}/coins/bitcoin/market_chart",
-        params={
-            "vs_currency": "usd",
-            "days": days,
-            "interval": "hourly"
-        },
-        timeout=15
-    )
-    response.raise_for_status()
-    return response.json()
+    try:
+        response = requests.get(
+            f"{COINGECKO_URL}/coins/bitcoin/market_chart",
+            params={
+                "vs_currency": "usd",
+                "days": days,
+                "interval": "hourly"
+            },
+            timeout=15
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch BTC chart: {str(e)}")
 
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
