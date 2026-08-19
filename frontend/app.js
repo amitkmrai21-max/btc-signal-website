@@ -128,3 +128,13 @@ document.getElementById("refreshBtn").addEventListener("click", loadBTCData);
 loadBTCData();
 setupPaperTrading();
 setupUpload();
+const timeframeButtons = document.querySelectorAll(".timeframe-btn");
+
+timeframeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    timeframeButtons.forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+
+    console.log(`Selected timeframe: ${button.dataset.timeframe}`);
+  });
+});
