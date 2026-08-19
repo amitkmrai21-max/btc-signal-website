@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BTC Signal Website</title>
+  <link rel="stylesheet" href="./style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>BTC/USD Signal Website</h1>
+      <p>Live paper trading in INR, AI signals, RRG and chart analysis</p>
+    </div>
+    <button id="refreshBtn">Refresh</button>
+  </header>
+
+  <main class="dashboard">
+    <section class="card hero-card">
+      <h2>Live Market</h2>
+      <div class="metrics">
+        <div class="metric-box">
+          <span>BTC Price</span>
+          <strong id="btcPrice">$--</strong>
+        </div>
+        <div class="metric-box">
+          <span>24h Change</span>
+          <strong id="btcChange">--%</strong>
+        </div>
+        <div class="metric-box">
+          <span>Signal</span>
+          <strong id="signalBox">Loading...</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>BTC Chart</h2>
+      <canvas id="btcChart"></canvas>
+    </section>
+
+    <section class="card">
+      <h2>AI Signal</h2>
+      <p id="aiSignalText">Analyzing market...</p>
+    </section>
+
+    <section class="card">
+      <h2>Paper Trading (INR)</h2>
+      <div class="trade-box">
+        <label>Capital (INR)</label>
+        <input type="number" id="capitalInput" placeholder="Enter amount in INR" />
+        <button id="calcTradeBtn">Calculate</button>
+        <p id="tradeResult">Result will appear here.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Upload Chart Data</h2>
+      <input type="file" id="fileInput" accept=".csv" />
+      <p id="uploadStatus">Upload CSV with date and close columns.</p>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
