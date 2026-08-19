@@ -4,37 +4,44 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BTC Signal Website</title>
-  <link rel="stylesheet" href="/fronttend/style.css" />
+
+  <link rel="stylesheet" href="/frontend/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
   <header class="topbar">
-  <div class="brand">
-    <img
-      class="brand-logo"
-      src="/frontend/generated-image.png"
-      alt="BTC AI Signal logo"
-    />
-    <div>
-      <h1>BTC AI Signal</h1>
-      <p>Live market analysis, paper trading and Gemini AI signals</p>
+    <div class="brand">
+      <img
+        class="brand-logo"
+        src="/frontend/generated-image.png"
+        alt="BTC AI Signal logo"
+      />
+
+      <div class="brand-text">
+        <h1>BTC AI Signal</h1>
+        <p>Live market analysis, paper trading and Gemini AI signals</p>
+      </div>
     </div>
-  </div>
-  <button id="refreshBtn">Refresh</button>
-</header>
+
+    <button id="refreshBtn" type="button">Refresh</button>
+  </header>
 
   <main class="dashboard">
     <section class="card hero-card">
       <h2>Live Market</h2>
+
       <div class="metrics">
         <div class="metric-box">
           <span>BTC Price</span>
           <strong id="btcPrice">$--</strong>
         </div>
+
         <div class="metric-box">
           <span>24h Change</span>
           <strong id="btcChange">--%</strong>
         </div>
+
         <div class="metric-box">
           <span>Signal</span>
           <strong id="signalBox">Loading...</strong>
@@ -42,30 +49,82 @@
       </div>
     </section>
 
-    <section class="card">
-      <h2>BTC Chart</h2>
+    <section class="card chart-card">
+      <div class="chart-toolbar">
+        <h2>BTC Chart</h2>
+
+        <div class="timeframe-buttons" aria-label="BTC chart timeframe">
+          <button class="timeframe-btn" type="button" data-timeframe="1W">
+            Weekly
+          </button>
+
+          <button
+            class="timeframe-btn active"
+            type="button"
+            data-timeframe="1D"
+          >
+            Daily
+          </button>
+
+          <button class="timeframe-btn" type="button" data-timeframe="1H">
+            Hourly
+          </button>
+
+          <button class="timeframe-btn" type="button" data-timeframe="15M">
+            15 Min
+          </button>
+        </div>
+      </div>
+
       <canvas id="btcChart"></canvas>
     </section>
 
     <section class="card">
       <h2>AI Signal</h2>
+
+      <div class="signal-details">
+        <div class="signal-tag date-tag">
+          <span class="tag-label">DATE</span>
+          <span id="signal-date">Loading...</span>
+        </div>
+
+        <div class="signal-tag buy-tag">
+          <span class="tag-label">SIGNAL</span>
+          <span id="signal-action">BUY</span>
+        </div>
+      </div>
+
       <p id="aiSignalText">Analyzing market...</p>
     </section>
 
     <section class="card">
       <h2>Paper Trading (INR)</h2>
+
       <div class="trade-box">
-        <label>Capital (INR)</label>
-        <input type="number" id="capitalInput" placeholder="Enter amount in INR" />
-        <button id="calcTradeBtn">Calculate</button>
+        <label for="capitalInput">Capital (INR)</label>
+
+        <input
+          type="number"
+          id="capitalInput"
+          placeholder="Enter amount in INR"
+          min="0"
+          step="100"
+        />
+
+        <button id="calcTradeBtn" type="button">Calculate</button>
+
         <p id="tradeResult">Result will appear here.</p>
       </div>
     </section>
 
     <section class="card">
       <h2>Upload Chart Data</h2>
+
       <input type="file" id="fileInput" accept=".csv" />
-      <p id="uploadStatus">Upload CSV with date and close columns.</p>
+
+      <p id="uploadStatus">
+        Upload CSV with date and close columns.
+      </p>
     </section>
   </main>
 
