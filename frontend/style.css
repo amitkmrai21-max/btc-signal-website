@@ -126,3 +126,35 @@ canvas {
     padding: 16px;
   }
 }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.35);
+}
+
+.brand h1 {
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .brand-logo {
+    width: 48px;
+    height: 48px;
+    flex-basis: 48px;
+    border-radius: 14px;
+  }
+
+  .brand {
+    gap: 10px;
+  }
+}
