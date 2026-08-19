@@ -148,10 +148,10 @@ canvas {
 
 @media (max-width: 768px) {
 .brand-logo {
-  width: 20px;
-  height: 20px;
-  flex-basis: 20px;
-  border-radius: 5px;
+  width: 28px !important;
+  height: 28px !important;
+  flex: 0 0 28px !important;
+  border-radius: 7px !important;
 }
 
   .brand {
