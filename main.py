@@ -27,6 +27,7 @@ GEMINI_MODEL = "gemini-3.6-flash"
 price_cache = {"data": None, "updated_at": 0}
 chart_cache = {"data": {}, "updated_at": 0}
 ai_signal_cache = {"data": None, "updated_at": 0}
+technical_cache = {"data": None, "updated_at": 0}
 rrg_cache = {"data": {}, "updated_at": 0}
 
 
@@ -561,30 +562,296 @@ def calculate_market_indicators(candles, interval):
     }
 
 
-def safe_hold_signal(reason):
+def timeframe_signal_from_indicators(indicators):
+    trend = str(indicators.get("trend", "")).lower()
+    macd_state = str(indicators.get("macd", {}).get("state", "")).lower()
+    rsi_value = float(indicators.get("rsi_14", 50))
+    momentum = float(indicators.get("momentum_percent", 0))
+
+    if "bull" in trend and "bull" in macd_state and rsi_value >= 50 and momentum >= 0:
+        return "BUY"
+    if "bear" in trend and "bear" in macd_state and rsi_value <= 50 and momentum <= 0:
+        return "SELL"
+    return "HOLD"
+
+
+def technical_main_signal(market_data):
+    timeframes = market_data["timeframes"]
+    analysis_15m = timeframes["15m"]
+    analysis_1h = timeframes["1h"]
+    analysis_4h = timeframes["4h"]
+
+    signal_15m = timeframe_signal_from_indicators(analysis_15m)
+    signal_1h = timeframe_signal_from_indicators(analysis_1h)
+    signal_4h = timeframe_signal_from_indicators(analysis_4h)
+
+    buy_count = [signal_15m, signal_1h, signal_4h].count("BUY")
+    sell_count = [signal_15m, signal_1h, signal_4h].count("SELL")
+
+    if buy_count >= 2 and signal_4h != "SELL":
+        signal = "BUY WATCH"
+        reason = "Technical fallback: higher-timeframe trend and momentum are mostly bullish. Wait for entry confirmation near the listed key levels."
+        risk = "MEDIUM"
+        setup_status = "Technical bullish setup — confirmation required"
+        market_bias = "Bullish technical bias"
+    elif sell_count >= 2 and signal_4h != "BUY":
+        signal = "SELL WATCH"
+        reason = "Technical fallback: higher-timeframe trend and momentum are mostly bearish. Wait for entry confirmation near the listed key levels."
+        risk = "MEDIUM"
+        setup_status = "Technical bearish setup — confirmation required"
+        market_bias = "Bearish technical bias"
+    else:
+        signal = "NO TRADE"
+        reason = "Technical fallback: 15m, 1h and 4h signals are mixed or lack enough alignment. Wait for clearer confirmation."
+        risk = "HIGH"
+        setup_status = "Mixed technical setup — wait"
+        market_bias = "Neutral / mixed technical bias"
+
+    resistance = analysis_15m["support_resistance"]["resistance_20"]
+    support = analysis_15m["support_resistance"]["support_20"]
+    atr_value = analysis_15m["atr_14"]
+
+    if signal == "BUY WATCH":
+        confirmation = f"15m candle close above ${resistance:,.2f} with volume confirmation"
+        entry_idea = f"Educational idea: wait for bullish confirmation above ${resistance:,.2f}."
+        stop_loss = f"Educational invalidation: below ${support:,.2f} or the recent 15m support."
+        target_1 = f"${resistance + atr_value:,.2f}"
+        target_2 = f"${resistance + (atr_value * 2):,.2f}"
+    elif signal == "SELL WATCH":
+        confirmation = f"15m candle close below ${support:,.2f} with volume confirmation"
+        entry_idea = f"Educational idea: wait for bearish confirmation below ${support:,.2f}."
+        stop_loss = f"Educational invalidation: above ${resistance:,.2f} or the recent 15m resistance."
+        target_1 = f"${support - atr_value:,.2f}"
+        target_2 = f"${support - (atr_value * 2):,.2f}"
+    else:
+        confirmation = "Wait for 15m, 1h and 4h trend/momentum alignment."
+        entry_idea = "No educational entry idea while technical signals are mixed."
+        stop_loss = "No trade is preferred until a clearer setup appears."
+        target_1 = "--"
+        target_2 = "--"
+
     return {
-        "signal": "HOLD",
-        "confidence": 0,
+        "signal": signal,
+        "confidence": None,
         "reason": reason,
-        "risk": "HIGH",
-        "entry_idea": "Wait for a clearer setup and confirmation.",
-        "stop_loss_idea": "Do not open a position based on unavailable analysis.",
+        "risk": risk,
+        "market_bias": market_bias,
+        "setup_status": setup_status,
+        "confirmation_needed": confirmation,
+        "entry_idea": entry_idea,
+        "stop_loss_idea": stop_loss,
+        "target_1": target_1,
+        "target_2": target_2,
         "timeframes": {
             "15m": {
-                "signal": "HOLD",
-                "summary": "Analysis unavailable.",
-                "key_level": "--",
+                "signal": signal_15m,
+                "summary": f"{analysis_15m['trend']} trend; RSI {analysis_15m['rsi_14']}; {analysis_15m['macd']['state']}.",
+                "key_level": f"${analysis_15m['support_resistance']['support_20']:,.2f} / ${analysis_15m['support_resistance']['resistance_20']:,.2f}",
             },
             "1h": {
-                "signal": "HOLD",
-                "summary": "Analysis unavailable.",
-                "key_level": "--",
+                "signal": signal_1h,
+                "summary": f"{analysis_1h['trend']} trend; RSI {analysis_1h['rsi_14']}; {analysis_1h['macd']['state']}.",
+                "key_level": f"${analysis_1h['support_resistance']['support_20']:,.2f} / ${analysis_1h['support_resistance']['resistance_20']:,.2f}",
+            },
+            "4h": {
+                "signal": signal_4h,
+                "summary": f"{analysis_4h['trend']} trend; RSI {analysis_4h['rsi_14']}; {analysis_4h['macd']['state']}.",
+                "key_level": f"${analysis_4h['support_resistance']['support_20']:,.2f} / ${analysis_4h['support_resistance']['resistance_20']:,.2f}",
             },
         },
-        "disclaimer": (
-            "Educational market analysis only. Not financial advice "
-            "or an automated trading instruction."
-        ),
+    }
+
+
+def build_market_data():
+    ticker = get_btc_ticker()
+    candles_15m = get_btc_klines(interval="15m", limit=250)
+    candles_1h = get_btc_klines(interval="1h", limit=250)
+    candles_4h = get_btc_klines(interval="4h", limit=250)
+
+    analysis_15m = calculate_market_indicators(candles_15m, "15m")
+    analysis_1h = calculate_market_indicators(candles_1h, "1h")
+    analysis_4h = calculate_market_indicators(candles_4h, "4h")
+
+    return {
+        "symbol": "BTCUSDT",
+        "current_price_usdt": round_value(ticker["lastPrice"]),
+        "price_change_24h_percent": round_value(ticker["priceChangePercent"]),
+        "high_24h_usdt": round_value(ticker["highPrice"]),
+        "low_24h_usdt": round_value(ticker["lowPrice"]),
+        "quote_volume_24h_usdt": round_value(ticker["quoteVolume"]),
+        "timeframes": {
+            "15m": analysis_15m,
+            "1h": analysis_1h,
+            "4h": analysis_4h,
+        },
+    }
+
+
+def get_technical_market_data(force_refresh=False):
+    now = time.time()
+    cache_age = now - technical_cache["updated_at"]
+
+    if not force_refresh and technical_cache["data"] and cache_age < 30:
+        return technical_cache["data"], True
+
+    try:
+        market_data = build_market_data()
+        technical_cache["data"] = market_data
+        technical_cache["updated_at"] = now
+        return market_data, False
+    except (requests.exceptions.RequestException, ValueError) as error:
+        if technical_cache["data"]:
+            return technical_cache["data"], True
+        raise HTTPException(
+            status_code=502,
+            detail="Live technical market data is temporarily unavailable.",
+        ) from error
+
+
+def build_technical_response(market_data, cached=False):
+    result = technical_main_signal(market_data)
+    result["market_data"] = market_data
+    result["source"] = "Binance live technical analysis"
+    result["analysis_mode"] = "technical_fallback"
+    result["cached"] = cached
+    result["updated_at"] = int(time.time())
+    result["disclaimer"] = (
+        "Educational market analysis only. Not financial advice "
+        "or an automated trading instruction."
+    )
+    return result
+
+
+def build_ai_prompt(market_data):
+    return f"""
+You are an advanced but cautious BTCUSDT market-analysis assistant
+for an educational dashboard. Analyze only the supplied live Binance
+market data.
+
+DATA:
+{json.dumps(market_data, indent=2)}
+
+Return only the requested JSON object in simple Hindi-English
+(Hinglish).
+
+SIGNAL DEFINITIONS:
+- STRONG BUY: 4h and 1h trend are bullish, 15m supports an entry,
+  momentum/volume confirms, and risk is acceptable.
+- BUY WATCH: Higher timeframe bias is bullish but an entry
+  confirmation, pullback completion, breakout, or volume confirmation
+  is still needed.
+- STRONG SELL: 4h and 1h trend are bearish, 15m supports an entry,
+  momentum/volume confirms, and risk is acceptable.
+- SELL WATCH: Higher timeframe bias is bearish but an entry
+  confirmation, rebound rejection, breakdown, or volume confirmation
+  is still needed.
+- NO TRADE: Market is choppy/ranging, timeframes are strongly mixed,
+  key levels are too close, risk is high, or data is unclear.
+
+DECISION RULES:
+1. Do not require all three timeframes to be identical. Use 4h for
+   broad bias, 1h for setup quality, and 15m for entry timing.
+2. Use EMA trend, RSI, MACD, ADX, volume ratio, taker-buy ratio,
+   market structure, candle pattern, breakout status, support,
+   resistance, pivots, Fibonacci levels, and ATR where relevant.
+3. Never promise profit, certainty, or guaranteed targets.
+4. Entry zone, invalidation/stop loss, and targets must be educational
+   ideas based only on supplied levels and ATR; never automatic orders.
+5. Explain the primary evidence and clearly identify what confirmation
+   is still needed for WATCH signals.
+6. Strong signals should normally have higher confidence than WATCH;
+   use NO TRADE whenever the setup is weak or unclear.
+"""
+
+
+def get_ai_response_schema():
+    return {
+        "type": "object",
+        "properties": {
+            "signal": {
+                "type": "string",
+                "enum": [
+                    "STRONG BUY",
+                    "BUY WATCH",
+                    "NO TRADE",
+                    "SELL WATCH",
+                    "STRONG SELL",
+                ],
+            },
+            "confidence": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+            },
+            "risk": {
+                "type": "string",
+                "enum": ["LOW", "MEDIUM", "HIGH"],
+            },
+            "market_bias": {"type": "string"},
+            "setup_status": {"type": "string"},
+            "reason": {"type": "string"},
+            "confirmation_needed": {"type": "string"},
+            "entry_idea": {"type": "string"},
+            "stop_loss_idea": {"type": "string"},
+            "target_1": {"type": "string"},
+            "target_2": {"type": "string"},
+            "timeframes": {
+                "type": "object",
+                "properties": {
+                    "15m": {
+                        "type": "object",
+                        "properties": {
+                            "signal": {
+                                "type": "string",
+                                "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
+                            },
+                            "summary": {"type": "string"},
+                            "key_level": {"type": "string"},
+                        },
+                        "required": ["signal", "summary", "key_level"],
+                    },
+                    "1h": {
+                        "type": "object",
+                        "properties": {
+                            "signal": {
+                                "type": "string",
+                                "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
+                            },
+                            "summary": {"type": "string"},
+                            "key_level": {"type": "string"},
+                        },
+                        "required": ["signal", "summary", "key_level"],
+                    },
+                    "4h": {
+                        "type": "object",
+                        "properties": {
+                            "signal": {
+                                "type": "string",
+                                "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
+                            },
+                            "summary": {"type": "string"},
+                            "key_level": {"type": "string"},
+                        },
+                        "required": ["signal", "summary", "key_level"],
+                    },
+                },
+                "required": ["15m", "1h", "4h"],
+            },
+        },
+        "required": [
+            "signal",
+            "confidence",
+            "risk",
+            "market_bias",
+            "setup_status",
+            "reason",
+            "confirmation_needed",
+            "entry_idea",
+            "stop_loss_idea",
+            "target_1",
+            "target_2",
+            "timeframes",
+        ],
     }
 
 
@@ -611,10 +878,7 @@ def build_rrg_data(interval):
         for symbol in plotted_symbols
     }
 
-    timestamps = [
-        int(candle[0])
-        for candle in candle_sets[benchmark_symbol]
-    ]
+    timestamps = [int(candle[0]) for candle in candle_sets[benchmark_symbol]]
     benchmark = close_sets[benchmark_symbol]
     lookback = config["lookback"]
     tail = config["tail"]
@@ -623,17 +887,9 @@ def build_rrg_data(interval):
     for symbol in plotted_symbols:
         if symbol == benchmark_symbol:
             benchmark_points = [
-                {
-                    "x": 100.0,
-                    "y": 100.0,
-                    "timestamp": timestamps[index],
-                }
-                for index in range(
-                    max(0, len(timestamps) - tail),
-                    len(timestamps),
-                )
+                {"x": 100.0, "y": 100.0, "timestamp": timestamps[index]}
+                for index in range(max(0, len(timestamps) - tail), len(timestamps))
             ]
-
             trails.append(
                 {
                     "symbol": benchmark_symbol,
@@ -644,7 +900,6 @@ def build_rrg_data(interval):
             continue
 
         closes = close_sets[symbol]
-
         ratios = [
             (asset_close / benchmark_close) * 100
             for asset_close, benchmark_close in zip(closes, benchmark)
@@ -696,7 +951,6 @@ def build_rrg_data(interval):
         ]
 
         latest_direction = "Flat"
-
         if len(valid_points) >= 2:
             previous_point = valid_points[-2]
             latest_point = valid_points[-1]
@@ -737,7 +991,6 @@ def build_rrg_data(interval):
     }
 
 
-
 @app.get("/api/health")
 def health():
     return {
@@ -763,9 +1016,7 @@ def btc_price(force_refresh: bool = False):
     try:
         ticker = get_btc_ticker()
         current_price = float(ticker["lastPrice"])
-        previous_daily_close, daily_change_percent = get_btc_daily_change(
-            current_price
-        )
+        previous_daily_close, daily_change_percent = get_btc_daily_change(current_price)
 
         result = {
             "bitcoin": {
@@ -790,10 +1041,7 @@ def btc_price(force_refresh: bool = False):
             return {
                 **price_cache["data"],
                 "cached": True,
-                "warning": (
-                    "Live market feed is temporarily unavailable. "
-                    "Showing last saved price."
-                ),
+                "warning": "Live market feed is temporarily unavailable. Showing last saved price.",
             }
 
         raise HTTPException(
@@ -808,14 +1056,10 @@ def btc_chart(days: int = 7, interval: str = "1h"):
     allowed_intervals = {"15m", "1h", "1d", "1w"}
 
     if interval not in allowed_intervals:
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported chart interval.",
-        )
+        raise HTTPException(status_code=400, detail="Unsupported chart interval.")
 
     safe_days = max(1, min(days, 3650))
     cache_key = f"{interval}:{safe_days}"
-
     candles_needed = {
         "15m": min(max(safe_days * 96, 48), 1000),
         "1h": min(max(safe_days * 24, 24), 1000),
@@ -824,28 +1068,19 @@ def btc_chart(days: int = 7, interval: str = "1h"):
     }[interval]
 
     cached_chart = chart_cache["data"].get(cache_key)
-
     if cached_chart and now - cached_chart["updated_at"] < 60:
-        return {
-            **cached_chart,
-            "cached": True,
-        }
+        return {**cached_chart, "cached": True}
 
     try:
         candles = get_btc_klines(interval=interval, limit=candles_needed)
-
         result = {
-            "prices": [
-                [int(candle[0]), float(candle[4])]
-                for candle in candles
-            ],
+            "prices": [[int(candle[0]), float(candle[4])] for candle in candles],
             "interval": interval,
             "days": safe_days,
             "source": "Binance",
             "cached": False,
             "updated_at": int(now),
         }
-
         chart_cache["data"][cache_key] = result
         chart_cache["updated_at"] = now
         return result
@@ -855,10 +1090,7 @@ def btc_chart(days: int = 7, interval: str = "1h"):
             return {
                 **cached_chart,
                 "cached": True,
-                "warning": (
-                    "Live chart feed is temporarily unavailable. "
-                    "Showing last saved chart."
-                ),
+                "warning": "Live chart feed is temporarily unavailable. Showing last saved chart.",
             }
 
         raise HTTPException(
@@ -867,24 +1099,24 @@ def btc_chart(days: int = 7, interval: str = "1h"):
         )
 
 
+@app.get("/api/technical-signal")
+def technical_signal(force_refresh: bool = False):
+    market_data, cached = get_technical_market_data(force_refresh)
+    return build_technical_response(market_data, cached)
+
+
 @app.get("/api/rrg")
 def rrg(interval: str = "1d"):
     now = time.time()
 
     if interval not in {"1h", "1d"}:
-        raise HTTPException(
-            status_code=400,
-            detail="RRG interval must be 1h or 1d.",
-        )
+        raise HTTPException(status_code=400, detail="RRG interval must be 1h or 1d.")
 
     cached_data = rrg_cache["data"].get(interval)
     cache_ttl = 300 if interval == "1h" else 900
 
     if cached_data and now - cached_data["updated_at"] < cache_ttl:
-        return {
-            **cached_data,
-            "cached": True,
-        }
+        return {**cached_data, "cached": True}
 
     try:
         result = build_rrg_data(interval)
@@ -910,199 +1142,34 @@ def ai_signal():
     now = time.time()
 
     if ai_signal_cache["data"] and now - ai_signal_cache["updated_at"] < 90:
-        return {
-            **ai_signal_cache["data"],
-            "cached": True,
-        }
+        return {**ai_signal_cache["data"], "cached": True}
 
+    market_data, market_data_cached = get_technical_market_data()
     api_key = os.getenv("GEMINI_API_KEY")
+
     if not api_key:
-        return safe_hold_signal(
-            "Gemini API key is not configured on the server."
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini AI is not configured. Live technical fallback is active.",
         )
 
     try:
-        ticker = get_btc_ticker()
-
-        candles_15m = get_btc_klines(interval="15m", limit=250)
-        candles_1h = get_btc_klines(interval="1h", limit=250)
-        candles_4h = get_btc_klines(interval="4h", limit=250)
-
-        analysis_15m = calculate_market_indicators(candles_15m, "15m")
-        analysis_1h = calculate_market_indicators(candles_1h, "1h")
-        analysis_4h = calculate_market_indicators(candles_4h, "4h")
-
-        market_data = {
-            "symbol": "BTCUSDT",
-            "current_price_usdt": round_value(ticker["lastPrice"]),
-            "price_change_24h_percent": round_value(
-                ticker["priceChangePercent"]
-            ),
-            "high_24h_usdt": round_value(ticker["highPrice"]),
-            "low_24h_usdt": round_value(ticker["lowPrice"]),
-            "quote_volume_24h_usdt": round_value(ticker["quoteVolume"]),
-            "timeframes": {
-                "15m": analysis_15m,
-                "1h": analysis_1h,
-                "4h": analysis_4h,
-            },
-        }
-
-        prompt = f"""
-You are an advanced but cautious BTCUSDT market-analysis assistant
-for an educational dashboard. Analyze only the supplied live Binance
-market data.
-
-DATA:
-{json.dumps(market_data, indent=2)}
-
-Return only the requested JSON object in simple Hindi-English
-(Hinglish).
-
-SIGNAL DEFINITIONS:
-- STRONG BUY: 4h and 1h trend are bullish, 15m supports an entry,
-  momentum/volume confirms, and risk is acceptable.
-- BUY WATCH: Higher timeframe bias is bullish but an entry
-  confirmation, pullback completion, breakout, or volume confirmation
-  is still needed.
-- STRONG SELL: 4h and 1h trend are bearish, 15m supports an entry,
-  momentum/volume confirms, and risk is acceptable.
-- SELL WATCH: Higher timeframe bias is bearish but an entry
-  confirmation, rebound rejection, breakdown, or volume confirmation
-  is still needed.
-- NO TRADE: Market is choppy/ranging, timeframes are strongly mixed,
-  key levels are too close, risk is high, or data is unclear.
-
-DECISION RULES:
-1. Do not require all three timeframes to be identical. Use 4h for
-   broad bias, 1h for setup quality, and 15m for entry timing.
-2. Use EMA trend, RSI, MACD, ADX, volume ratio, taker-buy ratio,
-   market structure, candle pattern, breakout status, support,
-   resistance, pivots, Fibonacci levels, and ATR where relevant.
-3. Never promise profit, certainty, or guaranteed targets.
-4. Entry zone, invalidation/stop loss, and targets must be educational
-   ideas based only on supplied levels and ATR; never automatic orders.
-5. Explain the primary evidence and clearly identify what confirmation
-   is still needed for WATCH signals.
-6. Strong signals should normally have higher confidence than WATCH;
-   use NO TRADE whenever the setup is weak or unclear.
-"""
-
-        response_schema = {
-            "type": "object",
-            "properties": {
-                "signal": {
-                    "type": "string",
-                    "enum": [
-                        "STRONG BUY",
-                        "BUY WATCH",
-                        "NO TRADE",
-                        "SELL WATCH",
-                        "STRONG SELL",
-                    ],
-                },
-                "confidence": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 100,
-                },
-                "risk": {
-                    "type": "string",
-                    "enum": ["LOW", "MEDIUM", "HIGH"],
-                },
-                "market_bias": {"type": "string"},
-                "setup_status": {"type": "string"},
-                "reason": {"type": "string"},
-                "confirmation_needed": {"type": "string"},
-                "entry_idea": {"type": "string"},
-                "stop_loss_idea": {"type": "string"},
-                "target_1": {"type": "string"},
-                "target_2": {"type": "string"},
-                "timeframes": {
-                    "type": "object",
-                    "properties": {
-                        "15m": {
-                            "type": "object",
-                            "properties": {
-                                "signal": {
-                                    "type": "string",
-                                    "enum": [
-                                        "BULLISH",
-                                        "BEARISH",
-                                        "NEUTRAL",
-                                    ],
-                                },
-                                "summary": {"type": "string"},
-                                "key_level": {"type": "string"},
-                            },
-                            "required": ["signal", "summary", "key_level"],
-                        },
-                        "1h": {
-                            "type": "object",
-                            "properties": {
-                                "signal": {
-                                    "type": "string",
-                                    "enum": [
-                                        "BULLISH",
-                                        "BEARISH",
-                                        "NEUTRAL",
-                                    ],
-                                },
-                                "summary": {"type": "string"},
-                                "key_level": {"type": "string"},
-                            },
-                            "required": ["signal", "summary", "key_level"],
-                        },
-                        "4h": {
-                            "type": "object",
-                            "properties": {
-                                "signal": {
-                                    "type": "string",
-                                    "enum": [
-                                        "BULLISH",
-                                        "BEARISH",
-                                        "NEUTRAL",
-                                    ],
-                                },
-                                "summary": {"type": "string"},
-                                "key_level": {"type": "string"},
-                            },
-                            "required": ["signal", "summary", "key_level"],
-                        },
-                    },
-                    "required": ["15m", "1h", "4h"],
-                },
-            },
-            "required": [
-                "signal",
-                "confidence",
-                "risk",
-                "market_bias",
-                "setup_status",
-                "reason",
-                "confirmation_needed",
-                "entry_idea",
-                "stop_loss_idea",
-                "target_1",
-                "target_2",
-                "timeframes",
-            ],
-        }
-
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=prompt,
+            contents=build_ai_prompt(market_data),
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_json_schema=response_schema,
+                response_json_schema=get_ai_response_schema(),
             ),
         )
 
         result = json.loads(response.text)
         result["market_data"] = market_data
         result["source"] = "Binance market data + Gemini advanced analysis"
+        result["analysis_mode"] = "ai"
         result["cached"] = False
+        result["market_data_cached"] = market_data_cached
         result["updated_at"] = int(now)
         result["disclaimer"] = (
             "Educational market analysis only. Not financial advice "
@@ -1113,48 +1180,32 @@ DECISION RULES:
         ai_signal_cache["updated_at"] = now
         return result
 
-    except Exception as error:
-        return safe_hold_signal(
-            "AI analysis is temporarily unavailable: "
-            f"{type(error).__name__}: {str(error)}"
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini AI quota or service is temporarily unavailable. Live technical fallback is active.",
         )
 
 
 @app.post("/api/chart-analyser")
 async def chart_analyser(file: UploadFile = File(...)):
-    allowed_types = {
-        "image/png",
-        "image/jpeg",
-        "image/webp",
-    }
+    allowed_types = {"image/png", "image/jpeg", "image/webp"}
     max_file_size = 8 * 1024 * 1024
 
     if file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail="Upload a PNG, JPG, or WEBP chart image only.",
-        )
+        raise HTTPException(status_code=400, detail="Upload a PNG, JPG, or WEBP chart image only.")
 
     image_bytes = await file.read()
 
     if not image_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="The uploaded chart image is empty.",
-        )
+        raise HTTPException(status_code=400, detail="The uploaded chart image is empty.")
 
     if len(image_bytes) > max_file_size:
-        raise HTTPException(
-            status_code=413,
-            detail="Chart image is too large. Maximum size is 8 MB.",
-        )
+        raise HTTPException(status_code=413, detail="Chart image is too large. Maximum size is 8 MB.")
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Gemini API key is not configured on the server.",
-        )
+        raise HTTPException(status_code=503, detail="Gemini API key is not configured on the server.")
 
     prompt = """
 You are a cautious technical-analysis assistant for an educational
@@ -1167,12 +1218,9 @@ that cannot be read clearly from the image.
 Return only a JSON object in simple Hinglish.
 
 Rules:
-1. Output BUY only if a clear bullish setup and visible confirmation
-   are present.
-2. Output SELL only if a clear bearish setup and visible confirmation
-   are present.
-3. Output HOLD if the chart is unclear, cropped, has insufficient
-   context, is sideways, or confirmation is missing.
+1. Output BUY only if a clear bullish setup and visible confirmation are present.
+2. Output SELL only if a clear bearish setup and visible confirmation are present.
+3. Output HOLD if the chart is unclear, cropped, has insufficient context, is sideways, or confirmation is missing.
 4. Never promise profit, certainty, or guaranteed targets.
 5. This is educational analysis only, never an automated trade order.
 6. Clearly say "Not visible" when required chart information is absent.
@@ -1181,19 +1229,9 @@ Rules:
     response_schema = {
         "type": "object",
         "properties": {
-            "signal": {
-                "type": "string",
-                "enum": ["BUY", "SELL", "HOLD"],
-            },
-            "confidence": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 100,
-            },
-            "risk": {
-                "type": "string",
-                "enum": ["LOW", "MEDIUM", "HIGH"],
-            },
+            "signal": {"type": "string", "enum": ["BUY", "SELL", "HOLD"]},
+            "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+            "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
             "trend": {"type": "string"},
             "pattern": {"type": "string"},
             "support": {"type": "string"},
@@ -1224,10 +1262,7 @@ Rules:
             model=GEMINI_MODEL,
             contents=[
                 prompt,
-                types.Part.from_bytes(
-                    data=image_bytes,
-                    mime_type=file.content_type,
-                ),
+                types.Part.from_bytes(data=image_bytes, mime_type=file.content_type),
             ],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -1243,13 +1278,10 @@ Rules:
         )
         return result
 
-    except Exception as error:
+    except Exception:
         raise HTTPException(
-            status_code=502,
-            detail=(
-                "Chart analysis is temporarily unavailable: "
-                f"{type(error).__name__}: {str(error)}"
-            ),
+            status_code=503,
+            detail="Chart Gemini AI is temporarily unavailable. Please try again later.",
         )
 
 
