@@ -367,81 +367,102 @@
       </div>
     </section>
 
-    <section class="card paper-trading-card">
-      <div class="section-heading">
-        <div>
-          <h2>Virtual Paper Trading (INR)</h2>
-          <p>
-            Practice only. No real money, payment, bank, wallet or exchange
-            order.
-          </p>
-        </div>
+   <section class="card paper-trading-card">
+  <div class="section-heading">
+    <div>
+      <h2>Virtual Paper Trading (INR)</h2>
+      <p>
+        Practice only. Supports 1x virtual long and short positions.
+        No real money, payment, bank, wallet or exchange order.
+      </p>
+    </div>
 
-        <button id="resetPaperBtn" class="reset-paper-btn" type="button">
-          Reset Demo
-        </button>
-      </div>
+    <button id="resetPaperBtn" class="reset-paper-btn" type="button">
+      Reset Demo
+    </button>
+  </div>
 
-      <div class="paper-metrics">
-        <div class="paper-metric">
-          <span>Virtual Cash</span>
-          <strong id="paperCash">₹--</strong>
-        </div>
+  <div class="paper-metrics">
+    <div class="paper-metric">
+      <span>Virtual Cash</span>
+      <strong id="paperCash">₹--</strong>
+    </div>
 
-        <div class="paper-metric">
-          <span>BTC Holding</span>
-          <strong id="paperBtcHolding">0 BTC</strong>
-        </div>
+    <div class="paper-metric">
+      <span>Long BTC Holding</span>
+      <strong id="paperBtcHolding">0.000000 BTC</strong>
+    </div>
 
-        <div class="paper-metric">
-          <span>Average Buy Price</span>
-          <strong id="paperAvgPrice">₹--</strong>
-        </div>
+    <div class="paper-metric">
+      <span>Short BTC Holding</span>
+      <strong id="paperShortBtcHolding">0.000000 BTC</strong>
+    </div>
 
-        <div class="paper-metric">
-          <span>Portfolio Value</span>
-          <strong id="paperPortfolioValue">₹--</strong>
-        </div>
+    <div class="paper-metric">
+      <span>Position</span>
+      <strong id="paperPositionType">No open position</strong>
+    </div>
 
-        <div class="paper-metric">
-          <span>Profit / Loss</span>
-          <strong id="paperPnl">₹--</strong>
-        </div>
-      </div>
+    <div class="paper-metric">
+      <span>Average Long Price</span>
+      <strong id="paperAvgPrice">No long position</strong>
+    </div>
 
-      <div class="paper-trade-form">
-        <label for="paperAmountInput">Virtual amount to trade (INR)</label>
+    <div class="paper-metric">
+      <span>Average Short Price</span>
+      <strong id="paperShortAvgPrice">No short position</strong>
+    </div>
 
-        <div class="paper-action-row">
-          <input
-            id="paperAmountInput"
-            type="number"
-            min="100"
-            step="100"
-            placeholder="Example: 10000"
-          />
+    <div class="paper-metric">
+      <span>Portfolio Value</span>
+      <strong id="paperPortfolioValue">₹--</strong>
+    </div>
 
-          <button id="paperBuyBtn" class="paper-buy-btn" type="button">
-            Virtual Buy BTC
-          </button>
+    <div class="paper-metric">
+      <span>Profit / Loss</span>
+      <strong id="paperPnl">₹--</strong>
+    </div>
+  </div>
 
-          <button id="paperSellBtn" class="paper-sell-btn" type="button">
-            Virtual Sell BTC
-          </button>
-        </div>
+  <div class="paper-trade-form">
+    <label for="paperAmountInput">Virtual amount to trade (INR)</label>
 
-        <p id="paperTradeStatus" class="paper-status">
-          Load live price, then enter a virtual INR amount.
-        </p>
-      </div>
+    <div class="paper-action-row">
+      <input
+        id="paperAmountInput"
+        type="number"
+        min="100"
+        step="100"
+        placeholder="Example: 10000"
+      />
 
-      <div class="paper-history-wrap">
-        <h3>Virtual Trade History</h3>
-        <div id="paperTradeHistory" class="paper-history">
-          No virtual trades yet.
-        </div>
-      </div>
-    </section>
+      <button id="paperBuyBtn" class="paper-buy-btn" type="button">
+        Buy BTC / Cover Short
+      </button>
+
+      <button id="paperSellBtn" class="paper-sell-btn" type="button">
+        Sell BTC / Open Short
+      </button>
+    </div>
+
+    <p class="paper-short-help">
+      Buy opens/adds a long position or covers an existing short. Sell closes
+      a long position or opens a 1x virtual short. Educational simulation only.
+    </p>
+
+    <p id="paperTradeStatus" class="paper-status">
+      Load live price, then enter a virtual INR amount.
+    </p>
+  </div>
+
+  <div class="paper-history-wrap">
+    <h3>Virtual Trade History</h3>
+
+    <div id="paperTradeHistory" class="paper-history">
+      No virtual trades yet.
+    </div>
+  </div>
+</section>
 
     <section class="disclaimer-card">
       <p id="disclaimerText">
