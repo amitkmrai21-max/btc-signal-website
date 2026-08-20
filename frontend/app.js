@@ -259,7 +259,68 @@ function calculateTechnicalSignal(market15m = {}, market1h = {}) {
     score: Math.max(buyScore, sellScore)
   };
 }
+async function loadTechnicalFallback(reasonPrefix) {
+  try {
+    const response = await fetch("/api/technical-signal", {
+      cache: "no-store"
+    });
 
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail || "Technical signal API could not be loaded."
+      );
+    }
+
+    latestTechnicalMarket = data?.market_data?.timeframes || {};
+
+    updateIndicators(
+      latestTechnicalMarket["15m"] || {},
+      latestTechnicalMarket["1h"] || {}
+    );
+
+    const analysis15m = data?.timeframes?.["15m"] || {};
+    const analysis1h = data?.timeframes?.["1h"] || {};
+    const analysis4h = data?.timeframes?.["4h"] || {};
+
+    setMiniSignal("signal15m", analysis15m.signal);
+    setMiniSignal("signal1h", analysis1h.signal);
+    setMiniSignal("signal4h", analysis4h.signal);
+
+    setText("summary15m", analysis15m.summary);
+    setText("summary1h", analysis1h.summary);
+    setText("summary4h", analysis4h.summary);
+    setText("keyLevel15m", analysis15m.key_level);
+    setText("keyLevel1h", analysis1h.key_level);
+    setText("keyLevel4h", analysis4h.key_level);
+
+    setText("marketBias", data.market_bias);
+    setText("setupStatus", data.setup_status);
+    setText("confirmationNeeded", data.confirmation_needed);
+    setText("target1", data.target_1);
+    setText("target2", data.target_2);
+
+    setSignal(data.signal, `${reasonPrefix} ${data.reason}`);
+    setText("aiConfidence", "--");
+    setText("entryIdea", data.entry_idea);
+    setText("stopLossIdea", data.stop_loss_idea);
+    setRiskBadge(data.risk);
+
+    setSignalSource(
+      "Live technical fallback — AI unavailable or expired",
+      "technical"
+    );
+
+    setText(
+      "analysisUpdatedAt",
+      "Gemini AI unavailable; live Binance technical analysis is active."
+    );
+  } catch (error) {
+    console.error(error);
+    renderTechnicalFallback(reasonPrefix);
+  }
+}
 function renderTechnicalFallback(reasonPrefix = "Gemini AI is temporarily unavailable.") {
   const market15m = latestTechnicalMarket?.["15m"] || {};
   const market1h = latestTechnicalMarket?.["1h"] || {};
@@ -275,13 +336,14 @@ function scheduleAiPlanExpiry() {
   if (aiPlanTimer) clearTimeout(aiPlanTimer);
 
   const remainingMs = AI_PLAN_VALIDITY_MS - getAiPlanAgeMs();
+
   if (remainingMs <= 0) {
-    renderTechnicalFallback("AI plan expired.");
+    loadTechnicalFallback("AI plan expired.");
     return;
   }
 
   aiPlanTimer = setTimeout(() => {
-    renderTechnicalFallback("AI plan expired.");
+    loadTechnicalFallback("AI plan expired.");
   }, remainingMs + 100);
 }
 
@@ -554,7 +616,7 @@ async function loadAiAnalysis() {
       return;
     }
 
-    renderTechnicalFallback("Gemini AI is temporarily unavailable.");
+    loadTechnicalFallback("Gemini AI is temporarily unavailable.");
   } finally {
     aiRefreshInProgress = false;
   }
