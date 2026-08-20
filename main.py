@@ -586,8 +586,8 @@ def safe_hold_signal(reason):
 
 def build_rrg_data(interval):
     settings = {
-        "1h": {"limit": 220, "lookback": 60, "tail": 10},
-        "1d": {"limit": 220, "lookback": 30, "tail": 10},
+        "1h": {"limit": 220, "lookback": 60, "tail": 6},
+        "1d": {"limit": 220, "lookback": 30, "tail": 6},
     }
 
     if interval not in settings:
@@ -686,29 +686,38 @@ def health():
 
 
 @app.get("/api/btc/price")
-def btc_price():
+def btc_price(force_refresh: bool = False):
     now = time.time()
+    cache_age = now - price_cache["updated_at"]
 
-    if price_cache["data"] and now - price_cache["updated_at"] < 15:
+    if (
+        not force_refresh
+        and price_cache["data"]
+        and cache_age < 15
+    ):
         return {
             **price_cache["data"],
             "cached": True,
+            "cache_age_seconds": round(cache_age, 1),
         }
 
     try:
         ticker = get_btc_ticker()
+
         result = {
             "bitcoin": {
                 "usd": float(ticker["lastPrice"]),
                 "usd_24h_change": float(ticker["priceChangePercent"]),
+                "price_change_24h_usd": float(ticker["priceChange"]),
+                "open_price_24h_usd": float(ticker["openPrice"]),
             },
             "source": "Binance",
             "cached": False,
-            "updated_at": int(now),
+            "updated_at": int(time.time()),
         }
 
         price_cache["data"] = result
-        price_cache["updated_at"] = now
+        price_cache["updated_at"] = time.time()
         return result
 
     except requests.exceptions.RequestException as error:
@@ -726,7 +735,6 @@ def btc_price():
             status_code=502,
             detail=f"Failed to fetch BTC price from Binance: {str(error)}",
         )
-
 
 @app.get("/api/btc/chart")
 def btc_chart(days: int = 7, interval: str = "1h"):
@@ -839,7 +847,7 @@ def rrg(interval: str = "1d"):
 def ai_signal():
     now = time.time()
 
-    if ai_signal_cache["data"] and now - ai_signal_cache["updated_at"] < 300:
+   if ai_signal_cache["data"] and now - ai_signal_cache["updated_at"] < 90::
         return {
             **ai_signal_cache["data"],
             "cached": True,
