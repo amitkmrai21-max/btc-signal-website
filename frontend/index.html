@@ -15,10 +15,10 @@
   <header class="topbar">
     <div class="brand">
       <img
-  class="brand-logo"
-  src="/frontend/image-1.png"
-  alt="BTC AI Signal logo"
->
+        class="brand-logo"
+        src="/frontend/image-1.png"
+        alt="BTC AI Signal logo"
+      />
 
       <div class="brand-text">
         <h1>BTC AI Signal</h1>
@@ -239,7 +239,7 @@
 
     <section class="card ai-analysis-card">
       <div class="section-heading">
-                <div>
+        <div>
           <h2>Gemini AI Analysis</h2>
           <p id="analysisUpdatedAt">Updating analysis...</p>
 
@@ -297,7 +297,7 @@
         </div>
       </div>
 
-            <div class="timeframe-analysis-grid">
+      <div class="timeframe-analysis-grid">
         <article class="timeframe-analysis-card">
           <div class="timeframe-title-row">
             <h3>15 Min</h3>
@@ -335,7 +335,45 @@
         </article>
       </div>
     </section>
-        <section class="card trade-plan-card">
+
+    <!-- New: Last AI signal vs live technical fallback comparison -->
+    <section class="card signal-comparison-card">
+      <div class="section-heading">
+        <div>
+          <h2>Signal Confirmation</h2>
+          <p>
+            Compares the most recent successful Gemini AI view with current
+            live technical conditions.
+          </p>
+        </div>
+      </div>
+
+      <div class="signal-comparison">
+        <article class="signal-card ai-history-card">
+          <div class="card-label">Last AI Signal</div>
+          <strong id="lastAiSignal">No previous AI analysis</strong>
+          <p id="lastAiConfidence">Confidence: --</p>
+          <p id="lastAiUpdated">Updated: --</p>
+        </article>
+
+        <article class="signal-card technical-live-card">
+          <div class="card-label">Live Technical Status</div>
+          <strong id="liveTechnicalSignal">
+            Waiting for live technical analysis
+          </strong>
+          <p id="liveTechnicalReason">--</p>
+          <p id="liveTechnicalUpdated">Updated: --</p>
+        </article>
+      </div>
+
+      <article class="combined-decision-card">
+        <div class="card-label">Execution Decision</div>
+        <strong id="combinedDecision">Waiting for analysis</strong>
+        <p id="combinedDecisionReason">--</p>
+      </article>
+    </section>
+
+    <section class="card trade-plan-card">
       <div class="section-heading">
         <div>
           <h2>Advanced Trade Plan</h2>
@@ -375,6 +413,7 @@
         </article>
       </div>
     </section>
+
     <section class="card">
       <div class="section-heading">
         <div>
@@ -422,102 +461,102 @@
       </div>
     </section>
 
-   <section class="card paper-trading-card">
-  <div class="section-heading">
-    <div>
-      <h2>Virtual Paper Trading (INR)</h2>
-      <p>
-        Practice only. Supports 1x virtual long and short positions.
-        No real money, payment, bank, wallet or exchange order.
-      </p>
-    </div>
+    <section class="card paper-trading-card">
+      <div class="section-heading">
+        <div>
+          <h2>Virtual Paper Trading (INR)</h2>
+          <p>
+            Practice only. Supports 1x virtual long and short positions.
+            No real money, payment, bank, wallet or exchange order.
+          </p>
+        </div>
 
-    <button id="resetPaperBtn" class="reset-paper-btn" type="button">
-      Reset Demo
-    </button>
-  </div>
+        <button id="resetPaperBtn" class="reset-paper-btn" type="button">
+          Reset Demo
+        </button>
+      </div>
 
-  <div class="paper-metrics">
-    <div class="paper-metric">
-      <span>Virtual Cash</span>
-      <strong id="paperCash">₹--</strong>
-    </div>
+      <div class="paper-metrics">
+        <div class="paper-metric">
+          <span>Virtual Cash</span>
+          <strong id="paperCash">₹--</strong>
+        </div>
 
-    <div class="paper-metric">
-      <span>Long BTC Holding</span>
-      <strong id="paperBtcHolding">0.000000 BTC</strong>
-    </div>
+        <div class="paper-metric">
+          <span>Long BTC Holding</span>
+          <strong id="paperBtcHolding">0.000000 BTC</strong>
+        </div>
 
-    <div class="paper-metric">
-      <span>Short BTC Holding</span>
-      <strong id="paperShortBtcHolding">0.000000 BTC</strong>
-    </div>
+        <div class="paper-metric">
+          <span>Short BTC Holding</span>
+          <strong id="paperShortBtcHolding">0.000000 BTC</strong>
+        </div>
 
-    <div class="paper-metric">
-      <span>Position</span>
-      <strong id="paperPositionType">No open position</strong>
-    </div>
+        <div class="paper-metric">
+          <span>Position</span>
+          <strong id="paperPositionType">No open position</strong>
+        </div>
 
-    <div class="paper-metric">
-      <span>Average Long Price</span>
-      <strong id="paperAvgPrice">No long position</strong>
-    </div>
+        <div class="paper-metric">
+          <span>Average Long Price</span>
+          <strong id="paperAvgPrice">No long position</strong>
+        </div>
 
-    <div class="paper-metric">
-      <span>Average Short Price</span>
-      <strong id="paperShortAvgPrice">No short position</strong>
-    </div>
+        <div class="paper-metric">
+          <span>Average Short Price</span>
+          <strong id="paperShortAvgPrice">No short position</strong>
+        </div>
 
-    <div class="paper-metric">
-      <span>Portfolio Value</span>
-      <strong id="paperPortfolioValue">₹--</strong>
-    </div>
+        <div class="paper-metric">
+          <span>Portfolio Value</span>
+          <strong id="paperPortfolioValue">₹--</strong>
+        </div>
 
-    <div class="paper-metric">
-      <span>Profit / Loss</span>
-      <strong id="paperPnl">₹--</strong>
-    </div>
-  </div>
+        <div class="paper-metric">
+          <span>Profit / Loss</span>
+          <strong id="paperPnl">₹--</strong>
+        </div>
+      </div>
 
-  <div class="paper-trade-form">
-    <label for="paperAmountInput">Virtual amount to trade (INR)</label>
+      <div class="paper-trade-form">
+        <label for="paperAmountInput">Virtual amount to trade (INR)</label>
 
-    <div class="paper-action-row">
-      <input
-        id="paperAmountInput"
-        type="number"
-        min="100"
-        step="100"
-        placeholder="Example: 10000"
-      />
+        <div class="paper-action-row">
+          <input
+            id="paperAmountInput"
+            type="number"
+            min="100"
+            step="100"
+            placeholder="Example: 10000"
+          />
 
-      <button id="paperBuyBtn" class="paper-buy-btn" type="button">
-        Buy BTC / Cover Short
-      </button>
+          <button id="paperBuyBtn" class="paper-buy-btn" type="button">
+            Buy BTC / Cover Short
+          </button>
 
-      <button id="paperSellBtn" class="paper-sell-btn" type="button">
-        Sell BTC / Open Short
-      </button>
-    </div>
+          <button id="paperSellBtn" class="paper-sell-btn" type="button">
+            Sell BTC / Open Short
+          </button>
+        </div>
 
-    <p class="paper-short-help">
-      Buy opens/adds a long position or covers an existing short. Sell closes
-      a long position or opens a 1x virtual short. Educational simulation only.
-    </p>
+        <p class="paper-short-help">
+          Buy opens/adds a long position or covers an existing short. Sell closes
+          a long position or opens a 1x virtual short. Educational simulation only.
+        </p>
 
-    <p id="paperTradeStatus" class="paper-status">
-      Load live price, then enter a virtual INR amount.
-    </p>
-  </div>
+        <p id="paperTradeStatus" class="paper-status">
+          Load live price, then enter a virtual INR amount.
+        </p>
+      </div>
 
-  <div class="paper-history-wrap">
-    <h3>Virtual Trade History</h3>
+      <div class="paper-history-wrap">
+        <h3>Virtual Trade History</h3>
 
-    <div id="paperTradeHistory" class="paper-history">
-      No virtual trades yet.
-    </div>
-  </div>
-</section>
+        <div id="paperTradeHistory" class="paper-history">
+          No virtual trades yet.
+        </div>
+      </div>
+    </section>
 
     <section class="disclaimer-card">
       <p id="disclaimerText">
