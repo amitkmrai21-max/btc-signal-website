@@ -458,8 +458,12 @@ function updateIndicators(market15m, market1h) {
   setText("structure1h", market1h.market_structure);
 }
 
-async function loadPrice() {
-  const response = await fetch("/api/btc/price", {
+async function loadPrice(forceRefresh = false) {
+  const url = forceRefresh
+    ? "/api/btc/price?force_refresh=true"
+    : "/api/btc/price";
+
+  const response = await fetch(url, {
     cache: "no-store"
   });
 
@@ -470,7 +474,6 @@ async function loadPrice() {
   const data = await response.json();
   updatePrice(data);
 }
-
 async function loadChart() {
   const selected = timeframeSettings[activeTimeframe];
 
@@ -553,7 +556,7 @@ async function loadAiAnalysis() {
 async function refreshFastData() {
   try {
     await Promise.all([
-      loadPrice(),
+      loadPrice(true),
       loadChart()
     ]);
   } catch (error) {
@@ -566,23 +569,19 @@ async function refreshFastData() {
   }
 }
 
-async function refreshAllData() {
-  const refreshButton = getElement("refreshBtn");
+async function refreshFastData() {
+  try {
+    await Promise.all([
+      loadPrice(true),
+      loadChart()
+    ]);
+  } catch (error) {
+    console.error(error);
 
-  if (refreshButton) {
-    refreshButton.disabled = true;
-    refreshButton.textContent = "Refreshing...";
-  }
-
-  await Promise.all([
-    refreshFastData(),
-    loadAiAnalysis(),
-    loadRrg()
-  ]);
-
-  if (refreshButton) {
-    refreshButton.disabled = false;
-    refreshButton.textContent = "Refresh Analysis";
+    setText(
+      "marketUpdatedAt",
+      "Live price/chart could not be updated. Please try again."
+    );
   }
 }
 
@@ -839,7 +838,7 @@ function renderRrg(rrgData) {
       })),
       borderColor: color.border,
       backgroundColor: color.background,
-      borderWidth: 2.5,
+      borderWidth: 3,
       pointBorderColor: color.border,
       pointBackgroundColor(context) {
         return context.raw?.isLatest
@@ -847,11 +846,11 @@ function renderRrg(rrgData) {
           : "rgba(15, 23, 42, 0.9)";
       },
       pointRadius(context) {
-        return context.raw?.isLatest ? 6 : 3;
+        return context.raw?.isLatest ? 8 : 2.5;
       },
       pointHoverRadius: 7,
       showLine: true,
-      tension: 0.22
+      tension: 0
     };
   });
 
@@ -864,7 +863,7 @@ function renderRrg(rrgData) {
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      aspectRatio: 1.8,
+      aspectRatio: 1.05,
       interaction: {
         intersect: false,
         mode: "nearest"
