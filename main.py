@@ -847,7 +847,7 @@ def rrg(interval: str = "1d"):
 def ai_signal():
     now = time.time()
 
-   if ai_signal_cache["data"] and now - ai_signal_cache["updated_at"] < 90::
+   if ai_signal_cache["data"] and now - ai_signal_cache["updated_at"] < 90:
         return {
             **ai_signal_cache["data"],
             "cached": True,
