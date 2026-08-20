@@ -640,8 +640,25 @@ def build_rrg_data(interval):
     trails = []
 
     for symbol in symbols:
-        # BTC is the benchmark. Do not draw its fixed BTC/BTC point.
-        if symbol == "BTCUSDT":
+                if symbol == "BTCUSDT":
+            btc_points = [
+                {
+                    "x": 100.0,
+                    "y": 100.0,
+                    "timestamp": timestamps[index],
+                }
+                for index in range(
+                    max(0, len(timestamps) - tail),
+                    len(timestamps)
+                )
+            ]
+
+            trails.append({
+                "symbol": "BTCUSDT",
+                "points": btc_points,
+                "direction": "Flat",
+            })
+
             continue
 
         closes = close_sets[symbol]
