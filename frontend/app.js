@@ -72,15 +72,34 @@ function formatBtc(value) {
 }
 
 function getSignalColor(signal) {
-  if (signal === "BUY") return "#22c55e";
-  if (signal === "SELL") return "#ef4444";
+  if (signal === "STRONG BUY" || signal === "BUY" || signal === "BUY WATCH") {
+    return "#22c55e";
+  }
+
+  if (signal === "STRONG SELL" || signal === "SELL" || signal === "SELL WATCH") {
+    return "#ef4444";
+  }
+
   return "#facc15";
 }
 
+function normaliseMainSignal(signal) {
+  const allowedSignals = [
+    "STRONG BUY",
+    "BUY WATCH",
+    "NO TRADE",
+    "SELL WATCH",
+    "STRONG SELL",
+    "BUY",
+    "SELL",
+    "HOLD"
+  ];
+
+  return allowedSignals.includes(signal) ? signal : "NO TRADE";
+}
+
 function setSignal(signal, reason) {
-  const normalizedSignal = ["BUY", "SELL", "HOLD"].includes(signal)
-    ? signal
-    : "HOLD";
+  const normalizedSignal = normaliseMainSignal(signal);
   const color = getSignalColor(normalizedSignal);
   const signalBox = getElement("signalBox");
   const signalAction = getElement("signal-action");
@@ -321,21 +340,37 @@ function updateAiAnalysis(aiData) {
   setText("entryIdea", aiData.entry_idea);
   setText("stopLossIdea", aiData.stop_loss_idea);
   setText("disclaimerText", aiData.disclaimer);
-  setText("analysisUpdatedAt", `Last analysis: ${formatUpdatedAt(aiData.updated_at)}${aiData.cached ? " (cached)" : ""}`);
+  setText(
+    "analysisUpdatedAt",
+    `Last analysis: ${formatUpdatedAt(aiData.updated_at)}${aiData.cached ? " (cached)" : ""}`
+  );
   setRiskBadge(aiData.risk);
 
   const analysis15m = aiData?.timeframes?.["15m"] || {};
   const analysis1h = aiData?.timeframes?.["1h"] || {};
+  const analysis4h = aiData?.timeframes?.["4h"] || {};
+
   setMiniSignal("signal15m", analysis15m.signal);
   setMiniSignal("signal1h", analysis1h.signal);
+
   setText("summary15m", analysis15m.summary);
   setText("summary1h", analysis1h.summary);
   setText("keyLevel15m", analysis15m.key_level);
   setText("keyLevel1h", analysis1h.key_level);
 
+  setText("marketBias", aiData.market_bias);
+  setText("setupStatus", aiData.setup_status);
+  setText("confirmationNeeded", aiData.confirmation_needed);
+  setText("target1", aiData.target_1);
+  setText("target2", aiData.target_2);
+
   const market15m = aiData?.market_data?.timeframes?.["15m"] || {};
   const market1h = aiData?.market_data?.timeframes?.["1h"] || {};
   updateIndicators(market15m, market1h);
+
+  setMiniSignal("signal4h", analysis4h.signal);
+  setText("summary4h", analysis4h.summary);
+  setText("keyLevel4h", analysis4h.key_level);
 }
 
 async function loadPrice(forceRefresh = false) {
