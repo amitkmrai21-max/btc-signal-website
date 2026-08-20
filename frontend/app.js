@@ -29,38 +29,22 @@ const timeframeSettings = {
     days: 7,
     interval: "1h",
     label: "Hourly",
-    dateOptions: {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit"
-    },
+    dateOptions: { month: "short", day: "numeric", hour: "2-digit" },
     maxPoints: 120
   },
   "15M": {
     days: 1,
     interval: "15m",
     label: "15 Min",
-    dateOptions: {
-      hour: "2-digit",
-      minute: "2-digit"
-    },
+    dateOptions: { hour: "2-digit", minute: "2-digit" },
     maxPoints: 120
   }
 };
 
 const rrgColors = {
-  BTCUSDT: {
-    border: "#facc15",
-    background: "rgba(250, 204, 21, 0.18)"
-  },
-  ETHUSDT: {
-    border: "#60a5fa",
-    background: "rgba(96, 165, 250, 0.18)"
-  },
-  SOLUSDT: {
-    border: "#a78bfa",
-    background: "rgba(167, 139, 250, 0.18)"
-  }
+  BTCUSDT: { border: "#facc15", background: "rgba(250, 204, 21, 0.18)" },
+  ETHUSDT: { border: "#60a5fa", background: "rgba(96, 165, 250, 0.18)" },
+  SOLUSDT: { border: "#a78bfa", background: "rgba(167, 139, 250, 0.18)" }
 };
 
 function getElement(id) {
@@ -69,85 +53,48 @@ function getElement(id) {
 
 function setText(id, value) {
   const element = getElement(id);
-
-  if (element) {
-    element.textContent = value ?? "--";
-  }
+  if (element) element.textContent = value ?? "--";
 }
 
 function formatDateForSignal() {
   return new Date().toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
+    day: "2-digit", month: "short", year: "numeric"
   });
 }
 
 function formatUpdatedAt(timestamp) {
-  if (!timestamp) {
-    return "Update time unavailable";
-  }
-
+  if (!timestamp) return "Update time unavailable";
   return new Date(timestamp * 1000).toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit"
   });
 }
 
 function formatUsd(value) {
   const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return "--";
-  }
-
-  return `$${number.toLocaleString("en-US", {
-    maximumFractionDigits: 2
-  })}`;
+  if (!Number.isFinite(number)) return "--";
+  return `$${number.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
 function formatInr(value) {
   const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return "₹--";
-  }
-
-  return `₹${number.toLocaleString("en-IN", {
-    maximumFractionDigits: 2
-  })}`;
+  if (!Number.isFinite(number)) return "₹--";
+  return `₹${number.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
 function formatBtc(value) {
   const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return "0.000000 BTC";
-  }
-
+  if (!Number.isFinite(number)) return "0.000000 BTC";
   return `${number.toFixed(6)} BTC`;
 }
 
 function getSignalColor(signal) {
-  if (signal === "BUY") {
-    return "#22c55e";
-  }
-
-  if (signal === "SELL") {
-    return "#ef4444";
-  }
-
+  if (signal === "BUY") return "#22c55e";
+  if (signal === "SELL") return "#ef4444";
   return "#facc15";
 }
 
 function setSignal(signal, reason) {
-  const normalizedSignal = ["BUY", "SELL", "HOLD"].includes(signal)
-    ? signal
-    : "HOLD";
-
+  const normalizedSignal = ["BUY", "SELL", "HOLD"].includes(signal) ? signal : "HOLD";
   const color = getSignalColor(normalizedSignal);
   const signalBox = getElement("signalBox");
   const signalAction = getElement("signal-action");
@@ -156,28 +103,18 @@ function setSignal(signal, reason) {
     signalBox.textContent = normalizedSignal;
     signalBox.style.color = color;
   }
-
   if (signalAction) {
     signalAction.textContent = normalizedSignal;
     signalAction.style.color = color;
   }
-
   setText("aiSignalText", reason);
 }
 
 function setMiniSignal(id, signal) {
   const element = getElement(id);
-
-  if (!element) {
-    return;
-  }
-
-  const normalizedSignal = ["BUY", "SELL", "HOLD"].includes(signal)
-    ? signal
-    : "HOLD";
-
+  if (!element) return;
+  const normalizedSignal = ["BUY", "SELL", "HOLD"].includes(signal) ? signal : "HOLD";
   const color = getSignalColor(normalizedSignal);
-
   element.textContent = normalizedSignal;
   element.style.color = color;
   element.style.borderColor = color;
@@ -185,46 +122,24 @@ function setMiniSignal(id, signal) {
 
 function setRiskBadge(risk) {
   const badge = getElement("riskBadge");
-
-  if (!badge) {
-    return;
-  }
-
-  const normalizedRisk = ["LOW", "MEDIUM", "HIGH"].includes(risk)
-    ? risk
-    : "HIGH";
-
+  if (!badge) return;
+  const normalizedRisk = ["LOW", "MEDIUM", "HIGH"].includes(risk) ? risk : "HIGH";
   badge.textContent = `Risk: ${normalizedRisk}`;
   badge.className = `risk-badge risk-${normalizedRisk.toLowerCase()}`;
 }
 
 function getDefaultPaperPortfolio() {
-  return {
-    cashInr: DEFAULT_PAPER_CASH,
-    btcHolding: 0,
-    totalCostInr: 0,
-    history: []
-  };
+  return { cashInr: DEFAULT_PAPER_CASH, btcHolding: 0, totalCostInr: 0, history: [] };
 }
 
 function loadPaperPortfolio() {
   try {
     const saved = localStorage.getItem(PAPER_STORAGE_KEY);
-
-    if (!saved) {
-      return getDefaultPaperPortfolio();
-    }
-
+    if (!saved) return getDefaultPaperPortfolio();
     const portfolio = JSON.parse(saved);
-
-    if (
-      !Number.isFinite(Number(portfolio.cashInr)) ||
-      !Number.isFinite(Number(portfolio.btcHolding)) ||
-      !Array.isArray(portfolio.history)
-    ) {
+    if (!Number.isFinite(Number(portfolio.cashInr)) || !Number.isFinite(Number(portfolio.btcHolding)) || !Array.isArray(portfolio.history)) {
       return getDefaultPaperPortfolio();
     }
-
     return {
       cashInr: Number(portfolio.cashInr),
       btcHolding: Number(portfolio.btcHolding),
@@ -246,79 +161,43 @@ function getPaperPortfolio() {
 
 function renderPaperHistory(history) {
   const container = getElement("paperTradeHistory");
-
-  if (!container) {
-    return;
-  }
-
+  if (!container) return;
   if (!history.length) {
     container.textContent = "No virtual trades yet.";
     return;
   }
-
   container.innerHTML = "";
-
   history.forEach((trade) => {
     const item = document.createElement("div");
-    const typeClass = trade.type === "BUY"
-      ? "history-buy"
-      : "history-sell";
-
+    const typeClass = trade.type === "BUY" ? "history-buy" : "history-sell";
     const date = new Date(trade.timestamp).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit"
+      day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
     });
-
     item.className = `history-item ${typeClass}`;
-    item.textContent =
-      `${trade.type} • ${formatInr(trade.amountInr)} • ` +
-      `${formatBtc(trade.btcAmount)} • ${date}`;
-
+    item.textContent = `${trade.type} • ${formatInr(trade.amountInr)} • ${formatBtc(trade.btcAmount)} • ${date}`;
     container.appendChild(item);
   });
 }
 
 function renderPaperTrading() {
   const portfolio = getPaperPortfolio();
-
-  const holdingValueInr = currentBtcPriceInr
-    ? portfolio.btcHolding * currentBtcPriceInr
-    : 0;
-
+  const holdingValueInr = currentBtcPriceInr ? portfolio.btcHolding * currentBtcPriceInr : 0;
   const portfolioValueInr = portfolio.cashInr + holdingValueInr;
   const pnlInr = portfolioValueInr - DEFAULT_PAPER_CASH;
   const pnlPercent = (pnlInr / DEFAULT_PAPER_CASH) * 100;
-
-  const averageBuyPriceInr = portfolio.btcHolding > 0
-    ? portfolio.totalCostInr / portfolio.btcHolding
-    : 0;
+  const averageBuyPriceInr = portfolio.btcHolding > 0 ? portfolio.totalCostInr / portfolio.btcHolding : 0;
 
   setText("paperCash", formatInr(portfolio.cashInr));
   setText("paperBtcHolding", formatBtc(portfolio.btcHolding));
-  setText(
-    "paperAvgPrice",
-    portfolio.btcHolding > 0
-      ? formatInr(averageBuyPriceInr)
-      : "No holding"
-  );
+  setText("paperAvgPrice", portfolio.btcHolding > 0 ? formatInr(averageBuyPriceInr) : "No holding");
   setText("paperPortfolioValue", formatInr(portfolioValueInr));
 
   const pnlElement = getElement("paperPnl");
-
   if (pnlElement) {
     const prefix = pnlInr >= 0 ? "+" : "";
-
-    pnlElement.textContent =
-      `${prefix}${formatInr(pnlInr)} ` +
-      `(${prefix}${pnlPercent.toFixed(2)}%)`;
-
-    pnlElement.style.color = pnlInr >= 0
-      ? "#22c55e"
-      : "#ef4444";
+    pnlElement.textContent = `${prefix}${formatInr(pnlInr)} (${prefix}${pnlPercent.toFixed(2)}%)`;
+    pnlElement.style.color = pnlInr >= 0 ? "#22c55e" : "#ef4444";
   }
-
   renderPaperHistory(portfolio.history);
 }
 
@@ -326,34 +205,19 @@ function updatePrice(priceData) {
   const btc = priceData?.bitcoin;
   const priceUsd = Number(btc?.usd);
   const change = Number(btc?.usd_24h_change || 0);
-
-  if (!Number.isFinite(priceUsd)) {
-    throw new Error("Live BTC price was not received.");
-  }
+  if (!Number.isFinite(priceUsd)) throw new Error("Live BTC price was not received.");
 
   currentBtcPriceUsd = priceUsd;
   currentBtcPriceInr = priceUsd * USD_INR_RATE;
-
   setText("btcPrice", formatUsd(priceUsd));
 
   const btcChange = getElement("btcChange");
-
   if (btcChange) {
-    btcChange.textContent =
-      `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
-
-    btcChange.style.color = change >= 0
-      ? "#22c55e"
-      : "#ef4444";
+    btcChange.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
+    btcChange.style.color = change >= 0 ? "#22c55e" : "#ef4444";
   }
 
-  setText(
-    "marketUpdatedAt",
-    `Live price updated: ${formatUpdatedAt(priceData.updated_at)}${
-      priceData.cached ? " (cached)" : ""
-    }`
-  );
-
+  setText("marketUpdatedAt", `Live price updated: ${formatUpdatedAt(priceData.updated_at)}${priceData.cached ? " (cached)" : ""}`);
   renderPaperTrading();
 }
 
@@ -361,67 +225,22 @@ function updateIndicators(market15m, market1h) {
   setText("trend15m", market15m.trend);
   setText("rsi15m", market15m.rsi_14);
   setText("macd15m", market15m?.macd?.state);
-
-  setText(
-    "adx15m",
-    `${market15m?.adx?.adx_14 ?? "--"} ` +
-    `(${market15m?.adx?.trend_strength ?? "--"})`
-  );
-
-  setText(
-    "momentum15m",
-    `${market15m?.momentum_percent ?? "--"}%`
-  );
-
+  setText("adx15m", `${market15m?.adx?.adx_14 ?? "--"} (${market15m?.adx?.trend_strength ?? "--"})`);
+  setText("momentum15m", `${market15m?.momentum_percent ?? "--"}%`);
   setText("trend1h", market1h.trend);
   setText("rsi1h", market1h.rsi_14);
   setText("macd1h", market1h?.macd?.state);
-
-  setText(
-    "adx1h",
-    `${market1h?.adx?.adx_14 ?? "--"} ` +
-    `(${market1h?.adx?.trend_strength ?? "--"})`
-  );
-
-  setText(
-    "momentum1h",
-    `${market1h?.momentum_percent ?? "--"}%`
-  );
-
-  setText(
-    "volume15m",
-    `x${market15m?.volume?.volume_ratio ?? "--"}`
-  );
-
-  setText(
-    "volume1h",
-    `x${market1h?.volume?.volume_ratio ?? "--"}`
-  );
-
+  setText("adx1h", `${market1h?.adx?.adx_14 ?? "--"} (${market1h?.adx?.trend_strength ?? "--"})`);
+  setText("momentum1h", `${market1h?.momentum_percent ?? "--"}%`);
+  setText("volume15m", `x${market15m?.volume?.volume_ratio ?? "--"}`);
+  setText("volume1h", `x${market1h?.volume?.volume_ratio ?? "--"}`);
   setText("pattern15m", market15m.candle_pattern);
   setText("pattern1h", market1h.candle_pattern);
   setText("breakout15m", market15m.breakout_status);
-
-  setText(
-    "support15m",
-    formatUsd(market15m?.support_resistance?.support_20)
-  );
-
-  setText(
-    "resistance15m",
-    formatUsd(market15m?.support_resistance?.resistance_20)
-  );
-
-  setText(
-    "support1h",
-    formatUsd(market1h?.support_resistance?.support_20)
-  );
-
-  setText(
-    "resistance1h",
-    formatUsd(market1h?.support_resistance?.resistance_20)
-  );
-
+  setText("support15m", formatUsd(market15m?.support_resistance?.support_20));
+  setText("resistance15m", formatUsd(market15m?.support_resistance?.resistance_20));
+  setText("support1h", formatUsd(market1h?.support_resistance?.support_20));
+  setText("resistance1h", formatUsd(market1h?.support_resistance?.resistance_20));
   setText("structure1h", market1h.market_structure);
 }
 
@@ -431,22 +250,13 @@ function updateAiAnalysis(aiData) {
   setText("entryIdea", aiData.entry_idea);
   setText("stopLossIdea", aiData.stop_loss_idea);
   setText("disclaimerText", aiData.disclaimer);
-
-  setText(
-    "analysisUpdatedAt",
-    `Last analysis: ${formatUpdatedAt(aiData.updated_at)}${
-      aiData.cached ? " (cached)" : ""
-    }`
-  );
-
+  setText("analysisUpdatedAt", `Last analysis: ${formatUpdatedAt(aiData.updated_at)}${aiData.cached ? " (cached)" : ""}`);
   setRiskBadge(aiData.risk);
 
   const analysis15m = aiData?.timeframes?.["15m"] || {};
   const analysis1h = aiData?.timeframes?.["1h"] || {};
-
   setMiniSignal("signal15m", analysis15m.signal);
   setMiniSignal("signal1h", analysis1h.signal);
-
   setText("summary15m", analysis15m.summary);
   setText("summary1h", analysis1h.summary);
   setText("keyLevel15m", analysis15m.key_level);
@@ -454,94 +264,41 @@ function updateAiAnalysis(aiData) {
 
   const market15m = aiData?.market_data?.timeframes?.["15m"] || {};
   const market1h = aiData?.market_data?.timeframes?.["1h"] || {};
-
   updateIndicators(market15m, market1h);
 }
 
 async function loadPrice(forceRefresh = false) {
-  const url = forceRefresh
-    ? "/api/btc/price?force_refresh=true"
-    : "/api/btc/price";
-
-  const response = await fetch(url, {
-    cache: "no-store"
-  });
-
-  if (!response.ok) {
-    throw new Error("Price API could not be loaded.");
-  }
-
+  const url = forceRefresh ? "/api/btc/price?force_refresh=true" : "/api/btc/price";
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error("Price API could not be loaded.");
   updatePrice(await response.json());
 }
 
 async function loadChart() {
   const selected = timeframeSettings[activeTimeframe];
-
-  const response = await fetch(
-    `/api/btc/chart?days=${selected.days}&interval=${selected.interval}`,
-    { cache: "no-store" }
-  );
-
-  if (!response.ok) {
-    throw new Error("Chart API could not be loaded.");
-  }
-
+  const response = await fetch(`/api/btc/chart?days=${selected.days}&interval=${selected.interval}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Chart API could not be loaded.");
   const chartData = await response.json();
-  const rawPrices = Array.isArray(chartData.prices)
-    ? chartData.prices
-    : [];
+  const rawPrices = Array.isArray(chartData.prices) ? chartData.prices : [];
+  if (!rawPrices.length) throw new Error("No chart data was received.");
 
-  if (!rawPrices.length) {
-    throw new Error("No chart data was received.");
-  }
-
-  const step = Math.max(
-    1,
-    Math.ceil(rawPrices.length / selected.maxPoints)
-  );
-
-  const chartPoints = rawPrices.filter((_, index) => {
-    return index % step === 0 || index === rawPrices.length - 1;
-  });
-
-  const labels = chartPoints.map((item) => {
-    return new Date(item[0]).toLocaleString(
-      "en-IN",
-      selected.dateOptions
-    );
-  });
-
-  renderChart(
-    labels,
-    chartPoints.map((item) => item[1]),
-    selected.label
-  );
+  const step = Math.max(1, Math.ceil(rawPrices.length / selected.maxPoints));
+  const chartPoints = rawPrices.filter((_, index) => index % step === 0 || index === rawPrices.length - 1);
+  const labels = chartPoints.map((item) => new Date(item[0]).toLocaleString("en-IN", selected.dateOptions));
+  renderChart(labels, chartPoints.map((item) => item[1]), selected.label);
 }
 
 async function loadAiAnalysis() {
-  if (aiRefreshInProgress) {
-    return;
-  }
-
+  if (aiRefreshInProgress) return;
   aiRefreshInProgress = true;
   setText("analysisUpdatedAt", "Updating Gemini AI analysis...");
-
   try {
-    const response = await fetch("/api/ai-signal", {
-      cache: "no-store"
-    });
-
-    if (!response.ok) {
-      throw new Error("AI signal API could not be loaded.");
-    }
-
+    const response = await fetch("/api/ai-signal", { cache: "no-store" });
+    if (!response.ok) throw new Error("AI signal API could not be loaded.");
     updateAiAnalysis(await response.json());
   } catch (error) {
     console.error(error);
-    setSignal(
-      "HOLD",
-      "AI analysis temporarily unavailable. Live price and paper trading still work."
-    );
+    setSignal("HOLD", "AI analysis temporarily unavailable. Live price and paper trading still work.");
     setRiskBadge("HIGH");
     setText("analysisUpdatedAt", "AI analysis could not be loaded.");
   } finally {
@@ -551,50 +308,33 @@ async function loadAiAnalysis() {
 
 async function refreshFastData() {
   try {
-    await Promise.all([
-      loadPrice(true),
-      loadChart()
-    ]);
+    await Promise.all([loadPrice(true), loadChart()]);
   } catch (error) {
     console.error(error);
-    setText(
-      "marketUpdatedAt",
-      "Live price/chart could not be updated. Please try again."
-    );
+    setText("marketUpdatedAt", "Live price/chart could not be updated. Please try again.");
   }
 }
 
 async function refreshAllData() {
   const refreshButton = getElement("refreshBtn");
-
   if (refreshButton) {
     refreshButton.disabled = true;
     refreshButton.textContent = "Refreshing...";
   }
-
   await refreshFastData();
-
   if (refreshButton) {
     refreshButton.disabled = false;
     refreshButton.textContent = "Refresh Analysis";
   }
-
   loadRrg();
   loadAiAnalysis();
 }
 
 function renderChart(labels, data, timeframeLabel) {
   const canvas = getElement("btcChart");
-
-  if (!canvas) {
-    return;
-  }
-
+  if (!canvas) return;
   const ctx = canvas.getContext("2d");
-
-  if (btcChart) {
-    btcChart.destroy();
-  }
+  if (btcChart) btcChart.destroy();
 
   btcChart = new Chart(ctx, {
     type: "line",
@@ -615,95 +355,79 @@ function renderChart(labels, data, timeframeLabel) {
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      interaction: {
-        intersect: false,
-        mode: "index"
-      },
+      interaction: { intersect: false, mode: "index" },
       plugins: {
-        legend: {
-          labels: {
-            color: "#ffffff"
-          }
-        },
-        tooltip: {
-          callbacks: {
-            label(context) {
-              return `BTC: ${formatUsd(context.raw)}`;
-            }
-          }
-        },
+        legend: { labels: { color: "#ffffff" } },
+        tooltip: { callbacks: { label(context) { return `BTC: ${formatUsd(context.raw)}`; } } },
         zoom: {
-          limits: {
-            x: {
-              min: "original",
-              max: "original",
-              minRange: 2
-            }
-          },
-          pan: {
-            enabled: true,
-            mode: "x",
-            threshold: 2
-          },
+          limits: { x: { min: "original", max: "original", minRange: 2 } },
+          pan: { enabled: true, mode: "x", threshold: 2 },
           zoom: {
-            wheel: {
-              enabled: true,
-              speed: 0.25
-            },
-            pinch: {
-              enabled: true
-            },
-            drag: {
-              enabled: true,
-              threshold: 2,
-              backgroundColor: "rgba(59, 130, 246, 0.18)",
-              borderColor: "#60a5fa",
-              borderWidth: 1
-            },
+            wheel: { enabled: true, speed: 0.25 },
+            pinch: { enabled: true },
+            drag: { enabled: true, threshold: 2, backgroundColor: "rgba(59, 130, 246, 0.18)", borderColor: "#60a5fa", borderWidth: 1 },
             mode: "x"
           }
         }
       },
       scales: {
-        x: {
-          ticks: {
-            color: "#cbd5e1",
-            maxTicksLimit: 7
-          },
-          grid: {
-            color: "#1e293b"
-          }
-        },
-        y: {
-          ticks: {
-            color: "#cbd5e1",
-            callback(value) {
-              return formatUsd(value);
-            }
-          },
-          grid: {
-            color: "#1e293b"
-          }
-        }
+        x: { ticks: { color: "#cbd5e1", maxTicksLimit: 7 }, grid: { color: "#1e293b" } },
+        y: { ticks: { color: "#cbd5e1", callback(value) { return formatUsd(value); } }, grid: { color: "#1e293b" } }
       }
     }
   });
 }
 
 function getRrgQuadrant(x, y) {
-  if (x >= 100 && y >= 100) {
-    return "Leading";
-  }
-
-  if (x >= 100 && y < 100) {
-    return "Weakening";
-  }
-
-  if (x < 100 && y < 100) {
-    return "Lagging";
-  }
-
+  if (x >= 100 && y >= 100) return "Leading";
+  if (x >= 100 && y < 100) return "Weakening";
+  if (x < 100 && y < 100) return "Lagging";
   return "Improving";
+}
+
+function createRrgQuadrantsPlugin() {
+  return {
+    id: "rrgQuadrants",
+    beforeDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      if (!chartArea || !scales.x || !scales.y) return;
+
+      const centerX = scales.x.getPixelForValue(100);
+      const centerY = scales.y.getPixelForValue(100);
+      const { left, right, top, bottom } = chartArea;
+
+      ctx.save();
+      ctx.fillStyle = "rgba(34, 197, 94, 0.08)";
+      ctx.fillRect(centerX, top, right - centerX, centerY - top);
+      ctx.fillStyle = "rgba(250, 204, 21, 0.07)";
+      ctx.fillRect(centerX, centerY, right - centerX, bottom - centerY);
+      ctx.fillStyle = "rgba(239, 68, 68, 0.08)";
+      ctx.fillRect(left, centerY, centerX - left, bottom - centerY);
+      ctx.fillStyle = "rgba(59, 130, 246, 0.08)";
+      ctx.fillRect(left, top, centerX - left, centerY - top);
+
+      ctx.strokeStyle = "rgba(203, 213, 225, 0.52)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(centerX, top);
+      ctx.lineTo(centerX, bottom);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(left, centerY);
+      ctx.lineTo(right, centerY);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(226, 232, 240, 0.72)";
+      ctx.font = "700 12px Arial";
+      ctx.fillText("IMPROVING", left + 12, top + 20);
+      ctx.fillText("LEADING", right - 72, top + 20);
+      ctx.fillText("LAGGING", left + 12, bottom - 12);
+      ctx.fillText("WEAKENING", right - 92, bottom - 12);
+      ctx.restore();
+    }
+  };
 }
 
 function createRrgDirectionArrowsPlugin() {
@@ -711,24 +435,15 @@ function createRrgDirectionArrowsPlugin() {
     id: "rrgDirectionArrows",
     afterDatasetsDraw(chart) {
       const { ctx } = chart;
-
       chart.data.datasets.forEach((dataset, datasetIndex) => {
         const meta = chart.getDatasetMeta(datasetIndex);
-
-        if (!meta?.data?.length) {
-          return;
-        }
-
+        if (!meta?.data?.length) return;
         const latestIndex = meta.data.length - 1;
         const latestElement = meta.data[latestIndex];
         const raw = dataset.data[latestIndex];
-
-        if (!latestElement || !raw) {
-          return;
-        }
+        if (!latestElement || !raw) return;
 
         const direction = raw.direction || "Flat";
-
         const arrowMap = {
           "North-East": "↗",
           "South-East": "↘",
@@ -736,9 +451,7 @@ function createRrgDirectionArrowsPlugin() {
           "South-West": "↙",
           "Flat": "→"
         };
-
         const arrow = arrowMap[direction] || "→";
-
         ctx.save();
         ctx.fillStyle = dataset.borderColor || "#ffffff";
         ctx.font = "bold 20px Arial";
@@ -753,83 +466,41 @@ function createRrgDirectionArrowsPlugin() {
 
 async function loadRrg() {
   const status = getElement("rrgStatus");
-
-  if (status) {
-    status.textContent = `Loading ${activeRrgTimeframe} RRG-style data...`;
-  }
-
+  if (status) status.textContent = `Loading ${activeRrgTimeframe} RRG-style data...`;
   try {
-    const response = await fetch(
-      `/api/rrg?interval=${activeRrgTimeframe}`,
-      { cache: "no-store" }
-    );
-
-    if (!response.ok) {
-      throw new Error("RRG API could not be loaded.");
-    }
-
+    const response = await fetch(`/api/rrg?interval=${activeRrgTimeframe}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("RRG API could not be loaded.");
     const data = await response.json();
     renderRrg(data);
-
     if (status) {
-      status.textContent =
-        `${activeRrgTimeframe.toUpperCase()} RRG updated: ` +
-        `${formatUpdatedAt(data.updated_at)}${
-          data.cached ? " (cached)" : ""
-        }`;
+      status.textContent = `${activeRrgTimeframe.toUpperCase()} RRG updated: ${formatUpdatedAt(data.updated_at)}${data.cached ? " (cached)" : ""}`;
     }
   } catch (error) {
     console.error(error);
-
-    if (status) {
-      status.textContent =
-        "RRG-style chart could not be loaded. Please refresh again.";
-    }
+    if (status) status.textContent = "RRG-style chart could not be loaded. Please refresh again.";
   }
 }
 
 function renderRrg(rrgData) {
   const canvas = getElement("rrgChart");
-
-  if (!canvas || !Array.isArray(rrgData?.trails)) {
-    return;
-  }
-
+  if (!canvas || !Array.isArray(rrgData?.trails)) return;
   const ctx = canvas.getContext("2d");
+  if (rrgChart) rrgChart.destroy();
 
-  if (rrgChart) {
-    rrgChart.destroy();
-  }
-
-  const allPoints = rrgData.trails.flatMap((trail) => {
-    return Array.isArray(trail.points) ? trail.points : [];
-  });
-
-  const xValues = allPoints
-    .map((point) => Number(point.x))
-    .filter(Number.isFinite);
-
-  const yValues = allPoints
-    .map((point) => Number(point.y))
-    .filter(Number.isFinite);
-
+  const allPoints = rrgData.trails.flatMap((trail) => Array.isArray(trail.points) ? trail.points : []);
+  const xValues = allPoints.map((point) => Number(point.x)).filter(Number.isFinite);
+  const yValues = allPoints.map((point) => Number(point.y)).filter(Number.isFinite);
   const xMin = Math.min(100, ...xValues);
   const xMax = Math.max(100, ...xValues);
   const yMin = Math.min(100, ...yValues);
   const yMax = Math.max(100, ...yValues);
-
   const xPadding = Math.max(0.8, (xMax - xMin) * 0.22);
   const yPadding = Math.max(0.8, (yMax - yMin) * 0.22);
 
   const datasets = rrgData.trails.map((trail) => {
-    const color = rrgColors[trail.symbol] || {
-      border: "#ffffff",
-      background: "rgba(255, 255, 255, 0.15)"
-    };
-
+    const color = rrgColors[trail.symbol] || { border: "#ffffff", background: "rgba(255, 255, 255, 0.15)" };
     const points = Array.isArray(trail.points) ? trail.points : [];
     const lastIndex = points.length - 1;
-
     return {
       label: trail.symbol.replace("USDT", ""),
       data: points.map((point, index) => ({
@@ -844,9 +515,7 @@ function renderRrg(rrgData) {
       borderWidth: 2,
       pointBorderColor: color.border,
       pointBackgroundColor(context) {
-        return context.raw?.isLatest
-          ? color.border
-          : "rgba(15, 23, 42, 0.95)";
+        return context.raw?.isLatest ? color.border : "rgba(15, 23, 42, 0.95)";
       },
       pointRadius(context) {
         return context.raw?.isLatest ? 5 : 2;
@@ -861,46 +530,29 @@ function renderRrg(rrgData) {
     type: "scatter",
     data: { datasets },
     plugins: [
-  createRrgQuadrantsPlugin(),
-  createRrgDirectionArrowsPlugin()
-  ],,
+      createRrgQuadrantsPlugin(),
+      createRrgDirectionArrowsPlugin()
+    ],
     options: {
       responsive: true,
       maintainAspectRatio: true,
       aspectRatio: 1.15,
-      interaction: {
-        intersect: false,
-        mode: "nearest"
-      },
+      interaction: { intersect: false, mode: "nearest" },
       plugins: {
-        legend: {
-          labels: {
-            color: "#ffffff",
-            usePointStyle: true,
-            pointStyle: "circle"
-          }
-        },
+        legend: { labels: { color: "#ffffff", usePointStyle: true, pointStyle: "circle" } },
         tooltip: {
           callbacks: {
             title(context) {
               const raw = context[0]?.raw;
-
-              if (!raw?.timestamp) {
-                return "RRG-style point";
-              }
-
+              if (!raw?.timestamp) return "RRG-style point";
               return new Date(raw.timestamp).toLocaleString("en-IN", {
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit"
+                day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
               });
             },
             label(context) {
               const x = Number(context.raw?.x || 0);
               const y = Number(context.raw?.y || 0);
               const direction = context.raw?.direction || "Flat";
-
               return [
                 `${context.dataset.label}: ${getRrgQuadrant(x, y)}`,
                 `Direction: ${direction}`,
@@ -912,37 +564,14 @@ function renderRrg(rrgData) {
         },
         zoom: {
           limits: {
-            x: {
-              min: "original",
-              max: "original",
-              minRange: 0.5
-            },
-            y: {
-              min: "original",
-              max: "original",
-              minRange: 0.5
-            }
+            x: { min: "original", max: "original", minRange: 0.5 },
+            y: { min: "original", max: "original", minRange: 0.5 }
           },
-          pan: {
-            enabled: true,
-            mode: "xy",
-            threshold: 2
-          },
+          pan: { enabled: true, mode: "xy", threshold: 2 },
           zoom: {
-            wheel: {
-              enabled: true,
-              speed: 0.18
-            },
-            pinch: {
-              enabled: true
-            },
-            drag: {
-              enabled: true,
-              threshold: 2,
-              backgroundColor: "rgba(59, 130, 246, 0.16)",
-              borderColor: "#60a5fa",
-              borderWidth: 1
-            },
+            wheel: { enabled: true, speed: 0.18 },
+            pinch: { enabled: true },
+            drag: { enabled: true, threshold: 2, backgroundColor: "rgba(59, 130, 246, 0.16)", borderColor: "#60a5fa", borderWidth: 1 },
             mode: "xy"
           }
         }
@@ -952,35 +581,17 @@ function renderRrg(rrgData) {
           type: "linear",
           min: xMin - xPadding,
           max: xMax + xPadding,
-          title: {
-            display: true,
-            text: "Relative Strength Ratio",
-            color: "#cbd5e1"
-          },
-          ticks: {
-            color: "#cbd5e1",
-            maxTicksLimit: 7
-          },
-          grid: {
-            color: "#334155"
-          }
+          title: { display: true, text: "Relative Strength Ratio", color: "#cbd5e1" },
+          ticks: { color: "#cbd5e1", maxTicksLimit: 7 },
+          grid: { color: "#334155" }
         },
         y: {
           type: "linear",
           min: yMin - yPadding,
           max: yMax + yPadding,
-          title: {
-            display: true,
-            text: "Relative Strength Momentum",
-            color: "#cbd5e1"
-          },
-          ticks: {
-            color: "#cbd5e1",
-            maxTicksLimit: 7
-          },
-          grid: {
-            color: "#334155"
-          }
+          title: { display: true, text: "Relative Strength Momentum", color: "#cbd5e1" },
+          ticks: { color: "#cbd5e1", maxTicksLimit: 7 },
+          grid: { color: "#334155" }
         }
       }
     }
@@ -990,145 +601,73 @@ function renderRrg(rrgData) {
 function executePaperBuy() {
   const input = getElement("paperAmountInput");
   const amountInr = Number(input?.value);
-
   if (!currentBtcPriceInr) {
-    setText(
-      "paperTradeStatus",
-      "Waiting for live BTC price. Please wait a few seconds."
-    );
+    setText("paperTradeStatus", "Waiting for live BTC price. Please wait a few seconds.");
     return;
   }
-
   if (!Number.isFinite(amountInr) || amountInr < 100) {
-    setText(
-      "paperTradeStatus",
-      "Please enter a valid virtual amount of at least ₹100."
-    );
+    setText("paperTradeStatus", "Please enter a valid virtual amount of at least ₹100.");
     return;
   }
-
   const portfolio = getPaperPortfolio();
-
   if (amountInr > portfolio.cashInr) {
-    setText(
-      "paperTradeStatus",
-      "Not enough virtual cash for this trade."
-    );
+    setText("paperTradeStatus", "Not enough virtual cash for this trade.");
     return;
   }
 
   const btcAmount = amountInr / currentBtcPriceInr;
-
   portfolio.cashInr -= amountInr;
   portfolio.btcHolding += btcAmount;
   portfolio.totalCostInr += amountInr;
-
-  portfolio.history.unshift({
-    type: "BUY",
-    amountInr,
-    btcAmount,
-    priceInr: currentBtcPriceInr,
-    timestamp: Date.now()
-  });
-
+  portfolio.history.unshift({ type: "BUY", amountInr, btcAmount, priceInr: currentBtcPriceInr, timestamp: Date.now() });
   portfolio.history = portfolio.history.slice(0, 50);
   savePaperPortfolio(portfolio);
-
-  if (input) {
-    input.value = "";
-  }
-
-  setText(
-    "paperTradeStatus",
-    `Virtual BUY complete: ${formatBtc(btcAmount)} at ` +
-    `${formatInr(currentBtcPriceInr)} per BTC.`
-  );
-
+  if (input) input.value = "";
+  setText("paperTradeStatus", `Virtual BUY complete: ${formatBtc(btcAmount)} at ${formatInr(currentBtcPriceInr)} per BTC.`);
   renderPaperTrading();
 }
 
 function executePaperSell() {
   const input = getElement("paperAmountInput");
   const amountInr = Number(input?.value);
-
   if (!currentBtcPriceInr) {
-    setText(
-      "paperTradeStatus",
-      "Waiting for live BTC price. Please wait a few seconds."
-    );
+    setText("paperTradeStatus", "Waiting for live BTC price. Please wait a few seconds.");
     return;
   }
-
   if (!Number.isFinite(amountInr) || amountInr < 100) {
-    setText(
-      "paperTradeStatus",
-      "Please enter a valid virtual amount of at least ₹100."
-    );
+    setText("paperTradeStatus", "Please enter a valid virtual amount of at least ₹100.");
     return;
   }
 
   const portfolio = getPaperPortfolio();
   const btcAmount = amountInr / currentBtcPriceInr;
-
   if (btcAmount > portfolio.btcHolding + 0.0000000001) {
-    setText(
-      "paperTradeStatus",
-      "Not enough virtual BTC holding to sell this amount."
-    );
+    setText("paperTradeStatus", "Not enough virtual BTC holding to sell this amount.");
     return;
   }
 
-  const averageCostPerBtc = portfolio.btcHolding > 0
-    ? portfolio.totalCostInr / portfolio.btcHolding
-    : 0;
-
+  const averageCostPerBtc = portfolio.btcHolding > 0 ? portfolio.totalCostInr / portfolio.btcHolding : 0;
   portfolio.cashInr += amountInr;
   portfolio.btcHolding -= btcAmount;
   portfolio.totalCostInr -= btcAmount * averageCostPerBtc;
-
   if (portfolio.btcHolding < 0.00000001) {
     portfolio.btcHolding = 0;
     portfolio.totalCostInr = 0;
   }
 
-  portfolio.history.unshift({
-    type: "SELL",
-    amountInr,
-    btcAmount,
-    priceInr: currentBtcPriceInr,
-    timestamp: Date.now()
-  });
-
+  portfolio.history.unshift({ type: "SELL", amountInr, btcAmount, priceInr: currentBtcPriceInr, timestamp: Date.now() });
   portfolio.history = portfolio.history.slice(0, 50);
   savePaperPortfolio(portfolio);
-
-  if (input) {
-    input.value = "";
-  }
-
-  setText(
-    "paperTradeStatus",
-    `Virtual SELL complete: ${formatBtc(btcAmount)} at ` +
-    `${formatInr(currentBtcPriceInr)} per BTC.`
-  );
-
+  if (input) input.value = "";
+  setText("paperTradeStatus", `Virtual SELL complete: ${formatBtc(btcAmount)} at ${formatInr(currentBtcPriceInr)} per BTC.`);
   renderPaperTrading();
 }
 
 function resetPaperTrading() {
-  const shouldReset = window.confirm(
-    "Reset virtual paper portfolio to ₹100,000 and remove all virtual trades?"
-  );
-
-  if (!shouldReset) {
-    return;
-  }
-
+  const shouldReset = window.confirm("Reset virtual paper portfolio to ₹100,000 and remove all virtual trades?");
+  if (!shouldReset) return;
   savePaperPortfolio(getDefaultPaperPortfolio());
-  setText(
-    "paperTradeStatus",
-    "Virtual portfolio reset to ₹100,000."
-  );
+  setText("paperTradeStatus", "Virtual portfolio reset to ₹100,000.");
   renderPaperTrading();
 }
 
@@ -1136,49 +675,26 @@ function setupPaperTrading() {
   const buyButton = getElement("paperBuyBtn");
   const sellButton = getElement("paperSellBtn");
   const resetButton = getElement("resetPaperBtn");
-
-  if (buyButton) {
-    buyButton.addEventListener("click", executePaperBuy);
-  }
-
-  if (sellButton) {
-    sellButton.addEventListener("click", executePaperSell);
-  }
-
-  if (resetButton) {
-    resetButton.addEventListener("click", resetPaperTrading);
-  }
-
+  if (buyButton) buyButton.addEventListener("click", executePaperBuy);
+  if (sellButton) sellButton.addEventListener("click", executePaperSell);
+  if (resetButton) resetButton.addEventListener("click", resetPaperTrading);
   renderPaperTrading();
 }
 
 function setupTimeframeButtons() {
   const buttons = document.querySelectorAll(".timeframe-btn");
-
   buttons.forEach((button) => {
     button.addEventListener("click", async () => {
       const selectedTimeframe = button.dataset.timeframe;
-
-      if (!timeframeSettings[selectedTimeframe]) {
-        return;
-      }
-
+      if (!timeframeSettings[selectedTimeframe]) return;
       activeTimeframe = selectedTimeframe;
-
-      buttons.forEach((item) => {
-        item.classList.remove("active");
-      });
-
+      buttons.forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
-
       try {
         await loadChart();
       } catch (error) {
         console.error(error);
-        setText(
-          "marketUpdatedAt",
-          "Selected chart timeframe could not be loaded."
-        );
+        setText("marketUpdatedAt", "Selected chart timeframe could not be loaded.");
       }
     });
   });
@@ -1188,70 +704,30 @@ function setupZoomButtons() {
   const zoomInButton = getElement("zoomInBtn");
   const zoomOutButton = getElement("zoomOutBtn");
   const resetZoomButton = getElement("resetZoomBtn");
-
-  if (zoomInButton) {
-    zoomInButton.addEventListener("click", () => {
-      if (btcChart) {
-        btcChart.zoom({ x: 1.35 });
-      }
-    });
-  }
-
-  if (zoomOutButton) {
-    zoomOutButton.addEventListener("click", () => {
-      if (btcChart) {
-        btcChart.zoom({ x: 0.74 });
-      }
-    });
-  }
-
-  if (resetZoomButton) {
-    resetZoomButton.addEventListener("click", () => {
-      if (btcChart) {
-        btcChart.resetZoom();
-      }
-    });
-  }
+  if (zoomInButton) zoomInButton.addEventListener("click", () => { if (btcChart) btcChart.zoom({ x: 1.35 }); });
+  if (zoomOutButton) zoomOutButton.addEventListener("click", () => { if (btcChart) btcChart.zoom({ x: 0.74 }); });
+  if (resetZoomButton) resetZoomButton.addEventListener("click", () => { if (btcChart) btcChart.resetZoom(); });
 }
 
 function setupRrgButtons() {
   const buttons = document.querySelectorAll(".rrg-timeframe-btn");
   const resetButton = getElement("rrgResetBtn");
-
   buttons.forEach((button) => {
     button.addEventListener("click", async () => {
       const selectedTimeframe = button.dataset.rrgTimeframe;
-
-      if (!["1h", "1d"].includes(selectedTimeframe)) {
-        return;
-      }
-
+      if (!["1h", "1d"].includes(selectedTimeframe)) return;
       activeRrgTimeframe = selectedTimeframe;
-
-      buttons.forEach((item) => {
-        item.classList.remove("active");
-      });
-
+      buttons.forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
       await loadRrg();
     });
   });
-
-  if (resetButton) {
-    resetButton.addEventListener("click", () => {
-      if (rrgChart) {
-        rrgChart.resetZoom();
-      }
-    });
-  }
+  if (resetButton) resetButton.addEventListener("click", () => { if (rrgChart) rrgChart.resetZoom(); });
 }
 
 function setUploadedChartText(id, value) {
   const element = getElement(id);
-
-  if (element) {
-    element.textContent = value || "--";
-  }
+  if (element) element.textContent = value || "--";
 }
 
 function setupChartAnalyser() {
@@ -1260,98 +736,63 @@ function setupChartAnalyser() {
   const analyseButton = getElement("analyseChartBtn");
   const status = getElement("chartAnalyseStatus");
   const resultBox = getElement("chartAnalysisResult");
-
-  if (!imageInput || !preview || !analyseButton || !status || !resultBox) {
-    return;
-  }
+  if (!imageInput || !preview || !analyseButton || !status || !resultBox) return;
 
   imageInput.addEventListener("change", () => {
     const file = imageInput.files[0];
     resultBox.hidden = true;
-
     if (!file) {
       preview.hidden = true;
       preview.removeAttribute("src");
-      status.textContent =
-        "Upload PNG, JPG, or WEBP chart image. Maximum 8 MB.";
+      status.textContent = "Upload PNG, JPG, or WEBP chart image. Maximum 8 MB.";
       return;
     }
-
-    const allowedTypes = [
-      "image/png",
-      "image/jpeg",
-      "image/webp"
-    ];
-
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       imageInput.value = "";
       preview.hidden = true;
       preview.removeAttribute("src");
-      status.textContent =
-        "Please select a PNG, JPG, or WEBP image only.";
+      status.textContent = "Please select a PNG, JPG, or WEBP image only.";
       return;
     }
-
     if (file.size > 8 * 1024 * 1024) {
       imageInput.value = "";
       preview.hidden = true;
       preview.removeAttribute("src");
-      status.textContent =
-        "Image is too large. Maximum allowed size is 8 MB.";
+      status.textContent = "Image is too large. Maximum allowed size is 8 MB.";
       return;
     }
-
     preview.src = URL.createObjectURL(file);
     preview.hidden = false;
-    status.textContent =
-      `Selected: ${file.name}. Click Analyse with Gemini AI.`;
+    status.textContent = `Selected: ${file.name}. Click Analyse with Gemini AI.`;
   });
 
   analyseButton.addEventListener("click", async () => {
     const file = imageInput.files[0];
-
     if (!file) {
       status.textContent = "Please upload a chart image first.";
       return;
     }
-
     const formData = new FormData();
     formData.append("file", file);
-
     analyseButton.disabled = true;
     analyseButton.textContent = "Analysing Chart...";
-    status.textContent =
-      "Gemini is reading the uploaded chart screenshot...";
+    status.textContent = "Gemini is reading the uploaded chart screenshot...";
     resultBox.hidden = true;
 
     try {
-      const response = await fetch("/api/chart-analyser", {
-        method: "POST",
-        body: formData
-      });
-
+      const response = await fetch("/api/chart-analyser", { method: "POST", body: formData });
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || "Chart analysis failed.");
-      }
-
-      const signal = ["BUY", "SELL", "HOLD"].includes(data.signal)
-        ? data.signal
-        : "HOLD";
+      if (!response.ok) throw new Error(data.detail || "Chart analysis failed.");
+      const signal = ["BUY", "SELL", "HOLD"].includes(data.signal) ? data.signal : "HOLD";
       const signalElement = getElement("uploadedChartSignal");
       const color = getSignalColor(signal);
-
       if (signalElement) {
         signalElement.textContent = signal;
         signalElement.style.color = color;
         signalElement.style.borderColor = color;
       }
-
-      setUploadedChartText(
-        "uploadedChartConfidence",
-        `Confidence: ${Number(data.confidence || 0)}%`
-      );
+      setUploadedChartText("uploadedChartConfidence", `Confidence: ${Number(data.confidence || 0)}%`);
       setUploadedChartText("uploadedChartRisk", data.risk);
       setUploadedChartText("uploadedChartTrend", data.trend);
       setUploadedChartText("uploadedChartPattern", data.pattern);
@@ -1359,19 +800,13 @@ function setupChartAnalyser() {
       setUploadedChartText("uploadedChartResistance", data.resistance);
       setUploadedChartText("uploadedChartReason", data.reason);
       setUploadedChartText("uploadedChartEntry", data.entry_idea);
-      setUploadedChartText(
-        "uploadedChartInvalidation",
-        data.invalidation_idea
-      );
+      setUploadedChartText("uploadedChartInvalidation", data.invalidation_idea);
       setUploadedChartText("uploadedChartWarning", data.warning);
-
       resultBox.hidden = false;
-      status.textContent =
-        "Chart analysis complete. Educational use only.";
+      status.textContent = "Chart analysis complete. Educational use only.";
     } catch (error) {
       console.error(error);
-      status.textContent =
-        `Chart analysis error: ${error.message}`;
+      status.textContent = `Chart analysis error: ${error.message}`;
     } finally {
       analyseButton.disabled = false;
       analyseButton.textContent = "Analyse with Gemini AI";
@@ -1380,22 +815,18 @@ function setupChartAnalyser() {
 }
 
 const refreshButton = getElement("refreshBtn");
-
-if (refreshButton) {
-  refreshButton.addEventListener("click", refreshAllData);
-}
+if (refreshButton) refreshButton.addEventListener("click", refreshAllData);
 
 setText("signal-date", formatDateForSignal());
-
 setupPaperTrading();
 setupTimeframeButtons();
 setupZoomButtons();
 setupRrgButtons();
 setupChartAnalyser();
-
 refreshAllData();
 
 setInterval(loadPrice, 30000);
 setInterval(loadChart, 60000);
 setInterval(loadAiAnalysis, 300000);
 setInterval(loadRrg, 300000);
+
