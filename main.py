@@ -62,6 +62,29 @@ def get_btc_klines(interval="1h", limit=250):
     return get_klines("BTCUSDT", interval, limit)
 
 
+def get_btc_daily_change(current_price):
+    """
+    Daily Change = live BTC price compared with Binance's previous completed
+    UTC daily candle close. This is different from Binance's rolling 24-hour
+    ticker percentage.
+    """
+    daily_candles = get_btc_klines(interval="1d", limit=2)
+
+    if len(daily_candles) < 2:
+        raise ValueError("Not enough daily candle data to calculate daily change.")
+
+    previous_daily_close = float(daily_candles[-2][4])
+
+    if previous_daily_close == 0:
+        raise ValueError("Previous daily close is zero.")
+
+    daily_change_percent = (
+        (current_price - previous_daily_close) / previous_daily_close
+    ) * 100
+
+    return previous_daily_close, daily_change_percent
+
+
 def average(values):
     return sum(values) / len(values) if values else 0.0
 
@@ -631,8 +654,11 @@ def build_rrg_data(interval):
         ]
         momentum_sma = [
             average(
-                [value for value in ratio_index[index - 9:index + 1]
-                 if value is not None]
+                [
+                    value
+                    for value in ratio_index[index - 9:index + 1]
+                    if value is not None
+                ]
             )
             if index >= lookback + 8 and ratio_index[index] is not None
             else None
@@ -703,24 +729,30 @@ def btc_price(force_refresh: bool = False):
 
     try:
         ticker = get_btc_ticker()
+        current_price = float(ticker["lastPrice"])
+        previous_daily_close, daily_change_percent = get_btc_daily_change(
+            current_price
+        )
 
         result = {
             "bitcoin": {
-                "usd": float(ticker["lastPrice"]),
-                "usd_24h_change": float(ticker["priceChangePercent"]),
+                "usd": current_price,
+                "usd_24h_change": daily_change_percent,
                 "price_change_24h_usd": float(ticker["priceChange"]),
                 "open_price_24h_usd": float(ticker["openPrice"]),
+                "previous_daily_close": previous_daily_close,
             },
             "source": "Binance",
+            "daily_change_basis": "Previous completed UTC daily candle close",
             "cached": False,
-            "updated_at": int(time.time()),
+            "updated_at": int(now),
         }
 
         price_cache["data"] = result
-        price_cache["updated_at"] = time.time()
+        price_cache["updated_at"] = now
         return result
 
-    except requests.exceptions.RequestException as error:
+    except (requests.exceptions.RequestException, ValueError) as error:
         if price_cache["data"]:
             return {
                 **price_cache["data"],
@@ -735,6 +767,7 @@ def btc_price(force_refresh: bool = False):
             status_code=502,
             detail=f"Failed to fetch BTC price from Binance: {str(error)}",
         )
+
 
 @app.get("/api/btc/chart")
 def btc_chart(days: int = 7, interval: str = "1h"):
