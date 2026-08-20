@@ -609,15 +609,19 @@ def safe_hold_signal(reason):
 
 def build_rrg_data(interval):
     settings = {
-        "1h": {"limit": 220, "lookback": 60, "tail": 6},
-        "1d": {"limit": 220, "lookback": 30, "tail": 6},
+        "1h": {"limit": 220, "lookback": 60, "tail": 4},
+        "1d": {"limit": 220, "lookback": 30, "tail": 4},
     }
 
     if interval not in settings:
         raise ValueError("Unsupported RRG interval.")
 
     config = settings[interval]
+
+    # BTC stays the benchmark, but it is not plotted because BTC/BTC
+    # stays near the same RRG point by definition.
     symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+
     candle_sets = {
         symbol: get_klines(symbol, interval, config["limit"])
         for symbol in symbols
@@ -627,6 +631,7 @@ def build_rrg_data(interval):
         symbol: [float(candle[4]) for candle in candle_sets[symbol]]
         for symbol in symbols
     }
+
     timestamps = [int(candle[0]) for candle in candle_sets["BTCUSDT"]]
     benchmark = close_sets["BTCUSDT"]
     lookback = config["lookback"]
@@ -635,23 +640,31 @@ def build_rrg_data(interval):
     trails = []
 
     for symbol in symbols:
+        # BTC is the benchmark. Do not draw its fixed BTC/BTC point.
+        if symbol == "BTCUSDT":
+            continue
+
         closes = close_sets[symbol]
+
         ratios = [
             (asset_close / btc_close) * 100
             for asset_close, btc_close in zip(closes, benchmark)
         ]
+
         ratio_sma = [
             average(ratios[index - lookback + 1:index + 1])
             if index >= lookback - 1
             else None
             for index in range(len(ratios))
         ]
+
         ratio_index = [
             (ratios[index] / ratio_sma[index]) * 100
             if ratio_sma[index]
             else None
             for index in range(len(ratios))
         ]
+
         momentum_sma = [
             average(
                 [
@@ -664,6 +677,7 @@ def build_rrg_data(interval):
             else None
             for index in range(len(ratio_index))
         ]
+
         momentum_index = [
             (ratio_index[index] / momentum_sma[index]) * 100
             if momentum_sma[index]
@@ -682,9 +696,30 @@ def build_rrg_data(interval):
             and momentum_index[index] is not None
         ]
 
+        latest_direction = "Flat"
+
+        if len(valid_points) >= 2:
+            previous_point = valid_points[-2]
+            latest_point = valid_points[-1]
+
+            delta_x = latest_point["x"] - previous_point["x"]
+            delta_y = latest_point["y"] - previous_point["y"]
+
+            if abs(delta_x) < 0.03 and abs(delta_y) < 0.03:
+                latest_direction = "Flat"
+            elif delta_x >= 0 and delta_y >= 0:
+                latest_direction = "North-East"
+            elif delta_x >= 0 and delta_y < 0:
+                latest_direction = "South-East"
+            elif delta_x < 0 and delta_y >= 0:
+                latest_direction = "North-West"
+            else:
+                latest_direction = "South-West"
+
         trails.append({
             "symbol": symbol,
             "points": valid_points[-tail:],
+            "direction": latest_direction,
         })
 
     return {
