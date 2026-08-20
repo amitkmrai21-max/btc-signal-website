@@ -1075,3 +1075,92 @@ canvas {
     min-height: 86px;
   }
 }
+/* Signal Confirmation: AI history vs live technical fallback */
+
+.signal-comparison-card {
+  overflow: hidden;
+}
+
+.signal-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.signal-card,
+.combined-decision-card {
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.signal-card {
+  min-height: 145px;
+}
+
+.ai-history-card {
+  border-left: 4px solid #8b5cf6;
+}
+
+.technical-live-card {
+  border-left: 4px solid #06b6d4;
+}
+
+.combined-decision-card {
+  margin-top: 16px;
+  border-left: 4px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.07);
+}
+
+.card-label {
+  display: block;
+  margin-bottom: 10px;
+  color: #94a3b8;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.signal-card strong,
+.combined-decision-card strong {
+  display: block;
+  margin-bottom: 10px;
+  color: #f8fafc;
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.signal-card p,
+.combined-decision-card p {
+  margin: 7px 0 0;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+#lastAiSignal {
+  color: #c4b5fd;
+}
+
+#liveTechnicalSignal {
+  color: #67e8f9;
+}
+
+#combinedDecision {
+  color: #fcd34d;
+}
+
+@media (max-width: 700px) {
+  .signal-comparison {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .signal-card,
+  .combined-decision-card {
+    padding: 15px;
+  }
+}
