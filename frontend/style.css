@@ -64,13 +64,13 @@ button:disabled {
 }
 
 .brand-logo {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+  width: 70px;
+  height: 70px;
+  flex: 0 0 70px;
   border: 1px solid rgba(96, 165, 250, 0.7);
-  border-radius: 9px;
-  object-fit: cover;
-  box-shadow: 0 0 14px rgba(59, 130, 246, 0.35);
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 0 18px rgba(59, 130, 246, 0.45);
 }
 
 .brand h1 {
@@ -895,10 +895,10 @@ canvas {
 
 @media (max-width: 420px) {
   .brand-logo {
-    width: 26px;
-    height: 26px;
-    flex-basis: 26px;
-    border-radius: 7px;
+    width: 55px;
+    height: 55px;
+    flex-basis: 55px;
+    border-radius: 10px;
   }
 
   .brand h1 {
