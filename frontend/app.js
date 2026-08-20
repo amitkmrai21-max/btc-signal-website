@@ -706,58 +706,47 @@ function getRrgQuadrant(x, y) {
   return "Improving";
 }
 
-function createRrgQuadrantsPlugin() {
+function createRrgDirectionArrowsPlugin() {
   return {
-    id: "rrgQuadrants",
-    beforeDraw(chart) {
-      const { ctx, chartArea, scales } = chart;
+    id: "rrgDirectionArrows",
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
 
-      if (!chartArea || !scales.x || !scales.y) {
-        return;
-      }
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        const meta = chart.getDatasetMeta(datasetIndex);
 
-      const centerX = scales.x.getPixelForValue(100);
-      const centerY = scales.y.getPixelForValue(100);
-      const { left, right, top, bottom } = chartArea;
+        if (!meta?.data?.length) {
+          return;
+        }
 
-      ctx.save();
+        const latestIndex = meta.data.length - 1;
+        const latestElement = meta.data[latestIndex];
+        const raw = dataset.data[latestIndex];
 
-      ctx.fillStyle = "rgba(34, 197, 94, 0.08)";
-      ctx.fillRect(centerX, top, right - centerX, centerY - top);
+        if (!latestElement || !raw) {
+          return;
+        }
 
-      ctx.fillStyle = "rgba(250, 204, 21, 0.07)";
-      ctx.fillRect(centerX, centerY, right - centerX, bottom - centerY);
+        const direction = raw.direction || "Flat";
 
-      ctx.fillStyle = "rgba(239, 68, 68, 0.08)";
-      ctx.fillRect(left, centerY, centerX - left, bottom - centerY);
+        const arrowMap = {
+          "North-East": "↗",
+          "South-East": "↘",
+          "North-West": "↖",
+          "South-West": "↙",
+          "Flat": "→"
+        };
 
-      ctx.fillStyle = "rgba(59, 130, 246, 0.08)";
-      ctx.fillRect(left, top, centerX - left, centerY - top);
+        const arrow = arrowMap[direction] || "→";
 
-      ctx.strokeStyle = "rgba(203, 213, 225, 0.52)";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([5, 5]);
-
-      ctx.beginPath();
-      ctx.moveTo(centerX, top);
-      ctx.lineTo(centerX, bottom);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(left, centerY);
-      ctx.lineTo(right, centerY);
-      ctx.stroke();
-
-      ctx.setLineDash([]);
-      ctx.fillStyle = "rgba(226, 232, 240, 0.72)";
-      ctx.font = "700 12px Arial";
-
-      ctx.fillText("IMPROVING", left + 12, top + 20);
-      ctx.fillText("LEADING", right - 72, top + 20);
-      ctx.fillText("LAGGING", left + 12, bottom - 12);
-      ctx.fillText("WEAKENING", right - 92, bottom - 12);
-
-      ctx.restore();
+        ctx.save();
+        ctx.fillStyle = dataset.borderColor || "#ffffff";
+        ctx.font = "bold 20px Arial";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(arrow, latestElement.x + 9, latestElement.y);
+        ctx.restore();
+      });
     }
   };
 }
@@ -812,37 +801,55 @@ function renderRrg(rrgData) {
     rrgChart.destroy();
   }
 
+  const allPoints = rrgData.trails.flatMap((trail) => {
+    return Array.isArray(trail.points) ? trail.points : [];
+  });
+
+  const xValues = allPoints
+    .map((point) => Number(point.x))
+    .filter(Number.isFinite);
+
+  const yValues = allPoints
+    .map((point) => Number(point.y))
+    .filter(Number.isFinite);
+
+  const xMin = Math.min(100, ...xValues);
+  const xMax = Math.max(100, ...xValues);
+  const yMin = Math.min(100, ...yValues);
+  const yMax = Math.max(100, ...yValues);
+
+  const xPadding = Math.max(0.8, (xMax - xMin) * 0.22);
+  const yPadding = Math.max(0.8, (yMax - yMin) * 0.22);
+
   const datasets = rrgData.trails.map((trail) => {
     const color = rrgColors[trail.symbol] || {
       border: "#ffffff",
       background: "rgba(255, 255, 255, 0.15)"
     };
 
-    const points = Array.isArray(trail.points)
-      ? trail.points
-      : [];
-
-    const lastIndex = Math.max(points.length - 1, 0);
+    const points = Array.isArray(trail.points) ? trail.points : [];
+    const lastIndex = points.length - 1;
 
     return {
       label: trail.symbol.replace("USDT", ""),
       data: points.map((point, index) => ({
-        x: point.x,
-        y: point.y,
+        x: Number(point.x),
+        y: Number(point.y),
         timestamp: point.timestamp,
-        isLatest: index === lastIndex
+        isLatest: index === lastIndex,
+        direction: trail.direction || "Flat"
       })),
       borderColor: color.border,
       backgroundColor: color.background,
-      borderWidth: 3,
+      borderWidth: 2,
       pointBorderColor: color.border,
       pointBackgroundColor(context) {
         return context.raw?.isLatest
           ? color.border
-          : "rgba(15, 23, 42, 0.9)";
+          : "rgba(15, 23, 42, 0.95)";
       },
       pointRadius(context) {
-        return context.raw?.isLatest ? 8 : 2.5;
+        return context.raw?.isLatest ? 5 : 2;
       },
       pointHoverRadius: 7,
       showLine: true,
@@ -853,11 +860,14 @@ function renderRrg(rrgData) {
   rrgChart = new Chart(ctx, {
     type: "scatter",
     data: { datasets },
-    plugins: [createRrgQuadrantsPlugin()],
+    plugins: [
+  createRrgQuadrantsPlugin(),
+  createRrgDirectionArrowsPlugin()
+  ],,
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      aspectRatio: 1.05,
+      aspectRatio: 1.15,
       interaction: {
         intersect: false,
         mode: "nearest"
@@ -889,9 +899,11 @@ function renderRrg(rrgData) {
             label(context) {
               const x = Number(context.raw?.x || 0);
               const y = Number(context.raw?.y || 0);
+              const direction = context.raw?.direction || "Flat";
 
               return [
                 `${context.dataset.label}: ${getRrgQuadrant(x, y)}`,
+                `Direction: ${direction}`,
                 `RS Ratio: ${x.toFixed(2)}`,
                 `RS Momentum: ${y.toFixed(2)}`
               ];
@@ -903,12 +915,12 @@ function renderRrg(rrgData) {
             x: {
               min: "original",
               max: "original",
-              minRange: 1
+              minRange: 0.5
             },
             y: {
               min: "original",
               max: "original",
-              minRange: 1
+              minRange: 0.5
             }
           },
           pan: {
@@ -938,13 +950,16 @@ function renderRrg(rrgData) {
       scales: {
         x: {
           type: "linear",
+          min: xMin - xPadding,
+          max: xMax + xPadding,
           title: {
             display: true,
             text: "Relative Strength Ratio",
             color: "#cbd5e1"
           },
           ticks: {
-            color: "#cbd5e1"
+            color: "#cbd5e1",
+            maxTicksLimit: 7
           },
           grid: {
             color: "#334155"
@@ -952,13 +967,16 @@ function renderRrg(rrgData) {
         },
         y: {
           type: "linear",
+          min: yMin - yPadding,
+          max: yMax + yPadding,
           title: {
             display: true,
             text: "Relative Strength Momentum",
             color: "#cbd5e1"
           },
           ticks: {
-            color: "#cbd5e1"
+            color: "#cbd5e1",
+            maxTicksLimit: 7
           },
           grid: {
             color: "#334155"
