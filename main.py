@@ -923,11 +923,14 @@ def ai_signal():
 
     try:
         ticker = get_btc_ticker()
+
         candles_15m = get_btc_klines(interval="15m", limit=250)
         candles_1h = get_btc_klines(interval="1h", limit=250)
+        candles_4h = get_btc_klines(interval="4h", limit=250)
 
         analysis_15m = calculate_market_indicators(candles_15m, "15m")
         analysis_1h = calculate_market_indicators(candles_1h, "1h")
+        analysis_4h = calculate_market_indicators(candles_4h, "4h")
 
         market_data = {
             "symbol": "BTCUSDT",
@@ -941,32 +944,48 @@ def ai_signal():
             "timeframes": {
                 "15m": analysis_15m,
                 "1h": analysis_1h,
+                "4h": analysis_4h,
             },
         }
 
         prompt = f"""
-You are a cautious BTCUSDT market-analysis assistant for an
-educational dashboard. Analyze only the supplied live Binance data.
+You are an advanced but cautious BTCUSDT market-analysis assistant
+for an educational dashboard. Analyze only the supplied live Binance
+market data.
 
 DATA:
 {json.dumps(market_data, indent=2)}
 
-Return only the requested JSON object in simple Hindi-English (Hinglish).
+Return only the requested JSON object in simple Hindi-English
+(Hinglish).
+
+SIGNAL DEFINITIONS:
+- STRONG BUY: 4h and 1h trend are bullish, 15m supports an entry,
+  momentum/volume confirms, and risk is acceptable.
+- BUY WATCH: Higher timeframe bias is bullish but an entry
+  confirmation, pullback completion, breakout, or volume confirmation
+  is still needed.
+- STRONG SELL: 4h and 1h trend are bearish, 15m supports an entry,
+  momentum/volume confirms, and risk is acceptable.
+- SELL WATCH: Higher timeframe bias is bearish but an entry
+  confirmation, rebound rejection, breakdown, or volume confirmation
+  is still needed.
+- NO TRADE: Market is choppy/ranging, timeframes are strongly mixed,
+  key levels are too close, risk is high, or data is unclear.
 
 DECISION RULES:
-1. BUY only when 15m and 1h broadly agree bullish, trend strength is
-   adequate, and volume/price action provides confirmation.
-2. SELL only when 15m and 1h broadly agree bearish, trend strength is
-   adequate, and volume/price action provides confirmation.
-3. HOLD whenever timeframes conflict, ADX says range/weak trend,
-   price is near key resistance/support without confirmation, or data
-   is otherwise unclear.
-4. Never promise profit, certainty, or guaranteed targets.
-5. Entry and stop-loss must be educational ideas based only on the
-   supplied support, resistance, pivots, and ATR. Never phrase them as
-   an automatic trade instruction.
-6. Mention the most important evidence: trend, RSI/MACD, ADX, volume,
-   candle/structure, and key level.
+1. Do not require all three timeframes to be identical. Use 4h for
+   broad bias, 1h for setup quality, and 15m for entry timing.
+2. Use EMA trend, RSI, MACD, ADX, volume ratio, taker-buy ratio,
+   market structure, candle pattern, breakout status, support,
+   resistance, pivots, Fibonacci levels, and ATR where relevant.
+3. Never promise profit, certainty, or guaranteed targets.
+4. Entry zone, invalidation/stop loss, and targets must be educational
+   ideas based only on supplied levels and ATR; never automatic orders.
+5. Explain the primary evidence and clearly identify what confirmation
+   is still needed for WATCH signals.
+6. Strong signals should normally have higher confidence than WATCH;
+   use NO TRADE whenever the setup is weak or unclear.
 """
 
         response_schema = {
@@ -974,7 +993,13 @@ DECISION RULES:
             "properties": {
                 "signal": {
                     "type": "string",
-                    "enum": ["BUY", "SELL", "HOLD"],
+                    "enum": [
+                        "STRONG BUY",
+                        "BUY WATCH",
+                        "NO TRADE",
+                        "SELL WATCH",
+                        "STRONG SELL",
+                    ],
                 },
                 "confidence": {
                     "type": "integer",
@@ -985,9 +1010,14 @@ DECISION RULES:
                     "type": "string",
                     "enum": ["LOW", "MEDIUM", "HIGH"],
                 },
+                "market_bias": {"type": "string"},
+                "setup_status": {"type": "string"},
                 "reason": {"type": "string"},
+                "confirmation_needed": {"type": "string"},
                 "entry_idea": {"type": "string"},
                 "stop_loss_idea": {"type": "string"},
+                "target_1": {"type": "string"},
+                "target_2": {"type": "string"},
                 "timeframes": {
                     "type": "object",
                     "properties": {
@@ -996,7 +1026,11 @@ DECISION RULES:
                             "properties": {
                                 "signal": {
                                     "type": "string",
-                                    "enum": ["BUY", "SELL", "HOLD"],
+                                    "enum": [
+                                        "BULLISH",
+                                        "BEARISH",
+                                        "NEUTRAL",
+                                    ],
                                 },
                                 "summary": {"type": "string"},
                                 "key_level": {"type": "string"},
@@ -1008,7 +1042,27 @@ DECISION RULES:
                             "properties": {
                                 "signal": {
                                     "type": "string",
-                                    "enum": ["BUY", "SELL", "HOLD"],
+                                    "enum": [
+                                        "BULLISH",
+                                        "BEARISH",
+                                        "NEUTRAL",
+                                    ],
+                                },
+                                "summary": {"type": "string"},
+                                "key_level": {"type": "string"},
+                            },
+                            "required": ["signal", "summary", "key_level"],
+                        },
+                        "4h": {
+                            "type": "object",
+                            "properties": {
+                                "signal": {
+                                    "type": "string",
+                                    "enum": [
+                                        "BULLISH",
+                                        "BEARISH",
+                                        "NEUTRAL",
+                                    ],
                                 },
                                 "summary": {"type": "string"},
                                 "key_level": {"type": "string"},
@@ -1016,16 +1070,21 @@ DECISION RULES:
                             "required": ["signal", "summary", "key_level"],
                         },
                     },
-                    "required": ["15m", "1h"],
+                    "required": ["15m", "1h", "4h"],
                 },
             },
             "required": [
                 "signal",
                 "confidence",
                 "risk",
+                "market_bias",
+                "setup_status",
                 "reason",
+                "confirmation_needed",
                 "entry_idea",
                 "stop_loss_idea",
+                "target_1",
+                "target_2",
                 "timeframes",
             ],
         }
@@ -1042,7 +1101,7 @@ DECISION RULES:
 
         result = json.loads(response.text)
         result["market_data"] = market_data
-        result["source"] = "Binance market data + Gemini AI analysis"
+        result["source"] = "Binance market data + Gemini advanced analysis"
         result["cached"] = False
         result["updated_at"] = int(now)
         result["disclaimer"] = (
