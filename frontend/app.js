@@ -1,1401 +1,1182 @@
-let btcChart;
-let rrgChart;
-let activeTimeframe = "1D";
-let activeRrgTimeframe = "1d";
-let currentBtcPriceUsd = null;
-let currentBtcPriceInr = null;
-let aiRefreshInProgress = false;
+import json
+import math
+import os
+import time
 
-const USD_INR_RATE = 83;
-const PAPER_STORAGE_KEY = "btcAiSignalPaperPortfolioV1";
-const DEFAULT_PAPER_CASH = 100000;
+import requests
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from google import genai
+from google.genai import types
 
-const timeframeSettings = {
-  "1W": {
-    days: 90,
-    interval: "1w",
-    label: "Weekly",
-    dateOptions: { month: "short", year: "numeric" },
-    maxPoints: 20
-  },
-  "1D": {
-    days: 30,
-    interval: "1d",
-    label: "Daily",
-    dateOptions: { month: "short", day: "numeric" },
-    maxPoints: 31
-  },
-  "1H": {
-    days: 7,
-    interval: "1h",
-    label: "Hourly",
-    dateOptions: {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit"
-    },
-    maxPoints: 120
-  },
-  "15M": {
-    days: 1,
-    interval: "15m",
-    label: "15 Min",
-    dateOptions: {
-      hour: "2-digit",
-      minute: "2-digit"
-    },
-    maxPoints: 120
-  }
-};
+app = FastAPI(title="BTC Signal Website")
 
-const rrgColors = {
-  BTCUSDT: {
-    border: "#facc15",
-    background: "rgba(250, 204, 21, 0.18)"
-  },
-  ETHUSDT: {
-    border: "#60a5fa",
-    background: "rgba(96, 165, 250, 0.18)"
-  },
-  SOLUSDT: {
-    border: "#a78bfa",
-    background: "rgba(167, 139, 250, 0.18)"
-  }
-};
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-function getElement(id) {
-  return document.getElementById(id);
-}
+BINANCE_BASE_URL = "https://data-api.binance.vision"
+GEMINI_MODEL = "gemini-3.6-flash"
 
-function setText(id, value) {
-  const element = getElement(id);
+price_cache = {"data": None, "updated_at": 0}
+chart_cache = {"data": {}, "updated_at": 0}
+ai_signal_cache = {"data": None, "updated_at": 0}
+rrg_cache = {"data": {}, "updated_at": 0}
 
-  if (element) {
-    element.textContent = value ?? "--";
-  }
-}
 
-function formatDateForSignal() {
-  return new Date().toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
-  });
-}
+def get_ticker(symbol="BTCUSDT"):
+    response = requests.get(
+        f"{BINANCE_BASE_URL}/api/v3/ticker/24hr",
+        params={"symbol": symbol},
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
 
-function formatUpdatedAt(timestamp) {
-  if (!timestamp) {
-    return "Update time unavailable";
-  }
 
-  return new Date(timestamp * 1000).toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-}
+def get_btc_ticker():
+    return get_ticker("BTCUSDT")
 
-function formatUsd(value) {
-  const number = Number(value);
 
-  if (!Number.isFinite(number)) {
-    return "--";
-  }
+def get_klines(symbol="BTCUSDT", interval="1h", limit=250):
+    response = requests.get(
+        f"{BINANCE_BASE_URL}/api/v3/klines",
+        params={
+            "symbol": symbol,
+            "interval": interval,
+            "limit": limit,
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
 
-  return `$${number.toLocaleString("en-US", {
-    maximumFractionDigits: 2
-  })}`;
-}
 
-function formatInr(value) {
-  const number = Number(value);
+def get_btc_klines(interval="1h", limit=250):
+    return get_klines("BTCUSDT", interval, limit)
 
-  if (!Number.isFinite(number)) {
-    return "₹--";
-  }
 
-  return `₹${number.toLocaleString("en-IN", {
-    maximumFractionDigits: 2
-  })}`;
-}
+def get_btc_daily_change(current_price):
+    """
+    Daily Change = live BTC price compared with Binance's previous completed
+    UTC daily candle close. This is different from Binance's rolling 24-hour
+    ticker percentage.
+    """
+    daily_candles = get_btc_klines(interval="1d", limit=2)
 
-function formatBtc(value) {
-  const number = Number(value);
+    if len(daily_candles) < 2:
+        raise ValueError("Not enough daily candle data to calculate daily change.")
 
-  if (!Number.isFinite(number)) {
-    return "0.000000 BTC";
-  }
+    previous_daily_close = float(daily_candles[-2][4])
 
-  return `${number.toFixed(6)} BTC`;
-}
+    if previous_daily_close == 0:
+        raise ValueError("Previous daily close is zero.")
 
-function getSignalColor(signal) {
-  if (signal === "BUY") {
-    return "#22c55e";
-  }
+    daily_change_percent = (
+        (current_price - previous_daily_close) / previous_daily_close
+    ) * 100
 
-  if (signal === "SELL") {
-    return "#ef4444";
-  }
+    return previous_daily_close, daily_change_percent
 
-  return "#facc15";
-}
 
-function setSignal(signal, reason) {
-  const normalizedSignal = ["BUY", "SELL", "HOLD"].includes(signal)
-    ? signal
-    : "HOLD";
+def average(values):
+    return sum(values) / len(values) if values else 0.0
 
-  const color = getSignalColor(normalizedSignal);
-  const signalBox = getElement("signalBox");
-  const signalAction = getElement("signal-action");
 
-  if (signalBox) {
-    signalBox.textContent = normalizedSignal;
-    signalBox.style.color = color;
-  }
+def round_value(value, digits=2):
+    return round(float(value), digits)
 
-  if (signalAction) {
-    signalAction.textContent = normalizedSignal;
-    signalAction.style.color = color;
-  }
 
-  setText("aiSignalText", reason);
-}
+def sma(values, period):
+    if len(values) < period:
+        raise ValueError(f"Need {period} values for SMA.")
+    return average(values[-period:])
 
-function setMiniSignal(id, signal) {
-  const element = getElement(id);
 
-  if (!element) {
-    return;
-  }
+def ema_series(values, period):
+    if len(values) < period:
+        raise ValueError(f"Need {period} values for EMA.")
 
-  const normalizedSignal = ["BUY", "SELL", "HOLD"].includes(signal)
-    ? signal
-    : "HOLD";
+    multiplier = 2 / (period + 1)
+    current = average(values[:period])
+    series = [None] * (period - 1) + [current]
 
-  const color = getSignalColor(normalizedSignal);
+    for value in values[period:]:
+        current = (value - current) * multiplier + current
+        series.append(current)
 
-  element.textContent = normalizedSignal;
-  element.style.color = color;
-  element.style.borderColor = color;
-}
+    return series
 
-function setRiskBadge(risk) {
-  const badge = getElement("riskBadge");
 
-  if (!badge) {
-    return;
-  }
+def ema(values, period):
+    return ema_series(values, period)[-1]
 
-  const normalizedRisk = ["LOW", "MEDIUM", "HIGH"].includes(risk)
-    ? risk
-    : "HIGH";
 
-  badge.textContent = `Risk: ${normalizedRisk}`;
-  badge.className = `risk-badge risk-${normalizedRisk.toLowerCase()}`;
-}
+def rsi(values, period=14):
+    if len(values) < period + 1:
+        raise ValueError(f"Need {period + 1} values for RSI.")
 
-function getDefaultPaperPortfolio() {
-  return {
-    cashInr: DEFAULT_PAPER_CASH,
-    btcHolding: 0,
-    totalCostInr: 0,
-    history: []
-  };
-}
+    changes = [
+        values[index] - values[index - 1]
+        for index in range(1, len(values))
+    ]
+    recent = changes[-period:]
 
-function loadPaperPortfolio() {
-  try {
-    const saved = localStorage.getItem(PAPER_STORAGE_KEY);
+    avg_gain = average([max(change, 0) for change in recent])
+    avg_loss = average([max(-change, 0) for change in recent])
 
-    if (!saved) {
-      return getDefaultPaperPortfolio();
+    if avg_loss == 0:
+        return 100.0
+
+    relative_strength = avg_gain / avg_loss
+    return 100 - (100 / (1 + relative_strength))
+
+
+def standard_deviation(values):
+    if not values:
+        return 0.0
+
+    mean = average(values)
+    return math.sqrt(average([(value - mean) ** 2 for value in values]))
+
+
+def percentage_change(start_value, end_value):
+    if start_value == 0:
+        return 0.0
+    return ((end_value - start_value) / start_value) * 100
+
+
+def macd(values, fast=12, slow=26, signal=9):
+    if len(values) < slow + signal:
+        raise ValueError("Not enough candle data for MACD.")
+
+    fast_series = ema_series(values, fast)
+    slow_series = ema_series(values, slow)
+
+    macd_line_series = [
+        fast_value - slow_value
+        for fast_value, slow_value in zip(fast_series, slow_series)
+        if fast_value is not None and slow_value is not None
+    ]
+
+    signal_line_series = ema_series(macd_line_series, signal)
+    macd_line = macd_line_series[-1]
+    signal_line = signal_line_series[-1]
+    histogram = macd_line - signal_line
+
+    previous_histogram = (
+        macd_line_series[-2] - signal_line_series[-2]
+        if len(macd_line_series) > 1
+        else histogram
+    )
+
+    direction = "Bullish" if macd_line > signal_line else "Bearish"
+    strength = (
+        "Strengthening"
+        if histogram > previous_histogram
+        else "Weakening"
+    )
+
+    return {
+        "macd_line": round_value(macd_line, 4),
+        "signal_line": round_value(signal_line, 4),
+        "histogram": round_value(histogram, 4),
+        "state": f"{direction}, {strength}",
     }
 
-    const portfolio = JSON.parse(saved);
+
+def atr(highs, lows, closes, period=14):
+    if len(closes) < period + 1:
+        raise ValueError("Not enough candle data for ATR.")
+
+    true_ranges = []
+    for index in range(1, len(closes)):
+        true_ranges.append(
+            max(
+                highs[index] - lows[index],
+                abs(highs[index] - closes[index - 1]),
+                abs(lows[index] - closes[index - 1]),
+            )
+        )
+
+    return average(true_ranges[-period:])
+
+
+def adx(highs, lows, closes, period=14):
+    if len(closes) < (period * 2) + 1:
+        raise ValueError("Not enough candle data for ADX.")
+
+    plus_dm = []
+    minus_dm = []
+    true_ranges = []
+
+    for index in range(1, len(closes)):
+        up_move = highs[index] - highs[index - 1]
+        down_move = lows[index - 1] - lows[index]
+
+        plus_dm.append(up_move if up_move > down_move and up_move > 0 else 0)
+        minus_dm.append(
+            down_move if down_move > up_move and down_move > 0 else 0
+        )
+        true_ranges.append(
+            max(
+                highs[index] - lows[index],
+                abs(highs[index] - closes[index - 1]),
+                abs(lows[index] - closes[index - 1]),
+            )
+        )
+
+    dx_values = []
+    plus_di_values = []
+    minus_di_values = []
+
+    for index in range(period - 1, len(true_ranges)):
+        tr_average = average(true_ranges[index - period + 1:index + 1])
+        plus_average = average(plus_dm[index - period + 1:index + 1])
+        minus_average = average(minus_dm[index - period + 1:index + 1])
+
+        plus_di = 100 * plus_average / tr_average if tr_average else 0
+        minus_di = 100 * minus_average / tr_average if tr_average else 0
+        total_di = plus_di + minus_di
+
+        dx = (
+            100 * abs(plus_di - minus_di) / total_di
+            if total_di
+            else 0
+        )
+
+        plus_di_values.append(plus_di)
+        minus_di_values.append(minus_di)
+        dx_values.append(dx)
+
+    adx_value = average(dx_values[-period:])
+
+    return {
+        "adx_14": round_value(adx_value),
+        "plus_di_14": round_value(plus_di_values[-1]),
+        "minus_di_14": round_value(minus_di_values[-1]),
+        "trend_strength": (
+            "Strong"
+            if adx_value >= 25
+            else "Moderate"
+            if adx_value >= 20
+            else "Weak / ranging"
+        ),
+    }
+
+
+def bollinger_bands(values, period=20, multiplier=2):
+    if len(values) < period:
+        raise ValueError("Not enough candle data for Bollinger Bands.")
+
+    window = values[-period:]
+    middle = average(window)
+    deviation = standard_deviation(window)
+    upper = middle + multiplier * deviation
+    lower = middle - multiplier * deviation
+    width_percent = ((upper - lower) / middle) * 100 if middle else 0
+
+    position_percent = (
+        ((values[-1] - lower) / (upper - lower)) * 100
+        if upper != lower
+        else 50
+    )
+
+    return {
+        "upper": round_value(upper),
+        "middle": round_value(middle),
+        "lower": round_value(lower),
+        "width_percent": round_value(width_percent),
+        "price_position_percent": round_value(position_percent),
+    }
+
+
+def obv(closes, volumes):
+    value = 0.0
+    values = [value]
+
+    for index in range(1, len(closes)):
+        if closes[index] > closes[index - 1]:
+            value += volumes[index]
+        elif closes[index] < closes[index - 1]:
+            value -= volumes[index]
+        values.append(value)
+
+    direction = (
+        "Rising"
+        if values[-1] > values[-6]
+        else "Falling"
+        if values[-1] < values[-6]
+        else "Flat"
+    )
+
+    return {
+        "value": round_value(values[-1], 2),
+        "direction_5_candles": direction,
+    }
+
+
+def mfi(highs, lows, closes, volumes, period=14):
+    if len(closes) < period + 1:
+        raise ValueError("Not enough candle data for MFI.")
+
+    typical_prices = [
+        (high + low + close) / 3
+        for high, low, close in zip(highs, lows, closes)
+    ]
+
+    positive_flow = []
+    negative_flow = []
+
+    for index in range(1, len(typical_prices)):
+        raw_flow = typical_prices[index] * volumes[index]
+
+        if typical_prices[index] > typical_prices[index - 1]:
+            positive_flow.append(raw_flow)
+            negative_flow.append(0)
+        elif typical_prices[index] < typical_prices[index - 1]:
+            positive_flow.append(0)
+            negative_flow.append(raw_flow)
+        else:
+            positive_flow.append(0)
+            negative_flow.append(0)
+
+    positive_sum = sum(positive_flow[-period:])
+    negative_sum = sum(negative_flow[-period:])
+
+    if negative_sum == 0:
+        return 100.0
+
+    money_ratio = positive_sum / negative_sum
+    return 100 - (100 / (1 + money_ratio))
+
+
+def candle_pattern(candles):
+    current = candles[-1]
+    previous = candles[-2]
+
+    open_price = float(current[1])
+    high_price = float(current[2])
+    low_price = float(current[3])
+    close_price = float(current[4])
+
+    previous_open = float(previous[1])
+    previous_high = float(previous[2])
+    previous_low = float(previous[3])
+    previous_close = float(previous[4])
+
+    body = abs(close_price - open_price)
+    full_range = max(high_price - low_price, 0.00000001)
+    upper_wick = high_price - max(open_price, close_price)
+    lower_wick = min(open_price, close_price) - low_price
+
+    if high_price < previous_high and low_price > previous_low:
+        return "Inside bar / consolidation"
 
     if (
-      !Number.isFinite(Number(portfolio.cashInr)) ||
-      !Number.isFinite(Number(portfolio.btcHolding)) ||
-      !Array.isArray(portfolio.history)
-    ) {
-      return getDefaultPaperPortfolio();
-    }
+        close_price > open_price
+        and previous_close < previous_open
+        and close_price >= previous_open
+        and open_price <= previous_close
+    ):
+        return "Bullish engulfing"
+
+    if (
+        close_price < open_price
+        and previous_close > previous_open
+        and close_price <= previous_open
+        and open_price >= previous_close
+    ):
+        return "Bearish engulfing"
+
+    if body / full_range < 0.12:
+        return "Doji / indecision"
+
+    if lower_wick > body * 2 and upper_wick < body:
+        return "Hammer-like bullish rejection"
+
+    if upper_wick > body * 2 and lower_wick < body:
+        return "Shooting-star-like bearish rejection"
+
+    return "Bullish candle" if close_price > open_price else "Bearish candle"
+
+
+def market_structure(closes, highs, lows, ema_20_value, ema_50_value):
+    recent_high = max(highs[-20:])
+    recent_low = min(lows[-20:])
+    prior_high = max(highs[-40:-20])
+    prior_low = min(lows[-40:-20])
+    last_close = closes[-1]
+
+    if (
+        recent_high > prior_high
+        and recent_low > prior_low
+        and last_close > ema_20_value > ema_50_value
+    ):
+        return "Bullish: Higher highs and higher lows"
+
+    if (
+        recent_high < prior_high
+        and recent_low < prior_low
+        and last_close < ema_20_value < ema_50_value
+    ):
+        return "Bearish: Lower highs and lower lows"
+
+    return "Range / mixed structure"
+
+
+def pivot_levels(highs, lows, closes):
+    prior_high = max(highs[-25:-1])
+    prior_low = min(lows[-25:-1])
+    prior_close = closes[-2]
+
+    pivot = (prior_high + prior_low + prior_close) / 3
+    resistance_1 = (2 * pivot) - prior_low
+    support_1 = (2 * pivot) - prior_high
+    resistance_2 = pivot + (prior_high - prior_low)
+    support_2 = pivot - (prior_high - prior_low)
 
     return {
-      cashInr: Number(portfolio.cashInr),
-      btcHolding: Number(portfolio.btcHolding),
-      totalCostInr: Number(portfolio.totalCostInr || 0),
-      history: portfolio.history.slice(0, 50)
-    };
-  } catch (error) {
-    return getDefaultPaperPortfolio();
-  }
-}
-
-function savePaperPortfolio(portfolio) {
-  localStorage.setItem(PAPER_STORAGE_KEY, JSON.stringify(portfolio));
-}
-
-function getPaperPortfolio() {
-  return loadPaperPortfolio();
-}
-
-function renderPaperHistory(history) {
-  const container = getElement("paperTradeHistory");
-
-  if (!container) {
-    return;
-  }
-
-  if (!history.length) {
-    container.textContent = "No virtual trades yet.";
-    return;
-  }
-
-  container.innerHTML = "";
-
-  history.forEach((trade) => {
-    const item = document.createElement("div");
-    const typeClass = trade.type === "BUY"
-      ? "history-buy"
-      : "history-sell";
-
-    const date = new Date(trade.timestamp).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
-
-    item.className = `history-item ${typeClass}`;
-    item.textContent =
-      `${trade.type} • ${formatInr(trade.amountInr)} • ` +
-      `${formatBtc(trade.btcAmount)} • ${date}`;
-
-    container.appendChild(item);
-  });
-}
-
-function renderPaperTrading() {
-  const portfolio = getPaperPortfolio();
-
-  const holdingValueInr = currentBtcPriceInr
-    ? portfolio.btcHolding * currentBtcPriceInr
-    : 0;
-
-  const portfolioValueInr = portfolio.cashInr + holdingValueInr;
-  const pnlInr = portfolioValueInr - DEFAULT_PAPER_CASH;
-  const pnlPercent = (pnlInr / DEFAULT_PAPER_CASH) * 100;
-
-  const averageBuyPriceInr = portfolio.btcHolding > 0
-    ? portfolio.totalCostInr / portfolio.btcHolding
-    : 0;
-
-  setText("paperCash", formatInr(portfolio.cashInr));
-  setText("paperBtcHolding", formatBtc(portfolio.btcHolding));
-  setText(
-    "paperAvgPrice",
-    portfolio.btcHolding > 0
-      ? formatInr(averageBuyPriceInr)
-      : "No holding"
-  );
-  setText("paperPortfolioValue", formatInr(portfolioValueInr));
-
-  const pnlElement = getElement("paperPnl");
-
-  if (pnlElement) {
-    const prefix = pnlInr >= 0 ? "+" : "";
-
-    pnlElement.textContent =
-      `${prefix}${formatInr(pnlInr)} ` +
-      `(${prefix}${pnlPercent.toFixed(2)}%)`;
-
-    pnlElement.style.color = pnlInr >= 0
-      ? "#22c55e"
-      : "#ef4444";
-  }
-
-  renderPaperHistory(portfolio.history);
-}
-
-function updatePrice(priceData) {
-  const btc = priceData?.bitcoin;
-  const priceUsd = Number(btc?.usd);
-  const change = Number(btc?.usd_24h_change || 0);
-
-  if (!Number.isFinite(priceUsd)) {
-    throw new Error("Live BTC price was not received.");
-  }
-
-  currentBtcPriceUsd = priceUsd;
-  currentBtcPriceInr = priceUsd * USD_INR_RATE;
-
-  setText("btcPrice", formatUsd(priceUsd));
-
-  const btcChange = getElement("btcChange");
-
-  if (btcChange) {
-    btcChange.textContent =
-      `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
-
-    btcChange.style.color = change >= 0
-      ? "#22c55e"
-      : "#ef4444";
-  }
-
-  setText(
-    "marketUpdatedAt",
-    `Live price updated: ${formatUpdatedAt(priceData.updated_at)}${
-      priceData.cached ? " (cached)" : ""
-    }`
-  );
-
-  renderPaperTrading();
-}
-
-function updateIndicators(market15m, market1h) {
-  setText("trend15m", market15m.trend);
-  setText("rsi15m", market15m.rsi_14);
-  setText("macd15m", market15m?.macd?.state);
-
-  setText(
-    "adx15m",
-    `${market15m?.adx?.adx_14 ?? "--"} ` +
-    `(${market15m?.adx?.trend_strength ?? "--"})`
-  );
-
-  setText(
-    "momentum15m",
-    `${market15m?.momentum_percent ?? "--"}%`
-  );
-
-  setText("trend1h", market1h.trend);
-  setText("rsi1h", market1h.rsi_14);
-  setText("macd1h", market1h?.macd?.state);
-
-  setText(
-    "adx1h",
-    `${market1h?.adx?.adx_14 ?? "--"} ` +
-    `(${market1h?.adx?.trend_strength ?? "--"})`
-  );
-
-  setText(
-    "momentum1h",
-    `${market1h?.momentum_percent ?? "--"}%`
-  );
-
-  setText(
-    "volume15m",
-    `x${market15m?.volume?.volume_ratio ?? "--"}`
-  );
-
-  setText(
-    "volume1h",
-    `x${market1h?.volume?.volume_ratio ?? "--"}`
-  );
-
-  setText("pattern15m", market15m.candle_pattern);
-  setText("pattern1h", market1h.candle_pattern);
-  setText("breakout15m", market15m.breakout_status);
-
-  setText(
-    "support15m",
-    formatUsd(market15m?.support_resistance?.support_20)
-  );
-
-  setText(
-    "resistance15m",
-    formatUsd(market15m?.support_resistance?.resistance_20)
-  );
-
-  setText(
-    "support1h",
-    formatUsd(market1h?.support_resistance?.support_20)
-  );
-
-  setText(
-    "resistance1h",
-    formatUsd(market1h?.support_resistance?.resistance_20)
-  );
-
-  setText("structure1h", market1h.market_structure);
-}
-
-function updateAiAnalysis(aiData) {
-  setSignal(aiData.signal, aiData.reason);
-  setText("aiConfidence", `${Number(aiData.confidence || 0)}%`);
-  setText("entryIdea", aiData.entry_idea);
-  setText("stopLossIdea", aiData.stop_loss_idea);
-  setText("disclaimerText", aiData.disclaimer);
-
-  setText(
-    "analysisUpdatedAt",
-    `Last analysis: ${formatUpdatedAt(aiData.updated_at)}${
-      aiData.cached ? " (cached)" : ""
-    }`
-  );
-
-  setRiskBadge(aiData.risk);
-
-  const analysis15m = aiData?.timeframes?.["15m"] || {};
-  const analysis1h = aiData?.timeframes?.["1h"] || {};
-
-  setMiniSignal("signal15m", analysis15m.signal);
-  setMiniSignal("signal1h", analysis1h.signal);
-
-  setText("summary15m", analysis15m.summary);
-  setText("summary1h", analysis1h.summary);
-  setText("keyLevel15m", analysis15m.key_level);
-  setText("keyLevel1h", analysis1h.key_level);
-
-  const market15m = aiData?.market_data?.timeframes?.["15m"] || {};
-  const market1h = aiData?.market_data?.timeframes?.["1h"] || {};
-
-  updateIndicators(market15m, market1h);
-}
-
-async function loadPrice(forceRefresh = false) {
-  const url = forceRefresh
-    ? "/api/btc/price?force_refresh=true"
-    : "/api/btc/price";
-
-  const response = await fetch(url, {
-    cache: "no-store"
-  });
-
-  if (!response.ok) {
-    throw new Error("Price API could not be loaded.");
-  }
-
-  updatePrice(await response.json());
-}
-
-async function loadChart() {
-  const selected = timeframeSettings[activeTimeframe];
-
-  const response = await fetch(
-    `/api/btc/chart?days=${selected.days}&interval=${selected.interval}`,
-    { cache: "no-store" }
-  );
-
-  if (!response.ok) {
-    throw new Error("Chart API could not be loaded.");
-  }
-
-  const chartData = await response.json();
-  const rawPrices = Array.isArray(chartData.prices)
-    ? chartData.prices
-    : [];
-
-  if (!rawPrices.length) {
-    throw new Error("No chart data was received.");
-  }
-
-  const step = Math.max(
-    1,
-    Math.ceil(rawPrices.length / selected.maxPoints)
-  );
-
-  const chartPoints = rawPrices.filter((_, index) => {
-    return index % step === 0 || index === rawPrices.length - 1;
-  });
-
-  const labels = chartPoints.map((item) => {
-    return new Date(item[0]).toLocaleString(
-      "en-IN",
-      selected.dateOptions
-    );
-  });
-
-  renderChart(
-    labels,
-    chartPoints.map((item) => item[1]),
-    selected.label
-  );
-}
-
-async function loadAiAnalysis() {
-  if (aiRefreshInProgress) {
-    return;
-  }
-
-  aiRefreshInProgress = true;
-  setText("analysisUpdatedAt", "Updating Gemini AI analysis...");
-
-  try {
-    const response = await fetch("/api/ai-signal", {
-      cache: "no-store"
-    });
-
-    if (!response.ok) {
-      throw new Error("AI signal API could not be loaded.");
+        "pivot": round_value(pivot),
+        "support_1": round_value(support_1),
+        "support_2": round_value(support_2),
+        "resistance_1": round_value(resistance_1),
+        "resistance_2": round_value(resistance_2),
     }
 
-    updateAiAnalysis(await response.json());
-  } catch (error) {
-    console.error(error);
-    setSignal(
-      "HOLD",
-      "AI analysis temporarily unavailable. Live price and paper trading still work."
-    );
-    setRiskBadge("HIGH");
-    setText("analysisUpdatedAt", "AI analysis could not be loaded.");
-  } finally {
-    aiRefreshInProgress = false;
-  }
-}
 
-async function refreshFastData() {
-  try {
-    await Promise.all([
-      loadPrice(true),
-      loadChart()
-    ]);
-  } catch (error) {
-    console.error(error);
-    setText(
-      "marketUpdatedAt",
-      "Live price/chart could not be updated. Please try again."
-    );
-  }
-}
-
-async function refreshAllData() {
-  const refreshButton = getElement("refreshBtn");
-
-  if (refreshButton) {
-    refreshButton.disabled = true;
-    refreshButton.textContent = "Refreshing...";
-  }
-
-  await refreshFastData();
-
-  if (refreshButton) {
-    refreshButton.disabled = false;
-    refreshButton.textContent = "Refresh Analysis";
-  }
-
-  loadRrg();
-  loadAiAnalysis();
-}
-
-function renderChart(labels, data, timeframeLabel) {
-  const canvas = getElement("btcChart");
-
-  if (!canvas) {
-    return;
-  }
-
-  const ctx = canvas.getContext("2d");
-
-  if (btcChart) {
-    btcChart.destroy();
-  }
-
-  btcChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels,
-      datasets: [{
-        label: `BTC/USD • ${timeframeLabel}`,
-        data,
-        borderColor: "#22c55e",
-        backgroundColor: "rgba(34, 197, 94, 0.15)",
-        borderWidth: 2,
-        fill: true,
-        tension: 0.28,
-        pointRadius: 0,
-        pointHoverRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      interaction: {
-        intersect: false,
-        mode: "index"
-      },
-      plugins: {
-        legend: {
-          labels: {
-            color: "#ffffff"
-          }
-        },
-        tooltip: {
-          callbacks: {
-            label(context) {
-              return `BTC: ${formatUsd(context.raw)}`;
-            }
-          }
-        },
-        zoom: {
-          limits: {
-            x: {
-              min: "original",
-              max: "original",
-              minRange: 2
-            }
-          },
-          pan: {
-            enabled: true,
-            mode: "x",
-            threshold: 2
-          },
-          zoom: {
-            wheel: {
-              enabled: true,
-              speed: 0.25
-            },
-            pinch: {
-              enabled: true
-            },
-            drag: {
-              enabled: true,
-              threshold: 2,
-              backgroundColor: "rgba(59, 130, 246, 0.18)",
-              borderColor: "#60a5fa",
-              borderWidth: 1
-            },
-            mode: "x"
-          }
-        }
-      },
-      scales: {
-        x: {
-          ticks: {
-            color: "#cbd5e1",
-            maxTicksLimit: 7
-          },
-          grid: {
-            color: "#1e293b"
-          }
-        },
-        y: {
-          ticks: {
-            color: "#cbd5e1",
-            callback(value) {
-              return formatUsd(value);
-            }
-          },
-          grid: {
-            color: "#1e293b"
-          }
-        }
-      }
-    }
-  });
-}
-
-function getRrgQuadrant(x, y) {
-  if (x >= 100 && y >= 100) {
-    return "Leading";
-  }
-
-  if (x >= 100 && y < 100) {
-    return "Weakening";
-  }
-
-  if (x < 100 && y < 100) {
-    return "Lagging";
-  }
-
-  return "Improving";
-}
-
-function createRrgDirectionArrowsPlugin() {
-  return {
-    id: "rrgDirectionArrows",
-    afterDatasetsDraw(chart) {
-      const { ctx } = chart;
-
-      chart.data.datasets.forEach((dataset, datasetIndex) => {
-        const meta = chart.getDatasetMeta(datasetIndex);
-
-        if (!meta?.data?.length) {
-          return;
-        }
-
-        const latestIndex = meta.data.length - 1;
-        const latestElement = meta.data[latestIndex];
-        const raw = dataset.data[latestIndex];
-
-        if (!latestElement || !raw) {
-          return;
-        }
-
-        const direction = raw.direction || "Flat";
-
-        const arrowMap = {
-          "North-East": "↗",
-          "South-East": "↘",
-          "North-West": "↖",
-          "South-West": "↙",
-          "Flat": "→"
-        };
-
-        const arrow = arrowMap[direction] || "→";
-
-        ctx.save();
-        ctx.fillStyle = dataset.borderColor || "#ffffff";
-        ctx.font = "bold 20px Arial";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        ctx.fillText(arrow, latestElement.x + 9, latestElement.y);
-        ctx.restore();
-      });
-    }
-  };
-}
-
-async function loadRrg() {
-  const status = getElement("rrgStatus");
-
-  if (status) {
-    status.textContent = `Loading ${activeRrgTimeframe} RRG-style data...`;
-  }
-
-  try {
-    const response = await fetch(
-      `/api/rrg?interval=${activeRrgTimeframe}`,
-      { cache: "no-store" }
-    );
-
-    if (!response.ok) {
-      throw new Error("RRG API could not be loaded.");
-    }
-
-    const data = await response.json();
-    renderRrg(data);
-
-    if (status) {
-      status.textContent =
-        `${activeRrgTimeframe.toUpperCase()} RRG updated: ` +
-        `${formatUpdatedAt(data.updated_at)}${
-          data.cached ? " (cached)" : ""
-        }`;
-    }
-  } catch (error) {
-    console.error(error);
-
-    if (status) {
-      status.textContent =
-        "RRG-style chart could not be loaded. Please refresh again.";
-    }
-  }
-}
-
-function renderRrg(rrgData) {
-  const canvas = getElement("rrgChart");
-
-  if (!canvas || !Array.isArray(rrgData?.trails)) {
-    return;
-  }
-
-  const ctx = canvas.getContext("2d");
-
-  if (rrgChart) {
-    rrgChart.destroy();
-  }
-
-  const allPoints = rrgData.trails.flatMap((trail) => {
-    return Array.isArray(trail.points) ? trail.points : [];
-  });
-
-  const xValues = allPoints
-    .map((point) => Number(point.x))
-    .filter(Number.isFinite);
-
-  const yValues = allPoints
-    .map((point) => Number(point.y))
-    .filter(Number.isFinite);
-
-  const xMin = Math.min(100, ...xValues);
-  const xMax = Math.max(100, ...xValues);
-  const yMin = Math.min(100, ...yValues);
-  const yMax = Math.max(100, ...yValues);
-
-  const xPadding = Math.max(0.8, (xMax - xMin) * 0.22);
-  const yPadding = Math.max(0.8, (yMax - yMin) * 0.22);
-
-  const datasets = rrgData.trails.map((trail) => {
-    const color = rrgColors[trail.symbol] || {
-      border: "#ffffff",
-      background: "rgba(255, 255, 255, 0.15)"
-    };
-
-    const points = Array.isArray(trail.points) ? trail.points : [];
-    const lastIndex = points.length - 1;
+def fibonacci_levels(highs, lows):
+    swing_high = max(highs[-50:])
+    swing_low = min(lows[-50:])
+    price_range = swing_high - swing_low
 
     return {
-      label: trail.symbol.replace("USDT", ""),
-      data: points.map((point, index) => ({
-        x: Number(point.x),
-        y: Number(point.y),
-        timestamp: point.timestamp,
-        isLatest: index === lastIndex,
-        direction: trail.direction || "Flat"
-      })),
-      borderColor: color.border,
-      backgroundColor: color.background,
-      borderWidth: 2,
-      pointBorderColor: color.border,
-      pointBackgroundColor(context) {
-        return context.raw?.isLatest
-          ? color.border
-          : "rgba(15, 23, 42, 0.95)";
-      },
-      pointRadius(context) {
-        return context.raw?.isLatest ? 5 : 2;
-      },
-      pointHoverRadius: 7,
-      showLine: true,
-      tension: 0
-    };
-  });
+        "swing_high": round_value(swing_high),
+        "swing_low": round_value(swing_low),
+        "level_23_6": round_value(swing_high - price_range * 0.236),
+        "level_38_2": round_value(swing_high - price_range * 0.382),
+        "level_50_0": round_value(swing_high - price_range * 0.5),
+        "level_61_8": round_value(swing_high - price_range * 0.618),
+        "level_78_6": round_value(swing_high - price_range * 0.786),
+    }
 
-  rrgChart = new Chart(ctx, {
-    type: "scatter",
-    data: { datasets },
-    plugins: [
-  createRrgQuadrantsPlugin(),
-  createRrgDirectionArrowsPlugin()
-  ],,
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      aspectRatio: 1.15,
-      interaction: {
-        intersect: false,
-        mode: "nearest"
-      },
-      plugins: {
-        legend: {
-          labels: {
-            color: "#ffffff",
-            usePointStyle: true,
-            pointStyle: "circle"
-          }
+
+def calculate_market_indicators(candles, interval):
+    if len(candles) < 200:
+        raise ValueError("Need 200 candles for full market analysis.")
+
+    highs = [float(candle[2]) for candle in candles]
+    lows = [float(candle[3]) for candle in candles]
+    closes = [float(candle[4]) for candle in candles]
+    volumes = [float(candle[5]) for candle in candles]
+    quote_volumes = [float(candle[7]) for candle in candles]
+    trade_counts = [int(candle[8]) for candle in candles]
+    taker_buy_volumes = [float(candle[9]) for candle in candles]
+
+    last_close = closes[-1]
+    ema_20_value = ema(closes, 20)
+    ema_50_value = ema(closes, 50)
+    ema_200_value = ema(closes, 200)
+    sma_20_value = sma(closes, 20)
+    sma_50_value = sma(closes, 50)
+
+    atr_value = atr(highs, lows, closes)
+    average_volume_20 = average(volumes[-20:-1])
+    current_volume = volumes[-1]
+    volume_ratio = (
+        current_volume / average_volume_20
+        if average_volume_20
+        else 0
+    )
+
+    total_volume_20 = sum(volumes[-20:])
+    taker_buy_total_20 = sum(taker_buy_volumes[-20:])
+    taker_buy_ratio = (
+        (taker_buy_total_20 / total_volume_20) * 100
+        if total_volume_20
+        else 50
+    )
+
+    support = min(lows[-20:])
+    resistance = max(highs[-20:])
+    prior_resistance = max(highs[-21:-1])
+    prior_support = min(lows[-21:-1])
+
+    breakout = (
+        "Bullish breakout"
+        if last_close > prior_resistance and volume_ratio >= 1.2
+        else "Bearish breakdown"
+        if last_close < prior_support and volume_ratio >= 1.2
+        else "No confirmed breakout"
+    )
+
+    trend = (
+        "Strong bullish"
+        if last_close > ema_20_value > ema_50_value > ema_200_value
+        else "Bullish"
+        if last_close > ema_20_value > ema_50_value
+        else "Strong bearish"
+        if last_close < ema_20_value < ema_50_value < ema_200_value
+        else "Bearish"
+        if last_close < ema_20_value < ema_50_value
+        else "Mixed"
+    )
+
+    momentum_percent = percentage_change(closes[-13], last_close)
+
+    return {
+        "timeframe": interval,
+        "price": round_value(last_close),
+        "trend": trend,
+        "ema": {
+            "ema_20": round_value(ema_20_value),
+            "ema_50": round_value(ema_50_value),
+            "ema_200": round_value(ema_200_value),
         },
-        tooltip: {
-          callbacks: {
-            title(context) {
-              const raw = context[0]?.raw;
+        "sma": {
+            "sma_20": round_value(sma_20_value),
+            "sma_50": round_value(sma_50_value),
+        },
+        "rsi_14": round_value(rsi(closes, 14)),
+        "macd": macd(closes),
+        "adx": adx(highs, lows, closes),
+        "atr_14": round_value(atr_value),
+        "atr_percent": round_value((atr_value / last_close) * 100),
+        "bollinger_bands": bollinger_bands(closes),
+        "volume": {
+            "current": round_value(current_volume, 4),
+            "average_20": round_value(average_volume_20, 4),
+            "volume_ratio": round_value(volume_ratio),
+            "quote_volume_current": round_value(quote_volumes[-1], 2),
+            "trade_count_current": trade_counts[-1],
+            "taker_buy_ratio_20_percent": round_value(taker_buy_ratio),
+        },
+        "obv": obv(closes, volumes),
+        "mfi_14": round_value(mfi(highs, lows, closes, volumes)),
+        "momentum_percent": round_value(momentum_percent),
+        "support_resistance": {
+            "support_20": round_value(support),
+            "resistance_20": round_value(resistance),
+        },
+        "pivots": pivot_levels(highs, lows, closes),
+        "fibonacci": fibonacci_levels(highs, lows),
+        "candle_pattern": candle_pattern(candles),
+        "market_structure": market_structure(
+            closes,
+            highs,
+            lows,
+            ema_20_value,
+            ema_50_value,
+        ),
+        "breakout_status": breakout,
+    }
 
-              if (!raw?.timestamp) {
-                return "RRG-style point";
-              }
 
-              return new Date(raw.timestamp).toLocaleString("en-IN", {
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit"
-              });
+def safe_hold_signal(reason):
+    return {
+        "signal": "HOLD",
+        "confidence": 0,
+        "reason": reason,
+        "risk": "HIGH",
+        "entry_idea": "Wait for a clearer setup and confirmation.",
+        "stop_loss_idea": (
+            "Do not open a position based on unavailable analysis."
+        ),
+        "timeframes": {
+            "15m": {
+                "signal": "HOLD",
+                "summary": "Analysis unavailable.",
+                "key_level": "--",
             },
-            label(context) {
-              const x = Number(context.raw?.x || 0);
-              const y = Number(context.raw?.y || 0);
-              const direction = context.raw?.direction || "Flat";
+            "1h": {
+                "signal": "HOLD",
+                "summary": "Analysis unavailable.",
+                "key_level": "--",
+            },
+        },
+        "disclaimer": (
+            "Educational market analysis only. Not financial advice "
+            "or an automated trading instruction."
+        ),
+    }
 
-              return [
-                `${context.dataset.label}: ${getRrgQuadrant(x, y)}`,
-                `Direction: ${direction}`,
-                `RS Ratio: ${x.toFixed(2)}`,
-                `RS Momentum: ${y.toFixed(2)}`
-              ];
+
+def build_rrg_data(interval):
+    settings = {
+        "1h": {"limit": 220, "lookback": 60, "tail": 6},
+        "1d": {"limit": 220, "lookback": 30, "tail": 6},
+    }
+
+    if interval not in settings:
+        raise ValueError("Unsupported RRG interval.")
+
+    config = settings[interval]
+    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    candle_sets = {
+        symbol: get_klines(symbol, interval, config["limit"])
+        for symbol in symbols
+    }
+
+    close_sets = {
+        symbol: [float(candle[4]) for candle in candle_sets[symbol]]
+        for symbol in symbols
+    }
+    timestamps = [int(candle[0]) for candle in candle_sets["BTCUSDT"]]
+    benchmark = close_sets["BTCUSDT"]
+    lookback = config["lookback"]
+    tail = config["tail"]
+
+    trails = []
+
+    for symbol in symbols:
+        closes = close_sets[symbol]
+        ratios = [
+            (asset_close / btc_close) * 100
+            for asset_close, btc_close in zip(closes, benchmark)
+        ]
+        ratio_sma = [
+            average(ratios[index - lookback + 1:index + 1])
+            if index >= lookback - 1
+            else None
+            for index in range(len(ratios))
+        ]
+        ratio_index = [
+            (ratios[index] / ratio_sma[index]) * 100
+            if ratio_sma[index]
+            else None
+            for index in range(len(ratios))
+        ]
+        momentum_sma = [
+            average(
+                [
+                    value
+                    for value in ratio_index[index - 9:index + 1]
+                    if value is not None
+                ]
+            )
+            if index >= lookback + 8 and ratio_index[index] is not None
+            else None
+            for index in range(len(ratio_index))
+        ]
+        momentum_index = [
+            (ratio_index[index] / momentum_sma[index]) * 100
+            if momentum_sma[index]
+            else None
+            for index in range(len(ratio_index))
+        ]
+
+        valid_points = [
+            {
+                "x": round_value(ratio_index[index], 2),
+                "y": round_value(momentum_index[index], 2),
+                "timestamp": timestamps[index],
             }
-          }
-        },
-        zoom: {
-          limits: {
-            x: {
-              min: "original",
-              max: "original",
-              minRange: 0.5
+            for index in range(len(ratio_index))
+            if ratio_index[index] is not None
+            and momentum_index[index] is not None
+        ]
+
+        trails.append({
+            "symbol": symbol,
+            "points": valid_points[-tail:],
+        })
+
+    return {
+        "benchmark": "BTCUSDT",
+        "interval": interval,
+        "tail_points": tail,
+        "trails": trails,
+        "source": "Binance market data",
+        "updated_at": int(time.time()),
+        "disclaimer": (
+            "RRG-style normalized relative-strength visualization only. "
+            "It is not official JdK RRG and is not financial advice."
+        ),
+    }
+
+
+@app.get("/api/health")
+def health():
+    return {
+        "status": "ok",
+        "message": "BTC Signal Website backend running",
+        "market_data_source": "Binance",
+        "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
+    }
+
+
+@app.get("/api/btc/price")
+def btc_price(force_refresh: bool = False):
+    now = time.time()
+    cache_age = now - price_cache["updated_at"]
+
+    if (
+        not force_refresh
+        and price_cache["data"]
+        and cache_age < 15
+    ):
+        return {
+            **price_cache["data"],
+            "cached": True,
+            "cache_age_seconds": round(cache_age, 1),
+        }
+
+    try:
+        ticker = get_btc_ticker()
+        current_price = float(ticker["lastPrice"])
+        previous_daily_close, daily_change_percent = get_btc_daily_change(
+            current_price
+        )
+
+        result = {
+            "bitcoin": {
+                "usd": current_price,
+                "usd_24h_change": daily_change_percent,
+                "price_change_24h_usd": float(ticker["priceChange"]),
+                "open_price_24h_usd": float(ticker["openPrice"]),
+                "previous_daily_close": previous_daily_close,
             },
-            y: {
-              min: "original",
-              max: "original",
-              minRange: 0.5
+            "source": "Binance",
+            "daily_change_basis": "Previous completed UTC daily candle close",
+            "cached": False,
+            "updated_at": int(now),
+        }
+
+        price_cache["data"] = result
+        price_cache["updated_at"] = now
+        return result
+
+    except (requests.exceptions.RequestException, ValueError) as error:
+        if price_cache["data"]:
+            return {
+                **price_cache["data"],
+                "cached": True,
+                "warning": (
+                    "Live market feed is temporarily unavailable. "
+                    "Showing last saved price."
+                ),
             }
-          },
-          pan: {
-            enabled: true,
-            mode: "xy",
-            threshold: 2
-          },
-          zoom: {
-            wheel: {
-              enabled: true,
-              speed: 0.18
-            },
-            pinch: {
-              enabled: true
-            },
-            drag: {
-              enabled: true,
-              threshold: 2,
-              backgroundColor: "rgba(59, 130, 246, 0.16)",
-              borderColor: "#60a5fa",
-              borderWidth: 1
-            },
-            mode: "xy"
-          }
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch BTC price from Binance: {str(error)}",
+        )
+
+
+@app.get("/api/btc/chart")
+def btc_chart(days: int = 7, interval: str = "1h"):
+    now = time.time()
+
+    allowed_intervals = {"15m", "1h", "1d", "1w"}
+
+    if interval not in allowed_intervals:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported chart interval.",
+        )
+
+    safe_days = max(1, min(days, 3650))
+    cache_key = f"{interval}:{safe_days}"
+
+    candles_needed = {
+        "15m": min(max(safe_days * 96, 48), 1000),
+        "1h": min(max(safe_days * 24, 24), 1000),
+        "1d": min(max(safe_days, 7), 1000),
+        "1w": min(max(math.ceil(safe_days / 7), 8), 1000),
+    }[interval]
+
+    cached_chart = chart_cache["data"].get(cache_key)
+
+    if cached_chart and now - cached_chart["updated_at"] < 60:
+        return {
+            **cached_chart,
+            "cached": True,
         }
-      },
-      scales: {
-        x: {
-          type: "linear",
-          min: xMin - xPadding,
-          max: xMax + xPadding,
-          title: {
-            display: true,
-            text: "Relative Strength Ratio",
-            color: "#cbd5e1"
-          },
-          ticks: {
-            color: "#cbd5e1",
-            maxTicksLimit: 7
-          },
-          grid: {
-            color: "#334155"
-          }
+
+    try:
+        candles = get_btc_klines(
+            interval=interval,
+            limit=candles_needed,
+        )
+
+        result = {
+            "prices": [
+                [int(candle[0]), float(candle[4])]
+                for candle in candles
+            ],
+            "interval": interval,
+            "days": safe_days,
+            "source": "Binance",
+            "cached": False,
+            "updated_at": int(now),
+        }
+
+        chart_cache["data"][cache_key] = result
+        chart_cache["updated_at"] = now
+        return result
+
+    except requests.exceptions.RequestException as error:
+        if cached_chart:
+            return {
+                **cached_chart,
+                "cached": True,
+                "warning": (
+                    "Live chart feed is temporarily unavailable. "
+                    "Showing last saved chart."
+                ),
+            }
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch BTC chart from Binance: {str(error)}",
+        )
+
+
+@app.get("/api/rrg")
+def rrg(interval: str = "1d"):
+    now = time.time()
+
+    if interval not in {"1h", "1d"}:
+        raise HTTPException(
+            status_code=400,
+            detail="RRG interval must be 1h or 1d.",
+        )
+
+    cached_data = rrg_cache["data"].get(interval)
+    cache_ttl = 300 if interval == "1h" else 900
+
+    if cached_data and now - cached_data["updated_at"] < cache_ttl:
+        return {
+            **cached_data,
+            "cached": True,
+        }
+
+    try:
+        result = build_rrg_data(interval)
+        rrg_cache["data"][interval] = result
+        rrg_cache["updated_at"] = now
+        return result
+    except requests.exceptions.RequestException as error:
+        if cached_data:
+            return {
+                **cached_data,
+                "cached": True,
+                "warning": "RRG feed unavailable. Showing cached data.",
+            }
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to build RRG data: {str(error)}",
+        )
+
+
+@app.get("/api/ai-signal")
+def ai_signal():
+    now = time.time()
+
+    if ai_signal_cache["data"] and now - ai_signal_cache["updated_at"] < 90:
+        return {
+            **ai_signal_cache["data"],
+            "cached": True,
+        }
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return safe_hold_signal(
+            "Gemini API key is not configured on the server."
+        )
+
+    try:
+        ticker = get_btc_ticker()
+        candles_15m = get_btc_klines(interval="15m", limit=250)
+        candles_1h = get_btc_klines(interval="1h", limit=250)
+
+        analysis_15m = calculate_market_indicators(candles_15m, "15m")
+        analysis_1h = calculate_market_indicators(candles_1h, "1h")
+
+        market_data = {
+            "symbol": "BTCUSDT",
+            "current_price_usdt": round_value(ticker["lastPrice"]),
+            "price_change_24h_percent": round_value(
+                ticker["priceChangePercent"]
+            ),
+            "high_24h_usdt": round_value(ticker["highPrice"]),
+            "low_24h_usdt": round_value(ticker["lowPrice"]),
+            "quote_volume_24h_usdt": round_value(ticker["quoteVolume"]),
+            "timeframes": {
+                "15m": analysis_15m,
+                "1h": analysis_1h,
+            },
+        }
+
+        prompt = f"""
+You are a cautious BTCUSDT market-analysis assistant for an
+educational dashboard. Analyze only the supplied live Binance data.
+
+DATA:
+{json.dumps(market_data, indent=2)}
+
+Return only the requested JSON object in simple Hindi-English (Hinglish).
+
+DECISION RULES:
+1. BUY only when 15m and 1h broadly agree bullish, trend strength is
+   adequate, and volume/price action provides confirmation.
+2. SELL only when 15m and 1h broadly agree bearish, trend strength is
+   adequate, and volume/price action provides confirmation.
+3. HOLD whenever timeframes conflict, ADX says range/weak trend,
+   price is near key resistance/support without confirmation, or data
+   is otherwise unclear.
+4. Never promise profit, certainty, or guaranteed targets.
+5. Entry and stop-loss must be educational ideas based only on the
+   supplied support, resistance, pivots, and ATR. Never phrase them as
+   an automatic trade instruction.
+6. Mention the most important evidence: trend, RSI/MACD, ADX, volume,
+   candle/structure, and key level.
+"""
+
+        response_schema = {
+            "type": "object",
+            "properties": {
+                "signal": {
+                    "type": "string",
+                    "enum": ["BUY", "SELL", "HOLD"],
+                },
+                "confidence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                },
+                "risk": {
+                    "type": "string",
+                    "enum": ["LOW", "MEDIUM", "HIGH"],
+                },
+                "reason": {"type": "string"},
+                "entry_idea": {"type": "string"},
+                "stop_loss_idea": {"type": "string"},
+                "timeframes": {
+                    "type": "object",
+                    "properties": {
+                        "15m": {
+                            "type": "object",
+                            "properties": {
+                                "signal": {
+                                    "type": "string",
+                                    "enum": ["BUY", "SELL", "HOLD"],
+                                },
+                                "summary": {"type": "string"},
+                                "key_level": {"type": "string"},
+                            },
+                            "required": [
+                                "signal",
+                                "summary",
+                                "key_level",
+                            ],
+                        },
+                        "1h": {
+                            "type": "object",
+                            "properties": {
+                                "signal": {
+                                    "type": "string",
+                                    "enum": ["BUY", "SELL", "HOLD"],
+                                },
+                                "summary": {"type": "string"},
+                                "key_level": {"type": "string"},
+                            },
+                            "required": [
+                                "signal",
+                                "summary",
+                                "key_level",
+                            ],
+                        },
+                    },
+                    "required": ["15m", "1h"],
+                },
+            },
+            "required": [
+                "signal",
+                "confidence",
+                "risk",
+                "reason",
+                "entry_idea",
+                "stop_loss_idea",
+                "timeframes",
+            ],
+        }
+
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_json_schema=response_schema,
+            ),
+        )
+
+        result = json.loads(response.text)
+        result["market_data"] = market_data
+        result["source"] = "Binance market data + Gemini AI analysis"
+        result["cached"] = False
+        result["updated_at"] = int(now)
+        result["disclaimer"] = (
+            "Educational market analysis only. Not financial advice "
+            "or an automated trading instruction."
+        )
+
+        ai_signal_cache["data"] = result
+        ai_signal_cache["updated_at"] = now
+        return result
+
+    except Exception as error:
+        return safe_hold_signal(
+            "AI analysis is temporarily unavailable: "
+            f"{type(error).__name__}: {str(error)}"
+        )
+
+
+@app.post("/api/chart-analyser")
+async def chart_analyser(file: UploadFile = File(...)):
+    allowed_types = {
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+    }
+    max_file_size = 8 * 1024 * 1024
+
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Upload a PNG, JPG, or WEBP chart image only.",
+        )
+
+    image_bytes = await file.read()
+
+    if not image_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded chart image is empty.",
+        )
+
+    if len(image_bytes) > max_file_size:
+        raise HTTPException(
+            status_code=413,
+            detail="Chart image is too large. Maximum size is 8 MB.",
+        )
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini API key is not configured on the server.",
+        )
+
+    prompt = """
+You are a cautious technical-analysis assistant for an educational
+BTC/crypto chart screenshot analyser.
+
+Analyze only visible information in the uploaded chart image.
+Do not invent exact prices, indicators, symbols, timeframes, or levels
+that cannot be read clearly from the image.
+
+Return only a JSON object in simple Hinglish.
+
+Rules:
+1. Output BUY only if a clear bullish setup and visible confirmation
+   are present.
+2. Output SELL only if a clear bearish setup and visible confirmation
+   are present.
+3. Output HOLD if the chart is unclear, cropped, has insufficient
+   context, is sideways, or confirmation is missing.
+4. Never promise profit, certainty, or guaranteed targets.
+5. This is educational analysis only, never an automated trade order.
+6. Clearly say "Not visible" when required chart information is absent.
+"""
+
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "signal": {
+                "type": "string",
+                "enum": ["BUY", "SELL", "HOLD"],
+            },
+            "confidence": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+            },
+            "risk": {
+                "type": "string",
+                "enum": ["LOW", "MEDIUM", "HIGH"],
+            },
+            "trend": {"type": "string"},
+            "pattern": {"type": "string"},
+            "support": {"type": "string"},
+            "resistance": {"type": "string"},
+            "reason": {"type": "string"},
+            "entry_idea": {"type": "string"},
+            "invalidation_idea": {"type": "string"},
+            "warning": {"type": "string"},
         },
-        y: {
-          type: "linear",
-          min: yMin - yPadding,
-          max: yMax + yPadding,
-          title: {
-            display: true,
-            text: "Relative Strength Momentum",
-            color: "#cbd5e1"
-          },
-          ticks: {
-            color: "#cbd5e1",
-            maxTicksLimit: 7
-          },
-          grid: {
-            color: "#334155"
-          }
-        }
-      }
-    }
-  });
-}
-
-function executePaperBuy() {
-  const input = getElement("paperAmountInput");
-  const amountInr = Number(input?.value);
-
-  if (!currentBtcPriceInr) {
-    setText(
-      "paperTradeStatus",
-      "Waiting for live BTC price. Please wait a few seconds."
-    );
-    return;
-  }
-
-  if (!Number.isFinite(amountInr) || amountInr < 100) {
-    setText(
-      "paperTradeStatus",
-      "Please enter a valid virtual amount of at least ₹100."
-    );
-    return;
-  }
-
-  const portfolio = getPaperPortfolio();
-
-  if (amountInr > portfolio.cashInr) {
-    setText(
-      "paperTradeStatus",
-      "Not enough virtual cash for this trade."
-    );
-    return;
-  }
-
-  const btcAmount = amountInr / currentBtcPriceInr;
-
-  portfolio.cashInr -= amountInr;
-  portfolio.btcHolding += btcAmount;
-  portfolio.totalCostInr += amountInr;
-
-  portfolio.history.unshift({
-    type: "BUY",
-    amountInr,
-    btcAmount,
-    priceInr: currentBtcPriceInr,
-    timestamp: Date.now()
-  });
-
-  portfolio.history = portfolio.history.slice(0, 50);
-  savePaperPortfolio(portfolio);
-
-  if (input) {
-    input.value = "";
-  }
-
-  setText(
-    "paperTradeStatus",
-    `Virtual BUY complete: ${formatBtc(btcAmount)} at ` +
-    `${formatInr(currentBtcPriceInr)} per BTC.`
-  );
-
-  renderPaperTrading();
-}
-
-function executePaperSell() {
-  const input = getElement("paperAmountInput");
-  const amountInr = Number(input?.value);
-
-  if (!currentBtcPriceInr) {
-    setText(
-      "paperTradeStatus",
-      "Waiting for live BTC price. Please wait a few seconds."
-    );
-    return;
-  }
-
-  if (!Number.isFinite(amountInr) || amountInr < 100) {
-    setText(
-      "paperTradeStatus",
-      "Please enter a valid virtual amount of at least ₹100."
-    );
-    return;
-  }
-
-  const portfolio = getPaperPortfolio();
-  const btcAmount = amountInr / currentBtcPriceInr;
-
-  if (btcAmount > portfolio.btcHolding + 0.0000000001) {
-    setText(
-      "paperTradeStatus",
-      "Not enough virtual BTC holding to sell this amount."
-    );
-    return;
-  }
-
-  const averageCostPerBtc = portfolio.btcHolding > 0
-    ? portfolio.totalCostInr / portfolio.btcHolding
-    : 0;
-
-  portfolio.cashInr += amountInr;
-  portfolio.btcHolding -= btcAmount;
-  portfolio.totalCostInr -= btcAmount * averageCostPerBtc;
-
-  if (portfolio.btcHolding < 0.00000001) {
-    portfolio.btcHolding = 0;
-    portfolio.totalCostInr = 0;
-  }
-
-  portfolio.history.unshift({
-    type: "SELL",
-    amountInr,
-    btcAmount,
-    priceInr: currentBtcPriceInr,
-    timestamp: Date.now()
-  });
-
-  portfolio.history = portfolio.history.slice(0, 50);
-  savePaperPortfolio(portfolio);
-
-  if (input) {
-    input.value = "";
-  }
-
-  setText(
-    "paperTradeStatus",
-    `Virtual SELL complete: ${formatBtc(btcAmount)} at ` +
-    `${formatInr(currentBtcPriceInr)} per BTC.`
-  );
-
-  renderPaperTrading();
-}
-
-function resetPaperTrading() {
-  const shouldReset = window.confirm(
-    "Reset virtual paper portfolio to ₹100,000 and remove all virtual trades?"
-  );
-
-  if (!shouldReset) {
-    return;
-  }
-
-  savePaperPortfolio(getDefaultPaperPortfolio());
-  setText(
-    "paperTradeStatus",
-    "Virtual portfolio reset to ₹100,000."
-  );
-  renderPaperTrading();
-}
-
-function setupPaperTrading() {
-  const buyButton = getElement("paperBuyBtn");
-  const sellButton = getElement("paperSellBtn");
-  const resetButton = getElement("resetPaperBtn");
-
-  if (buyButton) {
-    buyButton.addEventListener("click", executePaperBuy);
-  }
-
-  if (sellButton) {
-    sellButton.addEventListener("click", executePaperSell);
-  }
-
-  if (resetButton) {
-    resetButton.addEventListener("click", resetPaperTrading);
-  }
-
-  renderPaperTrading();
-}
-
-function setupTimeframeButtons() {
-  const buttons = document.querySelectorAll(".timeframe-btn");
-
-  buttons.forEach((button) => {
-    button.addEventListener("click", async () => {
-      const selectedTimeframe = button.dataset.timeframe;
-
-      if (!timeframeSettings[selectedTimeframe]) {
-        return;
-      }
-
-      activeTimeframe = selectedTimeframe;
-
-      buttons.forEach((item) => {
-        item.classList.remove("active");
-      });
-
-      button.classList.add("active");
-
-      try {
-        await loadChart();
-      } catch (error) {
-        console.error(error);
-        setText(
-          "marketUpdatedAt",
-          "Selected chart timeframe could not be loaded."
-        );
-      }
-    });
-  });
-}
-
-function setupZoomButtons() {
-  const zoomInButton = getElement("zoomInBtn");
-  const zoomOutButton = getElement("zoomOutBtn");
-  const resetZoomButton = getElement("resetZoomBtn");
-
-  if (zoomInButton) {
-    zoomInButton.addEventListener("click", () => {
-      if (btcChart) {
-        btcChart.zoom({ x: 1.35 });
-      }
-    });
-  }
-
-  if (zoomOutButton) {
-    zoomOutButton.addEventListener("click", () => {
-      if (btcChart) {
-        btcChart.zoom({ x: 0.74 });
-      }
-    });
-  }
-
-  if (resetZoomButton) {
-    resetZoomButton.addEventListener("click", () => {
-      if (btcChart) {
-        btcChart.resetZoom();
-      }
-    });
-  }
-}
-
-function setupRrgButtons() {
-  const buttons = document.querySelectorAll(".rrg-timeframe-btn");
-  const resetButton = getElement("rrgResetBtn");
-
-  buttons.forEach((button) => {
-    button.addEventListener("click", async () => {
-      const selectedTimeframe = button.dataset.rrgTimeframe;
-
-      if (!["1h", "1d"].includes(selectedTimeframe)) {
-        return;
-      }
-
-      activeRrgTimeframe = selectedTimeframe;
-
-      buttons.forEach((item) => {
-        item.classList.remove("active");
-      });
-
-      button.classList.add("active");
-      await loadRrg();
-    });
-  });
-
-  if (resetButton) {
-    resetButton.addEventListener("click", () => {
-      if (rrgChart) {
-        rrgChart.resetZoom();
-      }
-    });
-  }
-}
-
-function setUploadedChartText(id, value) {
-  const element = getElement(id);
-
-  if (element) {
-    element.textContent = value || "--";
-  }
-}
-
-function setupChartAnalyser() {
-  const imageInput = getElement("chartImageInput");
-  const preview = getElement("chartImagePreview");
-  const analyseButton = getElement("analyseChartBtn");
-  const status = getElement("chartAnalyseStatus");
-  const resultBox = getElement("chartAnalysisResult");
-
-  if (!imageInput || !preview || !analyseButton || !status || !resultBox) {
-    return;
-  }
-
-  imageInput.addEventListener("change", () => {
-    const file = imageInput.files[0];
-    resultBox.hidden = true;
-
-    if (!file) {
-      preview.hidden = true;
-      preview.removeAttribute("src");
-      status.textContent =
-        "Upload PNG, JPG, or WEBP chart image. Maximum 8 MB.";
-      return;
+        "required": [
+            "signal",
+            "confidence",
+            "risk",
+            "trend",
+            "pattern",
+            "support",
+            "resistance",
+            "reason",
+            "entry_idea",
+            "invalidation_idea",
+            "warning",
+        ],
     }
 
-    const allowedTypes = [
-      "image/png",
-      "image/jpeg",
-      "image/webp"
-    ];
+    try:
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[
+                prompt,
+                types.Part.from_bytes(
+                    data=image_bytes,
+                    mime_type=file.content_type,
+                ),
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_json_schema=response_schema,
+            ),
+        )
 
-    if (!allowedTypes.includes(file.type)) {
-      imageInput.value = "";
-      preview.hidden = true;
-      preview.removeAttribute("src");
-      status.textContent =
-        "Please select a PNG, JPG, or WEBP image only.";
-      return;
-    }
+        result = json.loads(response.text)
+        result["source"] = "Uploaded chart screenshot + Gemini AI analysis"
+        result["disclaimer"] = (
+            "Educational chart analysis only. Not financial advice "
+            "or an automated trading instruction."
+        )
+        return result
 
-    if (file.size > 8 * 1024 * 1024) {
-      imageInput.value = "";
-      preview.hidden = true;
-      preview.removeAttribute("src");
-      status.textContent =
-        "Image is too large. Maximum allowed size is 8 MB.";
-      return;
-    }
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Chart analysis is temporarily unavailable: "
+                f"{type(error).__name__}: {str(error)}"
+            ),
+        )
 
-    preview.src = URL.createObjectURL(file);
-    preview.hidden = false;
-    status.textContent =
-      `Selected: ${file.name}. Click Analyse with Gemini AI.`;
-  });
 
-  analyseButton.addEventListener("click", async () => {
-    const file = imageInput.files[0];
+app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 
-    if (!file) {
-      status.textContent = "Please upload a chart image first.";
-      return;
-    }
 
-    const formData = new FormData();
-    formData.append("file", file);
+@app.get("/")
+def home():
+    return FileResponse("frontend/index.html")
 
-    analyseButton.disabled = true;
-    analyseButton.textContent = "Analysing Chart...";
-    status.textContent =
-      "Gemini is reading the uploaded chart screenshot...";
-    resultBox.hidden = true;
-
-    try {
-      const response = await fetch("/api/chart-analyser", {
-        method: "POST",
-        body: formData
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || "Chart analysis failed.");
-      }
-
-      const signal = ["BUY", "SELL", "HOLD"].includes(data.signal)
-        ? data.signal
-        : "HOLD";
-      const signalElement = getElement("uploadedChartSignal");
-      const color = getSignalColor(signal);
-
-      if (signalElement) {
-        signalElement.textContent = signal;
-        signalElement.style.color = color;
-        signalElement.style.borderColor = color;
-      }
-
-      setUploadedChartText(
-        "uploadedChartConfidence",
-        `Confidence: ${Number(data.confidence || 0)}%`
-      );
-      setUploadedChartText("uploadedChartRisk", data.risk);
-      setUploadedChartText("uploadedChartTrend", data.trend);
-      setUploadedChartText("uploadedChartPattern", data.pattern);
-      setUploadedChartText("uploadedChartSupport", data.support);
-      setUploadedChartText("uploadedChartResistance", data.resistance);
-      setUploadedChartText("uploadedChartReason", data.reason);
-      setUploadedChartText("uploadedChartEntry", data.entry_idea);
-      setUploadedChartText(
-        "uploadedChartInvalidation",
-        data.invalidation_idea
-      );
-      setUploadedChartText("uploadedChartWarning", data.warning);
-
-      resultBox.hidden = false;
-      status.textContent =
-        "Chart analysis complete. Educational use only.";
-    } catch (error) {
-      console.error(error);
-      status.textContent =
-        `Chart analysis error: ${error.message}`;
-    } finally {
-      analyseButton.disabled = false;
-      analyseButton.textContent = "Analyse with Gemini AI";
-    }
-  });
-}
-
-const refreshButton = getElement("refreshBtn");
-
-if (refreshButton) {
-  refreshButton.addEventListener("click", refreshAllData);
-}
-
-setText("signal-date", formatDateForSignal());
-
-setupPaperTrading();
-setupTimeframeButtons();
-setupZoomButtons();
-setupRrgButtons();
-setupChartAnalyser();
-
-refreshAllData();
-
-setInterval(loadPrice, 30000);
-setInterval(loadChart, 60000);
-setInterval(loadAiAnalysis, 300000);
-setInterval(loadRrg, 300000);
