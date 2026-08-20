@@ -598,27 +598,31 @@ def build_rrg_data(interval):
         raise ValueError("Unsupported RRG interval.")
 
     config = settings[interval]
-    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    benchmark_symbol = "ETHUSDT"
+    plotted_symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 
     candle_sets = {
         symbol: get_klines(symbol, interval, config["limit"])
-        for symbol in symbols
+        for symbol in plotted_symbols
     }
 
     close_sets = {
         symbol: [float(candle[4]) for candle in candle_sets[symbol]]
-        for symbol in symbols
+        for symbol in plotted_symbols
     }
 
-    timestamps = [int(candle[0]) for candle in candle_sets["BTCUSDT"]]
-    benchmark = close_sets["BTCUSDT"]
+    timestamps = [
+        int(candle[0])
+        for candle in candle_sets[benchmark_symbol]
+    ]
+    benchmark = close_sets[benchmark_symbol]
     lookback = config["lookback"]
     tail = config["tail"]
     trails = []
 
-    for symbol in symbols:
-        if symbol == "BTCUSDT":
-            btc_points = [
+    for symbol in plotted_symbols:
+        if symbol == benchmark_symbol:
+            benchmark_points = [
                 {
                     "x": 100.0,
                     "y": 100.0,
@@ -632,8 +636,8 @@ def build_rrg_data(interval):
 
             trails.append(
                 {
-                    "symbol": "BTCUSDT",
-                    "points": btc_points,
+                    "symbol": benchmark_symbol,
+                    "points": benchmark_points,
                     "direction": "Flat",
                 }
             )
@@ -642,8 +646,8 @@ def build_rrg_data(interval):
         closes = close_sets[symbol]
 
         ratios = [
-            (asset_close / btc_close) * 100
-            for asset_close, btc_close in zip(closes, benchmark)
+            (asset_close / benchmark_close) * 100
+            for asset_close, benchmark_close in zip(closes, benchmark)
         ]
 
         ratio_sma = [
@@ -719,17 +723,19 @@ def build_rrg_data(interval):
         )
 
     return {
-        "benchmark": "BTCUSDT",
+        "benchmark": benchmark_symbol,
         "interval": interval,
         "tail_points": tail,
         "trails": trails,
         "source": "Binance market data",
         "updated_at": int(time.time()),
         "disclaimer": (
-            "RRG-style normalized relative-strength visualization only. "
-            "It is not official JdK RRG and is not financial advice."
+            "BTC and SOL are compared with ETH as the benchmark in this "
+            "RRG-style normalized relative-strength visualization. It is not "
+            "official JdK RRG and is not financial advice."
         ),
     }
+
 
 
 @app.get("/api/health")
