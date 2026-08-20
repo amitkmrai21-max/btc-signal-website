@@ -16,6 +16,7 @@ const DEFAULT_PAPER_CASH = 100000;
 const PAPER_MIN_TRADE_INR = 100;
 const PAPER_EPSILON = 0.00000001;
 const AI_PLAN_STORAGE_KEY = "btcAiSignalLatestPlanV1";
+const LAST_AI_SIGNAL_STORAGE_KEY = "btcAiSignalLastSignalV1";
 const AI_PLAN_VALIDITY_MS = 5 * 60 * 1000;
 
 const timeframeSettings = {
@@ -146,6 +147,101 @@ function setSignalSource(message, mode = "ai") {
   element.style.color = mode === "ai" ? "#67e8f9" : mode === "technical" ? "#facc15" : "#cbd5e1";
 }
 
+function saveLastAiSignal(aiData) {
+  const snapshot = {
+    signal: aiData?.signal || "NO TRADE",
+    confidence: aiData?.confidence ?? "--",
+    reason: aiData?.reason || "No AI explanation available.",
+    updatedAt: aiData?.updated_at
+      ? Number(aiData.updated_at) * 1000
+      : Date.now()
+  };
+
+  try {
+    localStorage.setItem(LAST_AI_SIGNAL_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function getLastAiSignal() {
+  try {
+    const saved = localStorage.getItem(LAST_AI_SIGNAL_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function isBuyLike(signal = "") {
+  return String(signal).toUpperCase().includes("BUY");
+}
+
+function isSellLike(signal = "") {
+  return String(signal).toUpperCase().includes("SELL");
+}
+
+function formatStoredSignalTime(timestamp) {
+  if (!timestamp) return "--";
+
+  const date = new Date(Number(timestamp));
+  if (Number.isNaN(date.getTime())) return "--";
+
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+function updateSignalConfirmation(technicalData) {
+  const lastAi = getLastAiSignal();
+  const technicalSignal = technicalData?.signal || "NO TRADE";
+  const technicalReason = technicalData?.reason || "--";
+
+  setText("liveTechnicalSignal", technicalSignal);
+  setText("liveTechnicalReason", technicalReason);
+  setText("liveTechnicalUpdated", `Updated: ${new Date().toLocaleString("en-IN")}`);
+
+  if (!lastAi) {
+    setText("lastAiSignal", "No previous AI analysis");
+    setText("lastAiConfidence", "Confidence: --");
+    setText("lastAiUpdated", "Updated: --");
+    setText("combinedDecision", technicalSignal);
+    setText("combinedDecisionReason", "Gemini AI is unavailable. Showing live technical fallback only.");
+    return;
+  }
+
+  setText("lastAiSignal", lastAi.signal);
+  setText("lastAiConfidence", `Confidence: ${lastAi.confidence}`);
+  setText("lastAiUpdated", `Updated: ${formatStoredSignalTime(lastAi.updatedAt)}`);
+
+  const aiBuy = isBuyLike(lastAi.signal);
+  const aiSell = isSellLike(lastAi.signal);
+  const technicalBuy = isBuyLike(technicalSignal);
+  const technicalSell = isSellLike(technicalSignal);
+
+  let decision = "WAIT FOR CONFIRMATION";
+  let decisionReason = "The last AI view and live technical conditions are not fully aligned. Do not force an entry.";
+
+  if ((aiBuy && technicalBuy) || (aiSell && technicalSell)) {
+    decision = aiBuy ? "BUY SETUP CONFIRMED" : "SELL SETUP CONFIRMED";
+    decisionReason = "The last successful Gemini AI view and the current live technical signal are aligned.";
+  } else if ((aiBuy && technicalSell) || (aiSell && technicalBuy)) {
+    decision = "AI SIGNAL INVALIDATED — NO ENTRY";
+    decisionReason = "Current live technical conditions oppose the last Gemini AI signal.";
+  } else if (String(technicalSignal).toUpperCase().includes("NO TRADE")) {
+    decision = "WAIT FOR CONFIRMATION";
+    decisionReason = "The previous AI idea is not currently confirmed by live technical data.";
+  }
+
+  setText("combinedDecision", decision);
+  setText("combinedDecisionReason", decisionReason);
+}
+
 function saveAiPlan(aiData) {
   const plan = { data: aiData, savedAt: Date.now() };
   latestAiPlan = plan;
@@ -259,6 +355,7 @@ function calculateTechnicalSignal(market15m = {}, market1h = {}) {
     score: Math.max(buyScore, sellScore)
   };
 }
+
 async function loadTechnicalFallback(reasonPrefix) {
   try {
     const response = await fetch("/api/technical-signal", {
@@ -268,9 +365,7 @@ async function loadTechnicalFallback(reasonPrefix) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(
-        data.detail || "Technical signal API could not be loaded."
-      );
+      throw new Error(data.detail || "Technical signal API could not be loaded.");
     }
 
     latestTechnicalMarket = data?.market_data?.timeframes || {};
@@ -306,21 +401,16 @@ async function loadTechnicalFallback(reasonPrefix) {
     setText("entryIdea", data.entry_idea);
     setText("stopLossIdea", data.stop_loss_idea);
     setRiskBadge(data.risk);
+    updateSignalConfirmation(data);
 
-    setSignalSource(
-      "Live technical fallback — AI unavailable or expired",
-      "technical"
-    );
-
-    setText(
-      "analysisUpdatedAt",
-      "Gemini AI unavailable; live Binance technical analysis is active."
-    );
+    setSignalSource("Live technical fallback — AI unavailable or expired", "technical");
+    setText("analysisUpdatedAt", "Gemini AI unavailable; live Binance technical analysis is active.");
   } catch (error) {
     console.error(error);
     renderTechnicalFallback(reasonPrefix);
   }
 }
+
 function renderTechnicalFallback(reasonPrefix = "Gemini AI is temporarily unavailable.") {
   const market15m = latestTechnicalMarket?.["15m"] || {};
   const market1h = latestTechnicalMarket?.["1h"] || {};
@@ -330,6 +420,7 @@ function renderTechnicalFallback(reasonPrefix = "Gemini AI is temporarily unavai
   setRiskBadge(technical.signal === "NO TRADE" ? "HIGH" : "MEDIUM");
   setSignalSource("Live technical fallback — AI unavailable or expired", "technical");
   setText("analysisUpdatedAt", `Live technical fallback active • updated ${new Date().toLocaleTimeString("en-IN")}`);
+  updateSignalConfirmation(technical);
 }
 
 function scheduleAiPlanExpiry() {
@@ -604,6 +695,7 @@ async function loadAiAnalysis() {
       throw new Error(data.detail || data.message || `AI signal request failed (${response.status}).`);
     }
 
+    saveLastAiSignal(data);
     saveAiPlan(data);
     updateAiAnalysis(data);
   } catch (error) {
