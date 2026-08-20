@@ -569,22 +569,6 @@ async function refreshFastData() {
   }
 }
 
-async function refreshFastData() {
-  try {
-    await Promise.all([
-      loadPrice(true),
-      loadChart()
-    ]);
-  } catch (error) {
-    console.error(error);
-
-    setText(
-      "marketUpdatedAt",
-      "Live price/chart could not be updated. Please try again."
-    );
-  }
-}
-
 function renderChart(labels, data, timeframeLabel) {
   const canvas = getElement("btcChart");
 
