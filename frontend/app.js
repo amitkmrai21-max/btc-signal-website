@@ -244,6 +244,42 @@ function getPaperPortfolio() {
   return loadPaperPortfolio();
 }
 
+function renderPaperHistory(history) {
+  const container = getElement("paperTradeHistory");
+
+  if (!container) {
+    return;
+  }
+
+  if (!history.length) {
+    container.textContent = "No virtual trades yet.";
+    return;
+  }
+
+  container.innerHTML = "";
+
+  history.forEach((trade) => {
+    const item = document.createElement("div");
+    const typeClass = trade.type === "BUY"
+      ? "history-buy"
+      : "history-sell";
+
+    const date = new Date(trade.timestamp).toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+
+    item.className = `history-item ${typeClass}`;
+    item.textContent =
+      `${trade.type} • ${formatInr(trade.amountInr)} • ` +
+      `${formatBtc(trade.btcAmount)} • ${date}`;
+
+    container.appendChild(item);
+  });
+}
+
 function renderPaperTrading() {
   const portfolio = getPaperPortfolio();
 
@@ -286,42 +322,6 @@ function renderPaperTrading() {
   renderPaperHistory(portfolio.history);
 }
 
-function renderPaperHistory(history) {
-  const container = getElement("paperTradeHistory");
-
-  if (!container) {
-    return;
-  }
-
-  if (!history.length) {
-    container.textContent = "No virtual trades yet.";
-    return;
-  }
-
-  container.innerHTML = "";
-
-  history.forEach((trade) => {
-    const item = document.createElement("div");
-    const typeClass = trade.type === "BUY"
-      ? "history-buy"
-      : "history-sell";
-
-    const date = new Date(trade.timestamp).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
-
-    item.className = `history-item ${typeClass}`;
-    item.textContent =
-      `${trade.type} • ${formatInr(trade.amountInr)} • ` +
-      `${formatBtc(trade.btcAmount)} • ${date}`;
-
-    container.appendChild(item);
-  });
-}
-
 function updatePrice(priceData) {
   const btc = priceData?.bitcoin;
   const priceUsd = Number(btc?.usd);
@@ -355,39 +355,6 @@ function updatePrice(priceData) {
   );
 
   renderPaperTrading();
-}
-
-function updateAiAnalysis(aiData) {
-  setSignal(aiData.signal, aiData.reason);
-  setText("aiConfidence", `${Number(aiData.confidence || 0)}%`);
-  setText("entryIdea", aiData.entry_idea);
-  setText("stopLossIdea", aiData.stop_loss_idea);
-  setText("disclaimerText", aiData.disclaimer);
-
-  setText(
-    "analysisUpdatedAt",
-    `Last analysis: ${formatUpdatedAt(aiData.updated_at)}${
-      aiData.cached ? " (cached)" : ""
-    }`
-  );
-
-  setRiskBadge(aiData.risk);
-
-  const analysis15m = aiData?.timeframes?.["15m"] || {};
-  const analysis1h = aiData?.timeframes?.["1h"] || {};
-
-  setMiniSignal("signal15m", analysis15m.signal);
-  setMiniSignal("signal1h", analysis1h.signal);
-
-  setText("summary15m", analysis15m.summary);
-  setText("summary1h", analysis1h.summary);
-  setText("keyLevel15m", analysis15m.key_level);
-  setText("keyLevel1h", analysis1h.key_level);
-
-  const market15m = aiData?.market_data?.timeframes?.["15m"] || {};
-  const market1h = aiData?.market_data?.timeframes?.["1h"] || {};
-
-  updateIndicators(market15m, market1h);
 }
 
 function updateIndicators(market15m, market1h) {
@@ -458,6 +425,39 @@ function updateIndicators(market15m, market1h) {
   setText("structure1h", market1h.market_structure);
 }
 
+function updateAiAnalysis(aiData) {
+  setSignal(aiData.signal, aiData.reason);
+  setText("aiConfidence", `${Number(aiData.confidence || 0)}%`);
+  setText("entryIdea", aiData.entry_idea);
+  setText("stopLossIdea", aiData.stop_loss_idea);
+  setText("disclaimerText", aiData.disclaimer);
+
+  setText(
+    "analysisUpdatedAt",
+    `Last analysis: ${formatUpdatedAt(aiData.updated_at)}${
+      aiData.cached ? " (cached)" : ""
+    }`
+  );
+
+  setRiskBadge(aiData.risk);
+
+  const analysis15m = aiData?.timeframes?.["15m"] || {};
+  const analysis1h = aiData?.timeframes?.["1h"] || {};
+
+  setMiniSignal("signal15m", analysis15m.signal);
+  setMiniSignal("signal1h", analysis1h.signal);
+
+  setText("summary15m", analysis15m.summary);
+  setText("summary1h", analysis1h.summary);
+  setText("keyLevel15m", analysis15m.key_level);
+  setText("keyLevel1h", analysis1h.key_level);
+
+  const market15m = aiData?.market_data?.timeframes?.["15m"] || {};
+  const market1h = aiData?.market_data?.timeframes?.["1h"] || {};
+
+  updateIndicators(market15m, market1h);
+}
+
 async function loadPrice(forceRefresh = false) {
   const url = forceRefresh
     ? "/api/btc/price?force_refresh=true"
@@ -471,17 +471,15 @@ async function loadPrice(forceRefresh = false) {
     throw new Error("Price API could not be loaded.");
   }
 
-  const data = await response.json();
-  updatePrice(data);
+  updatePrice(await response.json());
 }
+
 async function loadChart() {
   const selected = timeframeSettings[activeTimeframe];
 
   const response = await fetch(
     `/api/btc/chart?days=${selected.days}&interval=${selected.interval}`,
-    {
-      cache: "no-store"
-    }
+    { cache: "no-store" }
   );
 
   if (!response.ok) {
@@ -489,7 +487,6 @@ async function loadChart() {
   }
 
   const chartData = await response.json();
-
   const rawPrices = Array.isArray(chartData.prices)
     ? chartData.prices
     : [];
@@ -514,9 +511,11 @@ async function loadChart() {
     );
   });
 
-  const prices = chartPoints.map((item) => item[1]);
-
-  renderChart(labels, prices, selected.label);
+  renderChart(
+    labels,
+    chartPoints.map((item) => item[1]),
+    selected.label
+  );
 }
 
 async function loadAiAnalysis() {
@@ -536,16 +535,13 @@ async function loadAiAnalysis() {
       throw new Error("AI signal API could not be loaded.");
     }
 
-    const data = await response.json();
-    updateAiAnalysis(data);
+    updateAiAnalysis(await response.json());
   } catch (error) {
     console.error(error);
-
     setSignal(
       "HOLD",
       "AI analysis temporarily unavailable. Live price and paper trading still work."
     );
-
     setRiskBadge("HIGH");
     setText("analysisUpdatedAt", "AI analysis could not be loaded.");
   } finally {
@@ -561,12 +557,30 @@ async function refreshFastData() {
     ]);
   } catch (error) {
     console.error(error);
-
     setText(
       "marketUpdatedAt",
       "Live price/chart could not be updated. Please try again."
     );
   }
+}
+
+async function refreshAllData() {
+  const refreshButton = getElement("refreshBtn");
+
+  if (refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.textContent = "Refreshing...";
+  }
+
+  await refreshFastData();
+
+  if (refreshButton) {
+    refreshButton.disabled = false;
+    refreshButton.textContent = "Refresh Analysis";
+  }
+
+  loadRrg();
+  loadAiAnalysis();
 }
 
 function renderChart(labels, data, timeframeLabel) {
@@ -758,9 +772,7 @@ async function loadRrg() {
   try {
     const response = await fetch(
       `/api/rrg?interval=${activeRrgTimeframe}`,
-      {
-        cache: "no-store"
-      }
+      { cache: "no-store" }
     );
 
     if (!response.ok) {
@@ -840,9 +852,7 @@ function renderRrg(rrgData) {
 
   rrgChart = new Chart(ctx, {
     type: "scatter",
-    data: {
-      datasets
-    },
+    data: { datasets },
     plugins: [createRrgQuadrantsPlugin()],
     options: {
       responsive: true,
@@ -1097,12 +1107,10 @@ function resetPaperTrading() {
   }
 
   savePaperPortfolio(getDefaultPaperPortfolio());
-
   setText(
     "paperTradeStatus",
     "Virtual portfolio reset to ₹100,000."
   );
-
   renderPaperTrading();
 }
 
@@ -1149,7 +1157,6 @@ function setupTimeframeButtons() {
         await loadChart();
       } catch (error) {
         console.error(error);
-
         setText(
           "marketUpdatedAt",
           "Selected chart timeframe could not be loaded."
@@ -1242,7 +1249,6 @@ function setupChartAnalyser() {
 
   imageInput.addEventListener("change", () => {
     const file = imageInput.files[0];
-
     resultBox.hidden = true;
 
     if (!file) {
@@ -1315,7 +1321,6 @@ function setupChartAnalyser() {
       const signal = ["BUY", "SELL", "HOLD"].includes(data.signal)
         ? data.signal
         : "HOLD";
-
       const signalElement = getElement("uploadedChartSignal");
       const color = getSignalColor(signal);
 
