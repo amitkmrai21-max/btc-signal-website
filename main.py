@@ -63,11 +63,6 @@ def get_btc_klines(interval="1h", limit=250):
 
 
 def get_btc_daily_change(current_price):
-    """
-    Daily Change = live BTC price compared with Binance's previous completed
-    UTC daily candle close. This is different from Binance's rolling 24-hour
-    ticker percentage.
-    """
     daily_candles = get_btc_klines(interval="1d", limit=2)
 
     if len(daily_candles) < 2:
@@ -177,11 +172,7 @@ def macd(values, fast=12, slow=26, signal=9):
     )
 
     direction = "Bullish" if macd_line > signal_line else "Bearish"
-    strength = (
-        "Strengthening"
-        if histogram > previous_histogram
-        else "Weakening"
-    )
+    strength = "Strengthening" if histogram > previous_histogram else "Weakening"
 
     return {
         "macd_line": round_value(macd_line, 4),
@@ -245,11 +236,7 @@ def adx(highs, lows, closes, period=14):
         minus_di = 100 * minus_average / tr_average if tr_average else 0
         total_di = plus_di + minus_di
 
-        dx = (
-            100 * abs(plus_di - minus_di) / total_di
-            if total_di
-            else 0
-        )
+        dx = 100 * abs(plus_di - minus_di) / total_di if total_di else 0
 
         plus_di_values.append(plus_di)
         minus_di_values.append(minus_di)
@@ -489,11 +476,7 @@ def calculate_market_indicators(candles, interval):
     atr_value = atr(highs, lows, closes)
     average_volume_20 = average(volumes[-20:-1])
     current_volume = volumes[-1]
-    volume_ratio = (
-        current_volume / average_volume_20
-        if average_volume_20
-        else 0
-    )
+    volume_ratio = current_volume / average_volume_20 if average_volume_20 else 0
 
     total_volume_20 = sum(volumes[-20:])
     taker_buy_total_20 = sum(taker_buy_volumes[-20:])
@@ -585,9 +568,7 @@ def safe_hold_signal(reason):
         "reason": reason,
         "risk": "HIGH",
         "entry_idea": "Wait for a clearer setup and confirmation.",
-        "stop_loss_idea": (
-            "Do not open a position based on unavailable analysis."
-        ),
+        "stop_loss_idea": "Do not open a position based on unavailable analysis.",
         "timeframes": {
             "15m": {
                 "signal": "HOLD",
@@ -617,9 +598,6 @@ def build_rrg_data(interval):
         raise ValueError("Unsupported RRG interval.")
 
     config = settings[interval]
-
-    # BTC stays the benchmark, but it is not plotted because BTC/BTC
-    # stays near the same RRG point by definition.
     symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 
     candle_sets = {
@@ -636,11 +614,10 @@ def build_rrg_data(interval):
     benchmark = close_sets["BTCUSDT"]
     lookback = config["lookback"]
     tail = config["tail"]
-
     trails = []
 
     for symbol in symbols:
-                if symbol == "BTCUSDT":
+        if symbol == "BTCUSDT":
             btc_points = [
                 {
                     "x": 100.0,
@@ -649,16 +626,17 @@ def build_rrg_data(interval):
                 }
                 for index in range(
                     max(0, len(timestamps) - tail),
-                    len(timestamps)
+                    len(timestamps),
                 )
             ]
 
-            trails.append({
-                "symbol": "BTCUSDT",
-                "points": btc_points,
-                "direction": "Flat",
-            })
-
+            trails.append(
+                {
+                    "symbol": "BTCUSDT",
+                    "points": btc_points,
+                    "direction": "Flat",
+                }
+            )
             continue
 
         closes = close_sets[symbol]
@@ -718,7 +696,6 @@ def build_rrg_data(interval):
         if len(valid_points) >= 2:
             previous_point = valid_points[-2]
             latest_point = valid_points[-1]
-
             delta_x = latest_point["x"] - previous_point["x"]
             delta_y = latest_point["y"] - previous_point["y"]
 
@@ -733,11 +710,13 @@ def build_rrg_data(interval):
             else:
                 latest_direction = "South-West"
 
-        trails.append({
-            "symbol": symbol,
-            "points": valid_points[-tail:],
-            "direction": latest_direction,
-        })
+        trails.append(
+            {
+                "symbol": symbol,
+                "points": valid_points[-tail:],
+                "direction": latest_direction,
+            }
+        )
 
     return {
         "benchmark": "BTCUSDT",
@@ -768,11 +747,7 @@ def btc_price(force_refresh: bool = False):
     now = time.time()
     cache_age = now - price_cache["updated_at"]
 
-    if (
-        not force_refresh
-        and price_cache["data"]
-        and cache_age < 15
-    ):
+    if not force_refresh and price_cache["data"] and cache_age < 15:
         return {
             **price_cache["data"],
             "cached": True,
@@ -824,7 +799,6 @@ def btc_price(force_refresh: bool = False):
 @app.get("/api/btc/chart")
 def btc_chart(days: int = 7, interval: str = "1h"):
     now = time.time()
-
     allowed_intervals = {"15m", "1h", "1d", "1w"}
 
     if interval not in allowed_intervals:
@@ -852,10 +826,7 @@ def btc_chart(days: int = 7, interval: str = "1h"):
         }
 
     try:
-        candles = get_btc_klines(
-            interval=interval,
-            limit=candles_needed,
-        )
+        candles = get_btc_klines(interval=interval, limit=candles_needed)
 
         result = {
             "prices": [
@@ -1024,11 +995,7 @@ DECISION RULES:
                                 "summary": {"type": "string"},
                                 "key_level": {"type": "string"},
                             },
-                            "required": [
-                                "signal",
-                                "summary",
-                                "key_level",
-                            ],
+                            "required": ["signal", "summary", "key_level"],
                         },
                         "1h": {
                             "type": "object",
@@ -1040,11 +1007,7 @@ DECISION RULES:
                                 "summary": {"type": "string"},
                                 "key_level": {"type": "string"},
                             },
-                            "required": [
-                                "signal",
-                                "summary",
-                                "key_level",
-                            ],
+                            "required": ["signal", "summary", "key_level"],
                         },
                     },
                     "required": ["15m", "1h"],
