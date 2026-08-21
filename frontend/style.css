@@ -1917,3 +1917,70 @@ body {
     margin-top: 5px;
   }
 }
+/* =========================================================
+   DESKTOP READING WIDTH FIX
+   Keeps mobile layout unchanged
+   ========================================================= */
+
+@media (min-width: 1101px) {
+  /* Main dashboard ko extra-wide monitor par compact rakhega */
+  .dashboard {
+    width: min(1240px, calc(100% - 48px));
+  }
+
+  /* Section paragraphs ki reading line chhoti aur clean */
+  .section-heading > div:first-child {
+    max-width: 760px;
+  }
+
+  .section-heading p,
+  .ai-copy p,
+  .idea-box p,
+  .timeframe-analysis-card > p:not(.key-level),
+  .signal-card p,
+  .combined-decision-card p {
+    max-width: 68ch;
+  }
+
+  /* Chart ke saath analyser right side par fixed, readable size */
+  .chart-and-analyser-grid {
+    grid-template-columns: minmax(0, 1.7fr) minmax(330px, 0.85fr);
+  }
+
+  /* Multi-Timeframe cards: ek row me 3, but compact content width */
+  .timeframe-analysis-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* Signal Confirmation: donon cards same readable width */
+  .signal-comparison {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Advanced plan: 5 bahut patle cards nahi; compact 3 + 2 layout */
+  .trade-plan-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .plan-item:nth-child(4),
+  .plan-item:nth-child(5) {
+    min-height: 106px;
+  }
+
+  /* Indicator cards: readable columns, extra long horizontal layout avoid */
+  .indicator-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Paper metrics ko 4-column se 3-column desktop grid me lao */
+  .paper-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Very large monitors: content should never look over-stretched */
+@media (min-width: 1600px) {
+  .dashboard {
+    width: 1240px;
+  }
+}
