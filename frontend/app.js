@@ -744,15 +744,18 @@ async function refreshAllData() {
 
   try {
     await refreshFastData();
-    await loadRrg();
   } catch (error) {
-    console.error("Technical refresh error:", error);
+    console.error("Fast refresh error:", error);
   } finally {
     if (refreshButton) {
       refreshButton.disabled = false;
       refreshButton.textContent = "Refresh Technical";
     }
   }
+
+  loadRrg().catch((error) => {
+    console.error("RRG refresh error:", error);
+  });
 }
 
 function renderChart(labels, data, timeframeLabel) {
@@ -1414,7 +1417,14 @@ setupRrgButtons();
 setupChartAnalyser();
 
 const savedPlanLoaded = renderSavedAiPlanIfActive();
-if (!savedPlanLoaded) setSignalSource("Loading Gemini AI plan...", "neutral");
+
+if (!savedPlanLoaded) {
+  setSignalSource("Gemini AI ready — run manual analysis when needed", "neutral");
+  setSignal(
+    "NO TRADE",
+    "Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan."
+  );
+}
 
 refreshAllData();
 
