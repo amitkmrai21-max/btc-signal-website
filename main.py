@@ -652,6 +652,133 @@ def rrg(interval: str = "1d"):
             return {**cached_data, "cached": True, "warning": "RRG feed unavailable. Showing cached data."}
         raise HTTPException(status_code=502, detail=f"Failed to build RRG data: {str(error)}")
 
+@app.get("/api/technical-signal")
+def technical_signal():
+    try:
+        ticker = get_btc_ticker()
+        candles_15m = get_btc_klines(interval="15m", limit=250)
+        candles_1h = get_btc_klines(interval="1h", limit=250)
+        candles_4h = get_btc_klines(interval="1h", limit=250)
+
+        analysis_15m = calculate_market_indicators(candles_15m, "15m")
+        analysis_1h = calculate_market_indicators(candles_1h, "1h")
+        analysis_4h = calculate_market_indicators(candles_4h, "4h")
+
+        def technical_view(analysis):
+            trend = str(analysis.get("trend", "Mixed"))
+            rsi_value = float(analysis.get("rsi_14", 50))
+            macd_state = str(analysis.get("macd", {}).get("state", "Mixed"))
+            volume_ratio = float(analysis.get("volume", {}).get("volume_ratio", 0))
+            breakout = str(analysis.get("breakout_status", "No confirmed breakout"))
+
+            bullish = (
+                "BULL" in trend.upper()
+                and "BULL" in macd_state.upper()
+                and rsi_value >= 52
+            )
+            bearish = (
+                "BEAR" in trend.upper()
+                and "BEAR" in macd_state.upper()
+                and rsi_value <= 48
+            )
+
+            if bullish:
+                signal = "BUY"
+            elif bearish:
+                signal = "SELL"
+            else:
+                signal = "HOLD"
+
+            summary = (
+                f"{trend}; RSI {rsi_value:.1f}; {macd_state}; "
+                f"volume x{volume_ratio:.2f}; {breakout}."
+            )
+
+            key_level = (
+                f"Support ${analysis['support_resistance']['support_20']:,.2f} | "
+                f"Resistance ${analysis['support_resistance']['resistance_20']:,.2f}"
+            )
+
+            return {
+                "signal": signal,
+                "summary": summary,
+                "key_level": key_level
+            }
+
+        view_15m = technical_view(analysis_15m)
+        view_1h = technical_view(analysis_1h)
+        view_4h = technical_view(analysis_4h)
+
+        buy_votes = sum(
+            view["signal"] == "BUY"
+            for view in [view_15m, view_1h, view_4h]
+        )
+        sell_votes = sum(
+            view["signal"] == "SELL"
+            for view in [view_15m, view_1h, view_4h]
+        )
+
+        if buy_votes >= 2:
+            signal = "BUY WATCH"
+            risk = "MEDIUM"
+            reason = "Multiple technical timeframes show bullish alignment. Wait for candle and volume confirmation."
+        elif sell_votes >= 2:
+            signal = "SELL WATCH"
+            risk = "MEDIUM"
+            reason = "Multiple technical timeframes show bearish alignment. Wait for candle and volume confirmation."
+        else:
+            signal = "NO TRADE"
+            risk = "HIGH"
+            reason = "Technical timeframes are mixed. Wait for trend, momentum and volume confirmation."
+
+        support = analysis_1h["support_resistance"]["support_20"]
+        resistance = analysis_1h["support_resistance"]["resistance_20"]
+        current_price = float(ticker["lastPrice"])
+
+        return {
+            "signal": signal,
+            "reason": reason,
+            "risk": risk,
+            "entry_idea": (
+                f"Educational idea: observe BTC near ${current_price:,.2f}; "
+                f"consider only a confirmed move around support ${support:,.2f} "
+                f"or resistance ${resistance:,.2f}."
+            ),
+            "stop_loss_idea": (
+                "Educational risk idea: use invalidation beyond the relevant "
+                "support/resistance level; do not use this as an automatic trade order."
+            ),
+            "market_bias": analysis_1h["trend"],
+            "setup_status": signal,
+            "confirmation_needed": (
+                "Require agreement between 15m, 1h and 4h trend, MACD, RSI, "
+                "volume and a confirmed candle close."
+            ),
+            "target_1": f"Resistance zone: ${resistance:,.2f}",
+            "target_2": f"Support zone: ${support:,.2f}",
+            "timeframes": {
+                "15m": view_15m,
+                "1h": view_1h,
+                "4h": view_4h
+            },
+            "market_data": {
+                "symbol": "BTCUSDT",
+                "current_price_usdt": round_value(current_price),
+                "timeframes": {
+                    "15m": analysis_15m,
+                    "1h": analysis_1h,
+                    "4h": analysis_4h
+                }
+            },
+            "source": "Binance live technical analysis",
+            "updated_at": int(time.time())
+        }
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Technical analysis is temporarily unavailable: {type(error).__name__}: {str(error)}"
+        )
 
 @app.get("/api/ai-signal")
 def ai_signal():
