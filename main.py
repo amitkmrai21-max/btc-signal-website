@@ -658,7 +658,7 @@ def technical_signal():
         ticker = get_btc_ticker()
         candles_15m = get_btc_klines(interval="15m", limit=250)
         candles_1h = get_btc_klines(interval="1h", limit=250)
-        candles_4h = get_btc_klines(interval="1h", limit=250)
+        candles_4h = get_btc_klines(interval="4h", limit=250)
 
         analysis_15m = calculate_market_indicators(candles_15m, "15m")
         analysis_1h = calculate_market_indicators(candles_1h, "1h")
