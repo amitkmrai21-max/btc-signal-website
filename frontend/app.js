@@ -1559,8 +1559,8 @@ if (!savedPlanLoaded) {
 refreshAllData();
 setInterval(loadPrice, 30000);
 setInterval(loadChart, 60000);
+setInterval(() => refreshTechnicalAnalysis("Automatic technical refresh."), 60000);
 setInterval(loadRrg, 300000);
-setInterval(() => {
   if (isAiPlanActive()) {
     setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`, "ai");
   }
