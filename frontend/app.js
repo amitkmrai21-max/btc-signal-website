@@ -292,7 +292,16 @@ function toNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
+function getTechnicalConfidence(technical) {
+  const score = Number(technical?.score || 0);
+  const signal = technical?.signal || "NO TRADE";
 
+  if (signal === "BUY WATCH" || signal === "SELL WATCH") {
+    return Math.min(85, 50 + score * 7);
+  }
+
+  return Math.min(55, 25 + score * 6);
+}
 function calculateTechnicalSignal(market15m = {}, market1h = {}) {
   const trend15m = String(market15m.trend || "").toUpperCase();
   const trend1h = String(market1h.trend || "").toUpperCase();
@@ -397,7 +406,15 @@ async function loadTechnicalFallback(reasonPrefix) {
     setText("target2", data.target_2);
 
     setSignal(data.signal, `${reasonPrefix} ${data.reason}`);
-    setText("aiConfidence", "--");
+    const technical = calculateTechnicalSignal(
+  latestTechnicalMarket["15m"] || {},
+  latestTechnicalMarket["1h"] || {}
+);
+
+setText(
+  "aiConfidence",
+  `Technical confidence: ${getTechnicalConfidence(technical)}%`
+);
     setText("entryIdea", data.entry_idea);
     setText("stopLossIdea", data.stop_loss_idea);
     setRiskBadge(data.risk);
@@ -421,6 +438,10 @@ function renderTechnicalFallback(reasonPrefix = "Gemini AI is temporarily unavai
   setSignalSource("Live technical fallback — AI unavailable or expired", "technical");
   setText("analysisUpdatedAt", `Live technical fallback active • updated ${new Date().toLocaleTimeString("en-IN")}`);
   updateSignalConfirmation(technical);
+  setText(
+  "aiConfidence",
+  `Technical confidence: ${getTechnicalConfidence(technical)}%`
+);
 }
 
 function scheduleAiPlanExpiry() {
