@@ -755,11 +755,6 @@ async function refreshAllData() {
   }
 }
 
-await loadTechnicalFallback("Live technical analysis refreshed.");
-  loadRrg();
-
-}
-
 function renderChart(labels, data, timeframeLabel) {
   const canvas = getElement("btcChart");
   if (!canvas) return;
