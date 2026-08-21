@@ -1984,3 +1984,179 @@ body {
     width: 1240px;
   }
 }
+/* =========================================================
+   SIGNAL COLOR CONSISTENCY + TIMEFRAME TEXT OVERFLOW FIX
+   Paste at the end of style.css
+   ========================================================= */
+
+/* Signal Confirmation colors:
+   AI = purple
+   Technical = blue
+   Same colors used in Advanced Trade Plan */
+:root {
+  --ai-signal-color: #a78bfa;
+  --ai-signal-bg: rgba(124, 58, 237, 0.16);
+
+  --technical-signal-color: #38bdf8;
+  --technical-signal-bg: rgba(2, 132, 199, 0.16);
+}
+
+/* Existing Signal Confirmation cards: enforce clear AI/Technical identity */
+.ai-history-card {
+  border-color: rgba(167, 139, 250, 0.44) !important;
+  border-top: 3px solid var(--ai-signal-color) !important;
+  background:
+    linear-gradient(145deg, var(--ai-signal-bg), rgba(8, 19, 35, 0.76)) !important;
+}
+
+.ai-history-card .card-label,
+.ai-history-card strong {
+  color: #ddd6fe;
+}
+
+.technical-live-card {
+  border-color: rgba(56, 189, 248, 0.42) !important;
+  border-top: 3px solid var(--technical-signal-color) !important;
+  background:
+    linear-gradient(
+      145deg,
+      var(--technical-signal-bg),
+      rgba(8, 19, 35, 0.76)
+    ) !important;
+}
+
+.technical-live-card .card-label,
+.technical-live-card strong {
+  color: #bae6fd;
+}
+
+/* Advanced Trade Plan:
+   First 2 tiles become AI-colored.
+   Next 3 tiles become Technical-colored.
+   This is based on your current HTML order:
+   1 Market Bias, 2 Setup Status = AI
+   3 Confirmation Needed, 4 Target 1, 5 Target 2 = Technical */
+.trade-plan-card .plan-item:nth-child(1),
+.trade-plan-card .plan-item:nth-child(2) {
+  border-color: rgba(167, 139, 250, 0.44) !important;
+  background:
+    linear-gradient(145deg, var(--ai-signal-bg), rgba(8, 19, 35, 0.8)) !important;
+}
+
+.trade-plan-card .plan-item:nth-child(1) span,
+.trade-plan-card .plan-item:nth-child(2) span {
+  color: #c4b5fd;
+}
+
+.trade-plan-card .plan-item:nth-child(1) strong,
+.trade-plan-card .plan-item:nth-child(2) strong {
+  color: #ede9fe;
+}
+
+/* Technical color for confirmation and target fields */
+.trade-plan-card .plan-item:nth-child(3),
+.trade-plan-card .plan-item:nth-child(4),
+.trade-plan-card .plan-item:nth-child(5) {
+  border-color: rgba(56, 189, 248, 0.42) !important;
+  background:
+    linear-gradient(
+      145deg,
+      var(--technical-signal-bg),
+      rgba(8, 19, 35, 0.8)
+    ) !important;
+}
+
+.trade-plan-card .plan-item:nth-child(3) span,
+.trade-plan-card .plan-item:nth-child(4) span,
+.trade-plan-card .plan-item:nth-child(5) span {
+  color: #7dd3fc;
+}
+
+.trade-plan-card .plan-item:nth-child(3) strong,
+.trade-plan-card .plan-item:nth-child(4) strong,
+.trade-plan-card .plan-item:nth-child(5) strong {
+  color: #e0f2fe;
+}
+
+/* ---------------------------------------------------------
+   Multi-Timeframe Signals text overflow fix
+   --------------------------------------------------------- */
+
+/* Critical: Grid items can shrink instead of expanding their column */
+.timeframe-analysis-grid,
+.timeframe-analysis-card,
+.timeframe-title-row {
+  min-width: 0;
+}
+
+/* Every text element may wrap inside the card */
+.timeframe-analysis-card h3,
+.timeframe-analysis-card p,
+.timeframe-analysis-card strong,
+.timeframe-analysis-card span,
+.timeframe-analysis-card .mini-signal {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* Keep heading and mini-signal aligned without overflowing */
+.timeframe-title-row {
+  gap: 10px;
+}
+
+.timeframe-title-row h3 {
+  flex: 1 1 auto;
+}
+
+.timeframe-title-row .mini-signal {
+  flex: 0 1 auto;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Summary text always stays within the card */
+.timeframe-analysis-card > p:not(.key-level) {
+  width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Key level: stop its strong text from pushing outside */
+.timeframe-analysis-card .key-level {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.timeframe-analysis-card .key-level strong {
+  flex: 0 1 auto;
+  text-align: right;
+}
+
+/* On smaller desktop/tablet, cards may become 2 + 1 instead of squeezing text */
+@media (min-width: 721px) and (max-width: 1040px) {
+  .timeframe-analysis-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Phone: each timeframe card full width */
+@media (max-width: 720px) {
+  .timeframe-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .timeframe-analysis-card .key-level {
+    display: block;
+  }
+
+  .timeframe-analysis-card .key-level strong {
+    display: block;
+    margin-top: 6px;
+    text-align: left;
+  }
+}
