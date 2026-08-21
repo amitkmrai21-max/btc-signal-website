@@ -18,6 +18,7 @@ const PAPER_EPSILON = 0.00000001;
 const AI_PLAN_STORAGE_KEY = "btcAiSignalLatestPlanV1";
 const LAST_AI_SIGNAL_STORAGE_KEY = "btcAiSignalLastSignalV1";
 const AI_PLAN_VALIDITY_MS = 5 * 60 * 1000;
+const LAYOUT_STORAGE_KEY = "btcAiSignalCustomLayoutV1";
 
 const timeframeSettings = {
   "1W": { days: 90, interval: "1w", label: "Weekly", dateOptions: { month: "short", year: "numeric" }, maxPoints: 20 },
@@ -152,9 +153,7 @@ function saveLastAiSignal(aiData) {
     signal: aiData?.signal || "NO TRADE",
     confidence: aiData?.confidence ?? "--",
     reason: aiData?.reason || "No AI explanation available.",
-    updatedAt: aiData?.updated_at
-      ? Number(aiData.updated_at) * 1000
-      : Date.now()
+    updatedAt: aiData?.updated_at ? Number(aiData.updated_at) * 1000 : Date.now()
   };
 
   try {
@@ -292,6 +291,7 @@ function toNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
+
 function getTechnicalConfidence(technical) {
   const score = Number(technical?.score || 0);
   const signal = technical?.signal || "NO TRADE";
@@ -302,6 +302,7 @@ function getTechnicalConfidence(technical) {
 
   return Math.min(55, 25 + score * 6);
 }
+
 function calculateTechnicalSignal(market15m = {}, market1h = {}) {
   const trend15m = String(market15m.trend || "").toUpperCase();
   const trend1h = String(market1h.trend || "").toUpperCase();
@@ -367,10 +368,7 @@ function calculateTechnicalSignal(market15m = {}, market1h = {}) {
 
 async function loadTechnicalFallback(reasonPrefix) {
   try {
-    const response = await fetch("/api/technical-signal", {
-      cache: "no-store"
-    });
-
+    const response = await fetch("/api/technical-signal", { cache: "no-store" });
     const data = await response.json();
 
     if (!response.ok) {
@@ -378,11 +376,7 @@ async function loadTechnicalFallback(reasonPrefix) {
     }
 
     latestTechnicalMarket = data?.market_data?.timeframes || {};
-
-    updateIndicators(
-      latestTechnicalMarket["15m"] || {},
-      latestTechnicalMarket["1h"] || {}
-    );
+    updateIndicators(latestTechnicalMarket["15m"] || {}, latestTechnicalMarket["1h"] || {});
 
     const analysis15m = data?.timeframes?.["15m"] || {};
     const analysis1h = data?.timeframes?.["1h"] || {};
@@ -391,7 +385,6 @@ async function loadTechnicalFallback(reasonPrefix) {
     setMiniSignal("signal15m", analysis15m.signal);
     setMiniSignal("signal1h", analysis1h.signal);
     setMiniSignal("signal4h", analysis4h.signal);
-
     setText("summary15m", analysis15m.summary);
     setText("summary1h", analysis1h.summary);
     setText("summary4h", analysis4h.summary);
@@ -407,19 +400,14 @@ async function loadTechnicalFallback(reasonPrefix) {
 
     setSignal(data.signal, `${reasonPrefix} ${data.reason}`);
     const technical = calculateTechnicalSignal(
-  latestTechnicalMarket["15m"] || {},
-  latestTechnicalMarket["1h"] || {}
-);
-
-setText(
-  "aiConfidence",
-  `Technical confidence: ${getTechnicalConfidence(technical)}%`
-);
+      latestTechnicalMarket["15m"] || {},
+      latestTechnicalMarket["1h"] || {}
+    );
+    setText("aiConfidence", `Technical confidence: ${getTechnicalConfidence(technical)}%`);
     setText("entryIdea", data.entry_idea);
     setText("stopLossIdea", data.stop_loss_idea);
     setRiskBadge(data.risk);
     updateSignalConfirmation(data);
-
     setSignalSource("Live technical fallback — AI unavailable or expired", "technical");
     setText("analysisUpdatedAt", "Gemini AI unavailable; live Binance technical analysis is active.");
   } catch (error) {
@@ -438,17 +426,13 @@ function renderTechnicalFallback(reasonPrefix = "Gemini AI is temporarily unavai
   setSignalSource("Live technical fallback — AI unavailable or expired", "technical");
   setText("analysisUpdatedAt", `Live technical fallback active • updated ${new Date().toLocaleTimeString("en-IN")}`);
   updateSignalConfirmation(technical);
-  setText(
-  "aiConfidence",
-  `Technical confidence: ${getTechnicalConfidence(technical)}%`
-);
+  setText("aiConfidence", `Technical confidence: ${getTechnicalConfidence(technical)}%`);
 }
 
 function scheduleAiPlanExpiry() {
   if (aiPlanTimer) clearTimeout(aiPlanTimer);
 
   const remainingMs = AI_PLAN_VALIDITY_MS - getAiPlanAgeMs();
-
   if (remainingMs <= 0) {
     loadTechnicalFallback("AI plan expired.");
     return;
@@ -541,7 +525,6 @@ function renderPaperHistory(history) {
   }
 
   container.innerHTML = "";
-
   history.forEach((trade) => {
     const item = document.createElement("div");
     const typeClass = trade.type.includes("SELL") || trade.type.includes("SHORT") ? "history-sell" : "history-buy";
@@ -659,7 +642,6 @@ function updateAiAnalysis(aiData, fromSavedPlan = false) {
   setMiniSignal("signal15m", analysis15m.signal);
   setMiniSignal("signal1h", analysis1h.signal);
   setMiniSignal("signal4h", analysis4h.signal);
-
   setText("summary15m", analysis15m.summary);
   setText("summary1h", analysis1h.summary);
   setText("summary4h", analysis4h.summary);
@@ -711,24 +693,19 @@ async function loadAiAnalysis() {
   try {
     const response = await fetch("/api/ai-signal", { cache: "no-store" });
     const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(data.detail || data.message || `AI signal request failed (${response.status}).`);
-    }
+    if (!response.ok) throw new Error(data.detail || data.message || `AI signal request failed (${response.status}).`);
 
     saveLastAiSignal(data);
     saveAiPlan(data);
     updateAiAnalysis(data);
   } catch (error) {
     console.error(error);
-
     const existingPlanIsActive = renderSavedAiPlanIfActive();
     if (existingPlanIsActive) {
       setSignalSource(`Gemini refresh failed — last AI plan active for ${getAiPlanRemainingLabel()}`, "ai");
       setText("analysisUpdatedAt", "Gemini refresh failed; using last successful AI plan.");
       return;
     }
-
     loadTechnicalFallback("Gemini AI is temporarily unavailable.");
   } finally {
     aiRefreshInProgress = false;
@@ -737,37 +714,26 @@ async function loadAiAnalysis() {
 
 async function refreshFastData() {
   try {
-    await Promise.all([
-      loadPrice(true),
-      loadChart(),
-    ]);
+    await Promise.all([loadPrice(true), loadChart()]);
   } catch (error) {
     console.error(error);
-    setText(
-      "marketUpdatedAt",
-      "Live price/chart could not be updated. Please try again."
-    );
+    setText("marketUpdatedAt", "Live price/chart could not be updated. Please try again.");
   }
 }
-async function refreshTechnicalAnalysis(
-  reasonPrefix = "Live technical analysis refreshed."
-) {
+
+async function refreshTechnicalAnalysis(reasonPrefix = "Live technical analysis refreshed.") {
   await loadTechnicalFallback(reasonPrefix);
 }
 
 async function refreshAllData() {
   const refreshButton = getElement("refreshBtn");
-
   if (refreshButton) {
     refreshButton.disabled = true;
     refreshButton.textContent = "Refreshing...";
   }
 
   try {
-    await Promise.all([
-      refreshFastData(),
-      loadTechnicalFallback("Live technical analysis refreshed.")
-    ]);
+    await Promise.all([refreshFastData(), loadTechnicalFallback("Live technical analysis refreshed.")]);
   } catch (error) {
     console.error("Technical refresh error:", error);
   } finally {
@@ -777,15 +743,12 @@ async function refreshAllData() {
     }
   }
 
-  loadRrg().catch((error) => {
-    console.error("RRG refresh error:", error);
-  });
+  loadRrg().catch((error) => console.error("RRG refresh error:", error));
 }
 
 function renderChart(labels, data, timeframeLabel) {
   const canvas = getElement("btcChart");
   if (!canvas) return;
-
   const ctx = canvas.getContext("2d");
   if (btcChart) btcChart.destroy();
 
@@ -811,41 +774,21 @@ function renderChart(labels, data, timeframeLabel) {
       interaction: { intersect: false, mode: "index" },
       plugins: {
         legend: { labels: { color: "#ffffff" } },
-        tooltip: {
-          callbacks: {
-            label(context) {
-              return `BTC: ${formatUsd(context.raw)}`;
-            }
-          }
-        },
+        tooltip: { callbacks: { label(context) { return `BTC: ${formatUsd(context.raw)}`; } } },
         zoom: {
           limits: { x: { min: "original", max: "original", minRange: 2 } },
           pan: { enabled: true, mode: "x", threshold: 2 },
           zoom: {
             wheel: { enabled: true, speed: 0.25 },
             pinch: { enabled: true },
-            drag: {
-              enabled: true,
-              threshold: 2,
-              backgroundColor: "rgba(59, 130, 246, 0.18)",
-              borderColor: "#60a5fa",
-              borderWidth: 1
-            },
+            drag: { enabled: true, threshold: 2, backgroundColor: "rgba(59, 130, 246, 0.18)", borderColor: "#60a5fa", borderWidth: 1 },
             mode: "x"
           }
         }
       },
       scales: {
         x: { ticks: { color: "#cbd5e1", maxTicksLimit: 7 }, grid: { color: "#1e293b" } },
-        y: {
-          ticks: {
-            color: "#cbd5e1",
-            callback(value) {
-              return formatUsd(value);
-            }
-          },
-          grid: { color: "#1e293b" }
-        }
+        y: { ticks: { color: "#cbd5e1", callback(value) { return formatUsd(value); } }, grid: { color: "#1e293b" } }
       }
     }
   });
@@ -864,7 +807,6 @@ function createRrgQuadrantsPlugin() {
     beforeDatasetsDraw(chart) {
       const { ctx, chartArea, scales } = chart;
       if (!chartArea || !scales.x || !scales.y) return;
-
       const { left, right, top, bottom } = chartArea;
       const centerX = scales.x.getPixelForValue(100);
       const centerY = scales.y.getPixelForValue(100);
@@ -879,7 +821,6 @@ function createRrgQuadrantsPlugin() {
       ctx.fillRect(left, centerY, centerX - left, bottom - centerY);
       ctx.fillStyle = "rgba(250, 204, 21, 0.13)";
       ctx.fillRect(centerX, centerY, right - centerX, bottom - centerY);
-
       ctx.strokeStyle = "rgba(255, 255, 255, 0.96)";
       ctx.lineWidth = 2.5;
       ctx.setLineDash([]);
@@ -891,12 +832,10 @@ function createRrgQuadrantsPlugin() {
       ctx.moveTo(left, centerY);
       ctx.lineTo(right, centerY);
       ctx.stroke();
-
       ctx.fillStyle = "#ffffff";
       ctx.beginPath();
       ctx.arc(centerX, centerY, 3.5, 0, Math.PI * 2);
       ctx.fill();
-
       ctx.font = "700 13px Arial";
       ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
       ctx.textBaseline = "top";
@@ -919,31 +858,19 @@ function createRrgDirectionArrowsPlugin() {
     id: "rrgDirectionArrows",
     afterDatasetsDraw(chart) {
       const { ctx } = chart;
-
       chart.data.datasets.forEach((dataset, datasetIndex) => {
         const meta = chart.getDatasetMeta(datasetIndex);
         if (!meta?.data?.length) return;
-
-        const latestIndex = meta.data.length - 1;
-        const latestElement = meta.data[latestIndex];
-        const raw = dataset.data[latestIndex];
+        const latestElement = meta.data[meta.data.length - 1];
+        const raw = dataset.data[dataset.data.length - 1];
         if (!latestElement || !raw) return;
-
-        const direction = raw.direction || "Flat";
-        const arrowMap = {
-          "North-East": "↗",
-          "South-East": "↘",
-          "North-West": "↖",
-          "South-West": "↙",
-          Flat: "→"
-        };
-
+        const arrowMap = { "North-East": "↗", "South-East": "↘", "North-West": "↖", "South-West": "↙", Flat: "→" };
         ctx.save();
         ctx.fillStyle = dataset.borderColor || "#ffffff";
         ctx.font = "bold 20px Arial";
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.fillText(arrowMap[direction] || "→", latestElement.x + 9, latestElement.y);
+        ctx.fillText(arrowMap[raw.direction || "Flat"] || "→", latestElement.x + 9, latestElement.y);
         ctx.restore();
       });
     }
@@ -953,11 +880,9 @@ function createRrgDirectionArrowsPlugin() {
 async function loadRrg() {
   const status = getElement("rrgStatus");
   if (status) status.textContent = `Loading ${activeRrgTimeframe} RRG-style data...`;
-
   try {
     const response = await fetch(`/api/rrg?interval=${activeRrgTimeframe}`, { cache: "no-store" });
     if (!response.ok) throw new Error("RRG API could not be loaded.");
-
     const data = await response.json();
     renderRrg(data);
     if (status) status.textContent = `${activeRrgTimeframe.toUpperCase()} RRG updated: ${formatUpdatedAt(data.updated_at)}${data.cached ? " (cached)" : ""}`;
@@ -970,7 +895,6 @@ async function loadRrg() {
 function renderRrg(rrgData) {
   const canvas = getElement("rrgChart");
   if (!canvas || !Array.isArray(rrgData?.trails)) return;
-
   const ctx = canvas.getContext("2d");
   if (rrgChart) rrgChart.destroy();
 
@@ -988,26 +912,15 @@ function renderRrg(rrgData) {
     const color = rrgColors[trail.symbol] || { border: "#ffffff", background: "rgba(255, 255, 255, 0.15)" };
     const points = Array.isArray(trail.points) ? trail.points : [];
     const lastIndex = points.length - 1;
-
     return {
       label: trail.symbol.replace("USDT", ""),
-      data: points.map((point, index) => ({
-        x: Number(point.x),
-        y: Number(point.y),
-        timestamp: point.timestamp,
-        isLatest: index === lastIndex,
-        direction: trail.direction || "Flat"
-      })),
+      data: points.map((point, index) => ({ x: Number(point.x), y: Number(point.y), timestamp: point.timestamp, isLatest: index === lastIndex, direction: trail.direction || "Flat" })),
       borderColor: color.border,
       backgroundColor: color.background,
       borderWidth: 2,
       pointBorderColor: color.border,
-      pointBackgroundColor(context) {
-        return context.raw?.isLatest ? color.border : "rgba(15, 23, 42, 0.95)";
-      },
-      pointRadius(context) {
-        return context.raw?.isLatest ? 5 : 2;
-      },
+      pointBackgroundColor(context) { return context.raw?.isLatest ? color.border : "rgba(15, 23, 42, 0.95)"; },
+      pointRadius(context) { return context.raw?.isLatest ? 5 : 2; },
       pointHoverRadius: 7,
       showLine: true,
       tension: 0
@@ -1030,63 +943,30 @@ function renderRrg(rrgData) {
             title(context) {
               const raw = context[0]?.raw;
               if (!raw?.timestamp) return "RRG-style point";
-              return new Date(raw.timestamp).toLocaleString("en-IN", {
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit"
-              });
+              return new Date(raw.timestamp).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
             },
             label(context) {
               const x = Number(context.raw?.x || 0);
               const y = Number(context.raw?.y || 0);
               const direction = context.raw?.direction || "Flat";
-              return [
-                `${context.dataset.label}: ${getRrgQuadrant(x, y)}`,
-                `Direction: ${direction}`,
-                `RS Ratio: ${x.toFixed(2)}`,
-                `RS Momentum: ${y.toFixed(2)}`
-              ];
+              return [`${context.dataset.label}: ${getRrgQuadrant(x, y)}`, `Direction: ${direction}`, `RS Ratio: ${x.toFixed(2)}`, `RS Momentum: ${y.toFixed(2)}`];
             }
           }
         },
         zoom: {
-          limits: {
-            x: { min: "original", max: "original", minRange: 0.5 },
-            y: { min: "original", max: "original", minRange: 0.5 }
-          },
+          limits: { x: { min: "original", max: "original", minRange: 0.5 }, y: { min: "original", max: "original", minRange: 0.5 } },
           pan: { enabled: true, mode: "xy", threshold: 2 },
           zoom: {
             wheel: { enabled: true, speed: 0.18 },
             pinch: { enabled: true },
-            drag: {
-              enabled: true,
-              threshold: 2,
-              backgroundColor: "rgba(59, 130, 246, 0.16)",
-              borderColor: "#60a5fa",
-              borderWidth: 1
-            },
+            drag: { enabled: true, threshold: 2, backgroundColor: "rgba(59, 130, 246, 0.16)", borderColor: "#60a5fa", borderWidth: 1 },
             mode: "xy"
           }
         }
       },
       scales: {
-        x: {
-          type: "linear",
-          min: xMin - xPadding,
-          max: xMax + xPadding,
-          title: { display: true, text: "Relative Strength Ratio", color: "#cbd5e1" },
-          ticks: { color: "#cbd5e1", maxTicksLimit: 7 },
-          grid: { color: "#334155" }
-        },
-        y: {
-          type: "linear",
-          min: yMin - yPadding,
-          max: yMax + yPadding,
-          title: { display: true, text: "Relative Strength Momentum", color: "#cbd5e1" },
-          ticks: { color: "#cbd5e1", maxTicksLimit: 7 },
-          grid: { color: "#334155" }
-        }
+        x: { type: "linear", min: xMin - xPadding, max: xMax + xPadding, title: { display: true, text: "Relative Strength Ratio", color: "#cbd5e1" }, ticks: { color: "#cbd5e1", maxTicksLimit: 7 }, grid: { color: "#334155" } },
+        y: { type: "linear", min: yMin - yPadding, max: yMax + yPadding, title: { display: true, text: "Relative Strength Momentum", color: "#cbd5e1" }, ticks: { color: "#cbd5e1", maxTicksLimit: 7 }, grid: { color: "#334155" } }
       }
     }
   });
@@ -1095,57 +975,46 @@ function renderRrg(rrgData) {
 function getPaperTradeAmount() {
   const input = getElement("paperAmountInput");
   const amountInr = Number(input?.value);
-
   if (!currentBtcPriceInr) {
     setText("paperTradeStatus", "Waiting for live BTC price. Please wait a few seconds.");
     return null;
   }
-
   if (!Number.isFinite(amountInr) || amountInr < PAPER_MIN_TRADE_INR) {
     setText("paperTradeStatus", "Please enter a valid virtual amount of at least ₹100.");
     return null;
   }
-
   return { input, amountInr };
 }
 
 function executePaperBuy() {
   const trade = getPaperTradeAmount();
   if (!trade) return;
-
   const { input, amountInr } = trade;
   const portfolio = getPaperPortfolio();
   const btcAmount = amountInr / currentBtcPriceInr;
 
   if (portfolio.shortBtcHolding > PAPER_EPSILON) {
     const shortMarketValue = portfolio.shortBtcHolding * currentBtcPriceInr;
-
     if (amountInr > shortMarketValue + 0.01) {
       setText("paperTradeStatus", "Cover amount is larger than the current open short position.");
       return;
     }
-
     if (amountInr > portfolio.cashInr + 0.01) {
       setText("paperTradeStatus", "Not enough virtual cash to cover this short position.");
       return;
     }
-
     const coverBtc = Math.min(btcAmount, portfolio.shortBtcHolding);
     const costToCover = coverBtc * currentBtcPriceInr;
     const averageShortPrice = portfolio.shortProceedsInr / portfolio.shortBtcHolding;
-
     portfolio.cashInr -= costToCover;
     portfolio.shortBtcHolding -= coverBtc;
     portfolio.shortProceedsInr -= coverBtc * averageShortPrice;
-
     if (portfolio.shortBtcHolding < PAPER_EPSILON) {
       portfolio.shortBtcHolding = 0;
       portfolio.shortProceedsInr = 0;
     }
-
     addPaperTrade(portfolio, "BUY TO COVER", costToCover, coverBtc);
     savePaperPortfolio(portfolio);
-
     if (input) input.value = "";
     setText("paperTradeStatus", `Virtual BUY TO COVER complete: ${formatBtc(coverBtc)} at ${formatInr(currentBtcPriceInr)} per BTC.`);
     renderPaperTrading();
@@ -1156,13 +1025,11 @@ function executePaperBuy() {
     setText("paperTradeStatus", "Not enough virtual cash for this long trade.");
     return;
   }
-
   portfolio.cashInr -= amountInr;
   portfolio.btcHolding += btcAmount;
   portfolio.totalCostInr += amountInr;
   addPaperTrade(portfolio, "BUY LONG", amountInr, btcAmount);
   savePaperPortfolio(portfolio);
-
   if (input) input.value = "";
   setText("paperTradeStatus", `Virtual BUY LONG complete: ${formatBtc(btcAmount)} at ${formatInr(currentBtcPriceInr)} per BTC.`);
   renderPaperTrading();
@@ -1171,35 +1038,28 @@ function executePaperBuy() {
 function executePaperSell() {
   const trade = getPaperTradeAmount();
   if (!trade) return;
-
   const { input, amountInr } = trade;
   const portfolio = getPaperPortfolio();
   const btcAmount = amountInr / currentBtcPriceInr;
 
   if (portfolio.btcHolding > PAPER_EPSILON) {
     const longMarketValue = portfolio.btcHolding * currentBtcPriceInr;
-
     if (amountInr > longMarketValue + 0.01) {
       setText("paperTradeStatus", "Sell amount is larger than the current BTC long holding.");
       return;
     }
-
     const sellBtc = Math.min(btcAmount, portfolio.btcHolding);
     const saleValue = sellBtc * currentBtcPriceInr;
     const averageLongPrice = portfolio.totalCostInr / portfolio.btcHolding;
-
     portfolio.cashInr += saleValue;
     portfolio.btcHolding -= sellBtc;
     portfolio.totalCostInr -= sellBtc * averageLongPrice;
-
     if (portfolio.btcHolding < PAPER_EPSILON) {
       portfolio.btcHolding = 0;
       portfolio.totalCostInr = 0;
     }
-
     addPaperTrade(portfolio, "SELL LONG", saleValue, sellBtc);
     savePaperPortfolio(portfolio);
-
     if (input) input.value = "";
     setText("paperTradeStatus", `Virtual SELL LONG complete: ${formatBtc(sellBtc)} at ${formatInr(currentBtcPriceInr)} per BTC.`);
     renderPaperTrading();
@@ -1210,13 +1070,11 @@ function executePaperSell() {
     setText("paperTradeStatus", "Not enough virtual cash/margin to open this 1x short trade.");
     return;
   }
-
   portfolio.cashInr += amountInr;
   portfolio.shortBtcHolding += btcAmount;
   portfolio.shortProceedsInr += amountInr;
   addPaperTrade(portfolio, "SELL SHORT", amountInr, btcAmount);
   savePaperPortfolio(portfolio);
-
   if (input) input.value = "";
   setText("paperTradeStatus", `Virtual SELL SHORT complete: ${formatBtc(btcAmount)} at ${formatInr(currentBtcPriceInr)} per BTC. Use Buy / Cover Short to close it.`);
   renderPaperTrading();
@@ -1225,7 +1083,6 @@ function executePaperSell() {
 function resetPaperTrading() {
   const shouldReset = window.confirm("Reset virtual paper portfolio to ₹100,000 and remove all virtual trades?");
   if (!shouldReset) return;
-
   savePaperPortfolio(getDefaultPaperPortfolio());
   setText("paperTradeStatus", "Virtual portfolio reset to ₹100,000.");
   renderPaperTrading();
@@ -1235,26 +1092,21 @@ function setupPaperTrading() {
   const buyButton = getElement("paperBuyBtn");
   const sellButton = getElement("paperSellBtn");
   const resetButton = getElement("resetPaperBtn");
-
   if (buyButton) buyButton.addEventListener("click", executePaperBuy);
   if (sellButton) sellButton.addEventListener("click", executePaperSell);
   if (resetButton) resetButton.addEventListener("click", resetPaperTrading);
-
   renderPaperTrading();
 }
 
 function setupTimeframeButtons() {
   const buttons = document.querySelectorAll(".timeframe-btn");
-
   buttons.forEach((button) => {
     button.addEventListener("click", async () => {
       const selectedTimeframe = button.dataset.timeframe;
       if (!timeframeSettings[selectedTimeframe]) return;
-
       activeTimeframe = selectedTimeframe;
       buttons.forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
-
       try {
         await loadChart();
       } catch (error) {
@@ -1269,47 +1121,25 @@ function setupZoomButtons() {
   const zoomInButton = getElement("zoomInBtn");
   const zoomOutButton = getElement("zoomOutBtn");
   const resetZoomButton = getElement("resetZoomBtn");
-
-  if (zoomInButton) {
-    zoomInButton.addEventListener("click", () => {
-      if (btcChart) btcChart.zoom({ x: 1.35 });
-    });
-  }
-
-  if (zoomOutButton) {
-    zoomOutButton.addEventListener("click", () => {
-      if (btcChart) btcChart.zoom({ x: 0.74 });
-    });
-  }
-
-  if (resetZoomButton) {
-    resetZoomButton.addEventListener("click", () => {
-      if (btcChart) btcChart.resetZoom();
-    });
-  }
+  if (zoomInButton) zoomInButton.addEventListener("click", () => { if (btcChart) btcChart.zoom({ x: 1.35 }); });
+  if (zoomOutButton) zoomOutButton.addEventListener("click", () => { if (btcChart) btcChart.zoom({ x: 0.74 }); });
+  if (resetZoomButton) resetZoomButton.addEventListener("click", () => { if (btcChart) btcChart.resetZoom(); });
 }
 
 function setupRrgButtons() {
   const buttons = document.querySelectorAll(".rrg-timeframe-btn");
   const resetButton = getElement("rrgResetBtn");
-
   buttons.forEach((button) => {
     button.addEventListener("click", async () => {
       const selectedTimeframe = button.dataset.rrgTimeframe;
       if (!["1h", "1d"].includes(selectedTimeframe)) return;
-
       activeRrgTimeframe = selectedTimeframe;
       buttons.forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
       await loadRrg();
     });
   });
-
-  if (resetButton) {
-    resetButton.addEventListener("click", () => {
-      if (rrgChart) rrgChart.resetZoom();
-    });
-  }
+  if (resetButton) resetButton.addEventListener("click", () => { if (rrgChart) rrgChart.resetZoom(); });
 }
 
 function setUploadedChartText(id, value) {
@@ -1323,22 +1153,18 @@ function setupChartAnalyser() {
   const analyseButton = getElement("analyseChartBtn");
   const status = getElement("chartAnalyseStatus");
   const resultBox = getElement("chartAnalysisResult");
-
   if (!imageInput || !preview || !analyseButton || !status || !resultBox) return;
 
   imageInput.addEventListener("change", () => {
     const file = imageInput.files[0];
     resultBox.hidden = true;
-
     if (!file) {
       preview.hidden = true;
       preview.removeAttribute("src");
       status.textContent = "Upload PNG, JPG, or WEBP chart image. Maximum 8 MB.";
       return;
     }
-
     const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
-
     if (!allowedTypes.includes(file.type)) {
       imageInput.value = "";
       preview.hidden = true;
@@ -1346,7 +1172,6 @@ function setupChartAnalyser() {
       status.textContent = "Please select a PNG, JPG, or WEBP image only.";
       return;
     }
-
     if (file.size > 8 * 1024 * 1024) {
       imageInput.value = "";
       preview.hidden = true;
@@ -1354,7 +1179,6 @@ function setupChartAnalyser() {
       status.textContent = "Image is too large. Maximum allowed size is 8 MB.";
       return;
     }
-
     preview.src = URL.createObjectURL(file);
     preview.hidden = false;
     status.textContent = `Selected: ${file.name}. Click Analyse with Gemini AI.`;
@@ -1362,34 +1186,28 @@ function setupChartAnalyser() {
 
   analyseButton.addEventListener("click", async () => {
     const file = imageInput.files[0];
-
     if (!file) {
       status.textContent = "Please upload a chart image first.";
       return;
     }
-
     const formData = new FormData();
     formData.append("file", file);
     analyseButton.disabled = true;
     analyseButton.textContent = "Analysing Chart...";
     status.textContent = "Gemini is reading the uploaded chart screenshot...";
     resultBox.hidden = true;
-
     try {
       const response = await fetch("/api/chart-analyser", { method: "POST", body: formData });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Chart analysis failed.");
-
       const signal = ["BUY", "SELL", "HOLD"].includes(data.signal) ? data.signal : "HOLD";
       const signalElement = getElement("uploadedChartSignal");
       const color = getSignalColor(signal);
-
       if (signalElement) {
         signalElement.textContent = signal;
         signalElement.style.color = color;
         signalElement.style.borderColor = color;
       }
-
       setUploadedChartText("uploadedChartConfidence", `Confidence: ${Number(data.confidence || 0)}%`);
       setUploadedChartText("uploadedChartRisk", data.risk);
       setUploadedChartText("uploadedChartTrend", data.trend);
@@ -1400,7 +1218,6 @@ function setupChartAnalyser() {
       setUploadedChartText("uploadedChartEntry", data.entry_idea);
       setUploadedChartText("uploadedChartInvalidation", data.invalidation_idea);
       setUploadedChartText("uploadedChartWarning", data.warning);
-
       resultBox.hidden = false;
       status.textContent = "Chart analysis complete. Educational use only.";
     } catch (error) {
@@ -1412,16 +1229,14 @@ function setupChartAnalyser() {
     }
   });
 }
+
 function setupGeminiAiButton() {
   const geminiButton = getElement("geminiAiBtn");
   if (!geminiButton) return;
-
   geminiButton.addEventListener("click", async () => {
     if (aiRefreshInProgress) return;
-
     geminiButton.disabled = true;
     geminiButton.textContent = "Running Gemini AI...";
-
     try {
       await loadAiAnalysis();
     } finally {
@@ -1430,6 +1245,131 @@ function setupGeminiAiButton() {
     }
   });
 }
+
+function setupLayoutEditor() {
+  const container = getElement("customizableSections");
+  const editButton = getElement("editLayoutBtn");
+  const saveButton = getElement("saveLayoutBtn");
+  const resetButton = getElement("resetLayoutBtn");
+  if (!container || !editButton || !saveButton || !resetButton) return;
+
+  let editMode = false;
+  let draggedCard = null;
+  const cards = () => [...container.querySelectorAll(":scope > .layout-editable")];
+
+  const applyHeight = (card, height) => {
+    card.classList.remove("layout-height-compact", "layout-height-normal", "layout-height-tall");
+    card.classList.add(`layout-height-${height}`);
+  };
+
+  const addToolbar = (card) => {
+    if (card.querySelector(".layout-editor-toolbar")) return;
+    const toolbar = document.createElement("div");
+    toolbar.className = "layout-editor-toolbar";
+    toolbar.innerHTML = `
+      <button class="layout-editor-btn layout-drag-handle" type="button" title="Drag this section">Move</button>
+      <button class="layout-editor-btn" type="button" data-height="compact">Compact</button>
+      <button class="layout-editor-btn" type="button" data-height="normal">Normal</button>
+      <button class="layout-editor-btn" type="button" data-height="tall">Tall</button>
+    `;
+    card.prepend(toolbar);
+    toolbar.querySelectorAll("[data-height]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        applyHeight(card, button.dataset.height);
+      });
+    });
+  };
+
+  const enableDrag = (card) => {
+    if (card.dataset.layoutDragReady === "true") return;
+    card.dataset.layoutDragReady = "true";
+
+    card.addEventListener("dragstart", (event) => {
+      if (!editMode) {
+        event.preventDefault();
+        return;
+      }
+      draggedCard = card;
+      card.classList.add("is-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", card.dataset.layoutId || "");
+    });
+
+    card.addEventListener("dragend", () => {
+      card.classList.remove("is-dragging");
+      cards().forEach((item) => item.classList.remove("drag-over"));
+      draggedCard = null;
+    });
+
+    card.addEventListener("dragover", (event) => {
+      if (!editMode || !draggedCard || draggedCard === card) return;
+      event.preventDefault();
+      card.classList.add("drag-over");
+      event.dataTransfer.dropEffect = "move";
+    });
+
+    card.addEventListener("dragleave", () => {
+      card.classList.remove("drag-over");
+    });
+
+    card.addEventListener("drop", (event) => {
+      if (!editMode || !draggedCard || draggedCard === card) return;
+      event.preventDefault();
+      const box = card.getBoundingClientRect();
+      const placeAfter = event.clientY > box.top + box.height / 2;
+      container.insertBefore(draggedCard, placeAfter ? card.nextSibling : card);
+      card.classList.remove("drag-over");
+    });
+  };
+
+  const setEditMode = (enabled) => {
+    editMode = enabled;
+    container.classList.toggle("layout-edit-mode", enabled);
+    cards().forEach((card) => {
+      addToolbar(card);
+      enableDrag(card);
+      card.draggable = enabled;
+      if (!enabled) card.classList.remove("is-dragging", "drag-over");
+    });
+    editButton.hidden = enabled;
+    saveButton.hidden = !enabled;
+    resetButton.hidden = !enabled;
+  };
+
+  const restoreLayout = () => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) || "[]");
+      if (!Array.isArray(stored) || !stored.length) return;
+      stored.forEach((item) => {
+        const card = container.querySelector(`:scope > .layout-editable[data-layout-id="${item.id}"]`);
+        if (!card) return;
+        container.appendChild(card);
+        applyHeight(card, ["compact", "normal", "tall"].includes(item.height) ? item.height : "normal");
+      });
+    } catch (error) {
+      console.warn("Saved dashboard layout could not be restored.", error);
+    }
+  };
+
+  editButton.addEventListener("click", () => setEditMode(true));
+  saveButton.addEventListener("click", () => {
+    const layout = cards().map((card) => {
+      const height = ["compact", "normal", "tall"].find((name) => card.classList.contains(`layout-height-${name}`)) || "normal";
+      return { id: card.dataset.layoutId, height };
+    });
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+    setEditMode(false);
+  });
+  resetButton.addEventListener("click", () => {
+    localStorage.removeItem(LAYOUT_STORAGE_KEY);
+    window.location.reload();
+  });
+
+  restoreLayout();
+}
+
 const refreshButton = getElement("refreshBtn");
 if (refreshButton) refreshButton.addEventListener("click", refreshAllData);
 setupGeminiAiButton();
@@ -1439,23 +1379,18 @@ setupTimeframeButtons();
 setupZoomButtons();
 setupRrgButtons();
 setupChartAnalyser();
+setupLayoutEditor();
 
 const savedPlanLoaded = renderSavedAiPlanIfActive();
-
 if (!savedPlanLoaded) {
   setSignalSource("Gemini AI ready — run manual analysis when needed", "neutral");
-  setSignal(
-    "NO TRADE",
-    "Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan."
-  );
+  setSignal("NO TRADE", "Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan.");
 }
 
 refreshAllData();
-
 setInterval(loadPrice, 30000);
 setInterval(loadChart, 60000);
 setInterval(loadRrg, 300000);
-
 setInterval(() => {
   if (isAiPlanActive()) {
     setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`, "ai");
