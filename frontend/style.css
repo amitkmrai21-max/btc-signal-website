@@ -2403,3 +2403,120 @@ body {
     text-align: left;
   }
 }
+/* =========================================================
+   COMPACT SIGNAL / PLAN CARDS + RESTORE INDICATORS BELOW
+   Paste at the end of style.css
+   ========================================================= */
+
+/* ---------- 1. Signal Confirmation: remove extra card height ---------- */
+
+.signal-card {
+  min-height: 0 !important;
+  padding: 15px 17px !important;
+}
+
+.signal-card strong {
+  margin: 9px 0 6px !important;
+  font-size: 1.08rem;
+}
+
+.signal-card p {
+  margin: 3px 0 !important;
+  line-height: 1.4;
+}
+
+.combined-decision-card {
+  min-height: 0 !important;
+  margin-top: 13px !important;
+  padding: 16px 18px !important;
+}
+
+.combined-decision-card strong {
+  margin: 9px 0 6px !important;
+}
+
+.signal-comparison-card .section-heading {
+  padding-bottom: 13px !important;
+  margin-bottom: 13px !important;
+}
+
+/* ---------- 2. Advanced Trade Plan: remove unnecessary empty space ---------- */
+
+.trade-plan-card .section-heading {
+  padding-bottom: 13px !important;
+  margin-bottom: 13px !important;
+}
+
+.trade-plan-grid {
+  gap: 12px !important;
+}
+
+.trade-plan-card .plan-item {
+  min-height: 84px !important;
+  padding: 13px 15px !important;
+}
+
+.trade-plan-card .plan-item strong {
+  margin-top: 9px !important;
+  font-size: 0.94rem;
+  line-height: 1.28;
+}
+
+/* ---------- 3. Move Trend & Indicator Snapshot below the plan ---------- */
+
+/* Remove left/right layout and restore normal full-width block */
+.market-insights-layout {
+  display: block !important;
+  width: 100%;
+}
+
+/* Multi-Timeframe remains a compact section at the top of this group */
+.multi-timeframe-side-card {
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+/* On desktop, show its three timeframe cards side-by-side again */
+.multi-timeframe-side-card .timeframe-analysis-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.multi-timeframe-side-card .timeframe-analysis-card {
+  min-height: 166px !important;
+}
+
+/* Trend & Indicator Snapshot comes after it, full page width */
+.indicator-snapshot-card {
+  width: 100%;
+  margin-top: 0;
+}
+
+.indicator-snapshot-card .indicator-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.indicator-snapshot-card .indicator-card {
+  min-height: 0 !important;
+}
+
+/* Tablet */
+@media (max-width: 1100px) {
+  .multi-timeframe-side-card .timeframe-analysis-grid,
+  .indicator-snapshot-card .indicator-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Mobile stays one column */
+@media (max-width: 720px) {
+  .multi-timeframe-side-card .timeframe-analysis-grid,
+  .indicator-snapshot-card .indicator-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .multi-timeframe-side-card {
+    margin-bottom: 14px;
+  }
+}
