@@ -294,55 +294,109 @@
       </div>
     </section>
 
-    <section class="card">
-      <div class="section-heading">
-        <div>
-          <h2>Multi-Timeframe Signals</h2>
-          <p>
-            Signal = action now. Trend = market direction, not a guaranteed
-            entry.
-          </p>
+    <section class="market-insights-layout">
+  <!-- Left: Indicator snapshot -->
+  <section class="card indicator-snapshot-card">
+    <div class="section-heading">
+      <div>
+        <h2>Trend &amp; Indicator Snapshot</h2>
+        <p>Trend direction and immediate entry signal can differ.</p>
+      </div>
+    </div>
+
+    <div class="indicator-grid">
+      <article class="indicator-card">
+        <h3>15m Trend &amp; Momentum</h3>
+        <p><span>Trend</span><strong id="trend15m">--</strong></p>
+        <p><span>RSI 14</span><strong id="rsi15m">--</strong></p>
+        <p><span>MACD</span><strong id="macd15m">--</strong></p>
+        <p><span>ADX</span><strong id="adx15m">--</strong></p>
+        <p><span>Momentum</span><strong id="momentum15m">--</strong></p>
+      </article>
+
+      <article class="indicator-card">
+        <h3>1h Trend &amp; Momentum</h3>
+        <p><span>Trend</span><strong id="trend1h">--</strong></p>
+        <p><span>RSI 14</span><strong id="rsi1h">--</strong></p>
+        <p><span>MACD</span><strong id="macd1h">--</strong></p>
+        <p><span>ADX</span><strong id="adx1h">--</strong></p>
+        <p><span>Momentum</span><strong id="momentum1h">--</strong></p>
+      </article>
+
+      <article class="indicator-card">
+        <h3>Volume &amp; Structure</h3>
+        <p><span>15m Volume</span><strong id="volume15m">--</strong></p>
+        <p><span>1h Volume</span><strong id="volume1h">--</strong></p>
+        <p><span>15m Pattern</span><strong id="pattern15m">--</strong></p>
+        <p><span>1h Pattern</span><strong id="pattern1h">--</strong></p>
+        <p><span>15m Breakout</span><strong id="breakout15m">--</strong></p>
+      </article>
+
+      <article class="indicator-card">
+        <h3>Key Zones</h3>
+        <p><span>15m Support</span><strong id="support15m">--</strong></p>
+        <p><span>15m Resistance</span><strong id="resistance15m">--</strong></p>
+        <p><span>1h Support</span><strong id="support1h">--</strong></p>
+        <p><span>1h Resistance</span><strong id="resistance1h">--</strong></p>
+        <p><span>1h Structure</span><strong id="structure1h">--</strong></p>
+      </article>
+    </div>
+  </section>
+
+  <!-- Right: Compact multi-timeframe panel -->
+  <section class="card multi-timeframe-side-card">
+    <div class="section-heading">
+      <div>
+        <h2>Multi-Timeframe Signals</h2>
+        <p>Action signal and market direction by timeframe.</p>
+      </div>
+    </div>
+
+    <div class="timeframe-analysis-grid">
+      <article class="timeframe-analysis-card">
+        <div class="timeframe-title-row">
+          <h3>15 Min</h3>
+          <span id="signal15m" class="mini-signal">--</span>
         </div>
-      </div>
 
-      <div class="timeframe-analysis-grid">
-        <article class="timeframe-analysis-card">
-          <div class="timeframe-title-row">
-            <h3>15 Min</h3>
-            <span id="signal15m" class="mini-signal">--</span>
-          </div>
+        <p id="summary15m">Waiting for 15m analysis...</p>
 
-          <p id="summary15m">Waiting for 15m analysis...</p>
-          <p class="key-level">
-            Key level: <strong id="keyLevel15m">--</strong>
-          </p>
-        </article>
+        <p class="key-level">
+          <span>Key level</span>
+          <strong id="keyLevel15m">--</strong>
+        </p>
+      </article>
 
-        <article class="timeframe-analysis-card">
-          <div class="timeframe-title-row">
-            <h3>1 Hour</h3>
-            <span id="signal1h" class="mini-signal">--</span>
-          </div>
+      <article class="timeframe-analysis-card">
+        <div class="timeframe-title-row">
+          <h3>1 Hour</h3>
+          <span id="signal1h" class="mini-signal">--</span>
+        </div>
 
-          <p id="summary1h">Waiting for 1h analysis...</p>
-          <p class="key-level">
-            Key level: <strong id="keyLevel1h">--</strong>
-          </p>
-        </article>
+        <p id="summary1h">Waiting for 1h analysis...</p>
 
-        <article class="timeframe-analysis-card">
-          <div class="timeframe-title-row">
-            <h3>4 Hour</h3>
-            <span id="signal4h" class="mini-signal">--</span>
-          </div>
+        <p class="key-level">
+          <span>Key level</span>
+          <strong id="keyLevel1h">--</strong>
+        </p>
+      </article>
 
-          <p id="summary4h">Waiting for 4h analysis...</p>
-          <p class="key-level">
-            Key level: <strong id="keyLevel4h">--</strong>
-          </p>
-        </article>
-      </div>
-    </section>
+      <article class="timeframe-analysis-card">
+        <div class="timeframe-title-row">
+          <h3>4 Hour</h3>
+          <span id="signal4h" class="mini-signal">--</span>
+        </div>
+
+        <p id="summary4h">Waiting for 4h analysis...</p>
+
+        <p class="key-level">
+          <span>Key level</span>
+          <strong id="keyLevel4h">--</strong>
+        </p>
+      </article>
+    </div>
+  </section>
+</section>
 
     <!-- New: Last AI signal vs live technical fallback comparison -->
     <section class="card signal-comparison-card">
