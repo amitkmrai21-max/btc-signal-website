@@ -716,13 +716,18 @@ async function loadAiAnalysis() {
 
 async function refreshFastData() {
   try {
-    await Promise.all([loadPrice(true), loadChart()]);
+    await Promise.all([
+      loadPrice(true),
+      loadChart(),
+    ]);
   } catch (error) {
     console.error(error);
-    setText("marketUpdatedAt", "Live price/chart could not be updated. Please try again.");
+    setText(
+      "marketUpdatedAt",
+      "Live price/chart could not be updated. Please try again."
+    );
   }
 }
-
 async function refreshTechnicalAnalysis(
   reasonPrefix = "Live technical analysis refreshed."
 ) {
@@ -740,6 +745,8 @@ async function refreshAllData() {
   try {
     await refreshFastData();
     await loadRrg();
+  } catch (error) {
+    console.error("Technical refresh error:", error);
   } finally {
     if (refreshButton) {
       refreshButton.disabled = false;
