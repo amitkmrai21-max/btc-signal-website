@@ -737,13 +737,14 @@ async function refreshAllData() {
     refreshButton.textContent = "Refreshing...";
   }
 
-  await refreshFastData();
-  await refreshTechnicalAnalysis("Live technical analysis refreshed.");
-  loadRrg();
-
-  if (refreshButton) {
-    refreshButton.disabled = false;
-    refreshButton.textContent = "Refresh Technical";
+  try {
+    await refreshFastData();
+    await loadRrg();
+  } finally {
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.textContent = "Refresh Technical";
+    }
   }
 }
 
