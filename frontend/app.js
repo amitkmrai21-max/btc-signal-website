@@ -723,22 +723,33 @@ async function refreshFastData() {
   }
 }
 
+async function refreshTechnicalAnalysis(
+  reasonPrefix = "Live technical analysis refreshed."
+) {
+  await loadTechnicalFallback(reasonPrefix);
+}
+
 async function refreshAllData() {
   const refreshButton = getElement("refreshBtn");
+
   if (refreshButton) {
     refreshButton.disabled = true;
     refreshButton.textContent = "Refreshing...";
   }
 
   await refreshFastData();
+  await refreshTechnicalAnalysis("Live technical analysis refreshed.");
+  loadRrg();
 
   if (refreshButton) {
     refreshButton.disabled = false;
-    refreshButton.textContent = "Refresh Analysis";
+    refreshButton.textContent = "Refresh Technical";
   }
+}
 
+await loadTechnicalFallback("Live technical analysis refreshed.");
   loadRrg();
-  loadAiAnalysis();
+
 }
 
 function renderChart(labels, data, timeframeLabel) {
@@ -1371,10 +1382,27 @@ function setupChartAnalyser() {
     }
   });
 }
+function setupGeminiAiButton() {
+  const geminiButton = getElement("geminiAiBtn");
+  if (!geminiButton) return;
 
+  geminiButton.addEventListener("click", async () => {
+    if (aiRefreshInProgress) return;
+
+    geminiButton.disabled = true;
+    geminiButton.textContent = "Running Gemini AI...";
+
+    try {
+      await loadAiAnalysis();
+    } finally {
+      geminiButton.disabled = false;
+      geminiButton.textContent = "Run Gemini AI Analysis";
+    }
+  });
+}
 const refreshButton = getElement("refreshBtn");
 if (refreshButton) refreshButton.addEventListener("click", refreshAllData);
-
+setupGeminiAiButton();
 setText("signal-date", formatDateForSignal());
 setupPaperTrading();
 setupTimeframeButtons();
@@ -1389,8 +1417,8 @@ refreshAllData();
 
 setInterval(loadPrice, 30000);
 setInterval(loadChart, 60000);
-setInterval(loadAiAnalysis, 300000);
 setInterval(loadRrg, 300000);
+
 setInterval(() => {
   if (isAiPlanActive()) {
     setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`, "ai");
