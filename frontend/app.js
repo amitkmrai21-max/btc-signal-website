@@ -764,9 +764,12 @@ async function refreshAllData() {
   }
 
   try {
-    await refreshFastData();
+    await Promise.all([
+      refreshFastData(),
+      loadTechnicalFallback("Live technical analysis refreshed.")
+    ]);
   } catch (error) {
-    console.error("Fast refresh error:", error);
+    console.error("Technical refresh error:", error);
   } finally {
     if (refreshButton) {
       refreshButton.disabled = false;
