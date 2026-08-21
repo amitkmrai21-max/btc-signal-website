@@ -30,6 +30,9 @@ ai_signal_cache = {"data": None, "updated_at": 0}
 technical_cache = {"data": None, "updated_at": 0}
 rrg_cache = {"data": {}, "updated_at": 0}
 
+TECHNICAL_CACHE_SECONDS = 30
+TECHNICAL_DELAYED_SECONDS = 90
+
 
 def get_ticker(symbol="BTCUSDT"):
     response = requests.get(
@@ -66,7 +69,9 @@ def get_btc_daily_change(current_price):
     previous_daily_close = float(daily_candles[-2][4])
     if previous_daily_close == 0:
         raise ValueError("Previous daily close is zero.")
-    return previous_daily_close, ((current_price - previous_daily_close) / previous_daily_close) * 100
+    return previous_daily_close, (
+        (current_price - previous_daily_close) / previous_daily_close
+    ) * 100
 
 
 def average(values):
@@ -128,6 +133,7 @@ def percentage_change(start_value, end_value):
 def macd(values, fast=12, slow=26, signal=9):
     if len(values) < slow + signal:
         raise ValueError("Not enough candle data for MACD.")
+
     fast_series = ema_series(values, fast)
     slow_series = ema_series(values, slow)
     macd_line_series = [
@@ -136,12 +142,20 @@ def macd(values, fast=12, slow=26, signal=9):
         if fast_value is not None and slow_value is not None
     ]
     signal_line_series = ema_series(macd_line_series, signal)
+
     macd_line = macd_line_series[-1]
     signal_line = signal_line_series[-1]
     histogram = macd_line - signal_line
-    previous_histogram = macd_line_series[-2] - signal_line_series[-2] if len(macd_line_series) > 1 else histogram
+
+    previous_histogram = (
+        macd_line_series[-2] - signal_line_series[-2]
+        if len(macd_line_series) > 1
+        else histogram
+    )
+
     direction = "Bullish" if macd_line > signal_line else "Bearish"
     strength = "Strengthening" if histogram > previous_histogram else "Weakening"
+
     return {
         "macd_line": round_value(macd_line, 4),
         "signal_line": round_value(signal_line, 4),
@@ -153,53 +167,93 @@ def macd(values, fast=12, slow=26, signal=9):
 def atr(highs, lows, closes, period=14):
     if len(closes) < period + 1:
         raise ValueError("Not enough candle data for ATR.")
+
     true_ranges = []
     for index in range(1, len(closes)):
-        true_ranges.append(max(highs[index] - lows[index], abs(highs[index] - closes[index - 1]), abs(lows[index] - closes[index - 1])))
+        true_ranges.append(
+            max(
+                highs[index] - lows[index],
+                abs(highs[index] - closes[index - 1]),
+                abs(lows[index] - closes[index - 1]),
+            )
+        )
+
     return average(true_ranges[-period:])
 
 
 def adx(highs, lows, closes, period=14):
     if len(closes) < (period * 2) + 1:
         raise ValueError("Not enough candle data for ADX.")
-    plus_dm, minus_dm, true_ranges = [], [], []
+
+    plus_dm = []
+    minus_dm = []
+    true_ranges = []
+
     for index in range(1, len(closes)):
         up_move = highs[index] - highs[index - 1]
         down_move = lows[index - 1] - lows[index]
+
         plus_dm.append(up_move if up_move > down_move and up_move > 0 else 0)
         minus_dm.append(down_move if down_move > up_move and down_move > 0 else 0)
-        true_ranges.append(max(highs[index] - lows[index], abs(highs[index] - closes[index - 1]), abs(lows[index] - closes[index - 1])))
-    dx_values, plus_di_values, minus_di_values = [], [], []
+
+        true_ranges.append(
+            max(
+                highs[index] - lows[index],
+                abs(highs[index] - closes[index - 1]),
+                abs(lows[index] - closes[index - 1]),
+            )
+        )
+
+    dx_values = []
+    plus_di_values = []
+    minus_di_values = []
+
     for index in range(period - 1, len(true_ranges)):
-        tr_average = average(true_ranges[index - period + 1:index + 1])
-        plus_average = average(plus_dm[index - period + 1:index + 1])
-        minus_average = average(minus_dm[index - period + 1:index + 1])
+        tr_average = average(true_ranges[index - period + 1 : index + 1])
+        plus_average = average(plus_dm[index - period + 1 : index + 1])
+        minus_average = average(minus_dm[index - period + 1 : index + 1])
+
         plus_di = 100 * plus_average / tr_average if tr_average else 0
         minus_di = 100 * minus_average / tr_average if tr_average else 0
         total_di = plus_di + minus_di
         dx = 100 * abs(plus_di - minus_di) / total_di if total_di else 0
+
         plus_di_values.append(plus_di)
         minus_di_values.append(minus_di)
         dx_values.append(dx)
+
     adx_value = average(dx_values[-period:])
+
     return {
         "adx_14": round_value(adx_value),
         "plus_di_14": round_value(plus_di_values[-1]),
         "minus_di_14": round_value(minus_di_values[-1]),
-        "trend_strength": "Strong" if adx_value >= 25 else "Moderate" if adx_value >= 20 else "Weak / ranging",
+        "trend_strength": (
+            "Strong"
+            if adx_value >= 25
+            else "Moderate"
+            if adx_value >= 20
+            else "Weak / ranging"
+        ),
     }
 
 
 def bollinger_bands(values, period=20, multiplier=2):
     if len(values) < period:
         raise ValueError("Not enough candle data for Bollinger Bands.")
+
     window = values[-period:]
     middle = average(window)
     deviation = standard_deviation(window)
     upper = middle + multiplier * deviation
     lower = middle - multiplier * deviation
     width_percent = ((upper - lower) / middle) * 100 if middle else 0
-    position_percent = ((values[-1] - lower) / (upper - lower)) * 100 if upper != lower else 50
+    position_percent = (
+        ((values[-1] - lower) / (upper - lower)) * 100
+        if upper != lower
+        else 50
+    )
+
     return {
         "upper": round_value(upper),
         "middle": round_value(middle),
@@ -212,23 +266,43 @@ def bollinger_bands(values, period=20, multiplier=2):
 def obv(closes, volumes):
     value = 0.0
     values = [value]
+
     for index in range(1, len(closes)):
         if closes[index] > closes[index - 1]:
             value += volumes[index]
         elif closes[index] < closes[index - 1]:
             value -= volumes[index]
         values.append(value)
-    direction = "Rising" if values[-1] > values[-6] else "Falling" if values[-1] < values[-6] else "Flat"
-    return {"value": round_value(values[-1], 2), "direction_5_candles": direction}
+
+    direction = (
+        "Rising"
+        if values[-1] > values[-6]
+        else "Falling"
+        if values[-1] < values[-6]
+        else "Flat"
+    )
+
+    return {
+        "value": round_value(values[-1], 2),
+        "direction_5_candles": direction,
+    }
 
 
 def mfi(highs, lows, closes, volumes, period=14):
     if len(closes) < period + 1:
         raise ValueError("Not enough candle data for MFI.")
-    typical_prices = [(high + low + close) / 3 for high, low, close in zip(highs, lows, closes)]
-    positive_flow, negative_flow = [], []
+
+    typical_prices = [
+        (high + low + close) / 3
+        for high, low, close in zip(highs, lows, closes)
+    ]
+
+    positive_flow = []
+    negative_flow = []
+
     for index in range(1, len(typical_prices)):
         raw_flow = typical_prices[index] * volumes[index]
+
         if typical_prices[index] > typical_prices[index - 1]:
             positive_flow.append(raw_flow)
             negative_flow.append(0)
@@ -238,10 +312,13 @@ def mfi(highs, lows, closes, volumes, period=14):
         else:
             positive_flow.append(0)
             negative_flow.append(0)
+
     positive_sum = sum(positive_flow[-period:])
     negative_sum = sum(negative_flow[-period:])
+
     if negative_sum == 0:
         return 100.0
+
     money_ratio = positive_sum / negative_sum
     return 100 - (100 / (1 + money_ratio))
 
@@ -249,41 +326,83 @@ def mfi(highs, lows, closes, volumes, period=14):
 def candle_pattern(candles):
     current = candles[-1]
     previous = candles[-2]
-    open_price, high_price, low_price, close_price = float(current[1]), float(current[2]), float(current[3]), float(current[4])
-    previous_open, previous_high, previous_low, previous_close = float(previous[1]), float(previous[2]), float(previous[3]), float(previous[4])
+
+    open_price = float(current[1])
+    high_price = float(current[2])
+    low_price = float(current[3])
+    close_price = float(current[4])
+
+    previous_open = float(previous[1])
+    previous_high = float(previous[2])
+    previous_low = float(previous[3])
+    previous_close = float(previous[4])
+
     body = abs(close_price - open_price)
     full_range = max(high_price - low_price, 0.00000001)
     upper_wick = high_price - max(open_price, close_price)
     lower_wick = min(open_price, close_price) - low_price
+
     if high_price < previous_high and low_price > previous_low:
         return "Inside bar / consolidation"
-    if close_price > open_price and previous_close < previous_open and close_price >= previous_open and open_price <= previous_close:
+
+    if (
+        close_price > open_price
+        and previous_close < previous_open
+        and close_price >= previous_open
+        and open_price <= previous_close
+    ):
         return "Bullish engulfing"
-    if close_price < open_price and previous_close > previous_open and close_price <= previous_open and open_price >= previous_close:
+
+    if (
+        close_price < open_price
+        and previous_close > previous_open
+        and close_price <= previous_open
+        and open_price >= previous_close
+    ):
         return "Bearish engulfing"
+
     if body / full_range < 0.12:
         return "Doji / indecision"
+
     if lower_wick > body * 2 and upper_wick < body:
         return "Hammer-like bullish rejection"
+
     if upper_wick > body * 2 and lower_wick < body:
         return "Shooting-star-like bearish rejection"
+
     return "Bullish candle" if close_price > open_price else "Bearish candle"
 
 
 def market_structure(closes, highs, lows, ema_20_value, ema_50_value):
-    recent_high, recent_low = max(highs[-20:]), min(lows[-20:])
-    prior_high, prior_low = max(highs[-40:-20]), min(lows[-40:-20])
+    recent_high = max(highs[-20:])
+    recent_low = min(lows[-20:])
+    prior_high = max(highs[-40:-20])
+    prior_low = min(lows[-40:-20])
     last_close = closes[-1]
-    if recent_high > prior_high and recent_low > prior_low and last_close > ema_20_value > ema_50_value:
+
+    if (
+        recent_high > prior_high
+        and recent_low > prior_low
+        and last_close > ema_20_value > ema_50_value
+    ):
         return "Bullish: Higher highs and higher lows"
-    if recent_high < prior_high and recent_low < prior_low and last_close < ema_20_value < ema_50_value:
+
+    if (
+        recent_high < prior_high
+        and recent_low < prior_low
+        and last_close < ema_20_value < ema_50_value
+    ):
         return "Bearish: Lower highs and lower lows"
+
     return "Range / mixed structure"
 
 
 def pivot_levels(highs, lows, closes):
-    prior_high, prior_low, prior_close = max(highs[-25:-1]), min(lows[-25:-1]), closes[-2]
+    prior_high = max(highs[-25:-1])
+    prior_low = min(lows[-25:-1])
+    prior_close = closes[-2]
     pivot = (prior_high + prior_low + prior_close) / 3
+
     return {
         "pivot": round_value(pivot),
         "support_1": round_value((2 * pivot) - prior_high),
@@ -294,8 +413,10 @@ def pivot_levels(highs, lows, closes):
 
 
 def fibonacci_levels(highs, lows):
-    swing_high, swing_low = max(highs[-50:]), min(lows[-50:])
+    swing_high = max(highs[-50:])
+    swing_low = min(lows[-50:])
     price_range = swing_high - swing_low
+
     return {
         "swing_high": round_value(swing_high),
         "swing_low": round_value(swing_low),
@@ -310,6 +431,7 @@ def fibonacci_levels(highs, lows):
 def calculate_market_indicators(candles, interval):
     if len(candles) < 200:
         raise ValueError("Need 200 candles for full market analysis.")
+
     highs = [float(candle[2]) for candle in candles]
     lows = [float(candle[3]) for candle in candles]
     closes = [float(candle[4]) for candle in candles]
@@ -317,42 +439,103 @@ def calculate_market_indicators(candles, interval):
     quote_volumes = [float(candle[7]) for candle in candles]
     trade_counts = [int(candle[8]) for candle in candles]
     taker_buy_volumes = [float(candle[9]) for candle in candles]
+
     last_close = closes[-1]
-    ema_20_value, ema_50_value, ema_200_value = ema(closes, 20), ema(closes, 50), ema(closes, 200)
-    sma_20_value, sma_50_value = sma(closes, 20), sma(closes, 50)
+
+    ema_20_value = ema(closes, 20)
+    ema_50_value = ema(closes, 50)
+    ema_200_value = ema(closes, 200)
+
+    sma_20_value = sma(closes, 20)
+    sma_50_value = sma(closes, 50)
+
     atr_value = atr(highs, lows, closes)
+
     average_volume_20 = average(volumes[-20:-1])
     current_volume = volumes[-1]
-    volume_ratio = current_volume / average_volume_20 if average_volume_20 else 0
+    volume_ratio = (
+        current_volume / average_volume_20 if average_volume_20 else 0
+    )
+
     total_volume_20 = sum(volumes[-20:])
     taker_buy_total_20 = sum(taker_buy_volumes[-20:])
-    taker_buy_ratio = (taker_buy_total_20 / total_volume_20) * 100 if total_volume_20 else 50
-    support, resistance = min(lows[-20:]), max(highs[-20:])
-    prior_resistance, prior_support = max(highs[-21:-1]), min(lows[-21:-1])
-    breakout = "Bullish breakout" if last_close > prior_resistance and volume_ratio >= 1.2 else "Bearish breakdown" if last_close < prior_support and volume_ratio >= 1.2 else "No confirmed breakout"
-    trend = "Strong bullish" if last_close > ema_20_value > ema_50_value > ema_200_value else "Bullish" if last_close > ema_20_value > ema_50_value else "Strong bearish" if last_close < ema_20_value < ema_50_value < ema_200_value else "Bearish" if last_close < ema_20_value < ema_50_value else "Mixed"
+    taker_buy_ratio = (
+        (taker_buy_total_20 / total_volume_20) * 100
+        if total_volume_20
+        else 50
+    )
+
+    support = min(lows[-20:])
+    resistance = max(highs[-20:])
+    prior_resistance = max(highs[-21:-1])
+    prior_support = min(lows[-21:-1])
+
+    breakout = (
+        "Bullish breakout"
+        if last_close > prior_resistance and volume_ratio >= 1.2
+        else "Bearish breakdown"
+        if last_close < prior_support and volume_ratio >= 1.2
+        else "No confirmed breakout"
+    )
+
+    trend = (
+        "Strong bullish"
+        if last_close > ema_20_value > ema_50_value > ema_200_value
+        else "Bullish"
+        if last_close > ema_20_value > ema_50_value
+        else "Strong bearish"
+        if last_close < ema_20_value < ema_50_value < ema_200_value
+        else "Bearish"
+        if last_close < ema_20_value < ema_50_value
+        else "Mixed"
+    )
+
     momentum_percent = percentage_change(closes[-13], last_close)
+
     return {
         "timeframe": interval,
         "price": round_value(last_close),
         "trend": trend,
-        "ema": {"ema_20": round_value(ema_20_value), "ema_50": round_value(ema_50_value), "ema_200": round_value(ema_200_value)},
-        "sma": {"sma_20": round_value(sma_20_value), "sma_50": round_value(sma_50_value)},
+        "ema": {
+            "ema_20": round_value(ema_20_value),
+            "ema_50": round_value(ema_50_value),
+            "ema_200": round_value(ema_200_value),
+        },
+        "sma": {
+            "sma_20": round_value(sma_20_value),
+            "sma_50": round_value(sma_50_value),
+        },
         "rsi_14": round_value(rsi(closes, 14)),
         "macd": macd(closes),
         "adx": adx(highs, lows, closes),
         "atr_14": round_value(atr_value),
         "atr_percent": round_value((atr_value / last_close) * 100),
         "bollinger_bands": bollinger_bands(closes),
-        "volume": {"current": round_value(current_volume, 4), "average_20": round_value(average_volume_20, 4), "volume_ratio": round_value(volume_ratio), "quote_volume_current": round_value(quote_volumes[-1], 2), "trade_count_current": trade_counts[-1], "taker_buy_ratio_20_percent": round_value(taker_buy_ratio)},
+        "volume": {
+            "current": round_value(current_volume, 4),
+            "average_20": round_value(average_volume_20, 4),
+            "volume_ratio": round_value(volume_ratio),
+            "quote_volume_current": round_value(quote_volumes[-1], 2),
+            "trade_count_current": trade_counts[-1],
+            "taker_buy_ratio_20_percent": round_value(taker_buy_ratio),
+        },
         "obv": obv(closes, volumes),
         "mfi_14": round_value(mfi(highs, lows, closes, volumes)),
         "momentum_percent": round_value(momentum_percent),
-        "support_resistance": {"support_20": round_value(support), "resistance_20": round_value(resistance)},
+        "support_resistance": {
+            "support_20": round_value(support),
+            "resistance_20": round_value(resistance),
+        },
         "pivots": pivot_levels(highs, lows, closes),
         "fibonacci": fibonacci_levels(highs, lows),
         "candle_pattern": candle_pattern(candles),
-        "market_structure": market_structure(closes, highs, lows, ema_20_value, ema_50_value),
+        "market_structure": market_structure(
+            closes,
+            highs,
+            lows,
+            ema_20_value,
+            ema_50_value,
+        ),
         "breakout_status": breakout,
     }
 
@@ -362,50 +545,357 @@ def timeframe_signal_from_indicators(indicators):
     macd_state = str(indicators.get("macd", {}).get("state", "")).lower()
     rsi_value = float(indicators.get("rsi_14", 50))
     momentum = float(indicators.get("momentum_percent", 0))
-    if "bull" in trend and "bull" in macd_state and rsi_value >= 50 and momentum >= 0:
+
+    if (
+        "bull" in trend
+        and "bull" in macd_state
+        and rsi_value >= 50
+        and momentum >= 0
+    ):
         return "BUY"
-    if "bear" in trend and "bear" in macd_state and rsi_value <= 50 and momentum <= 0:
+
+    if (
+        "bear" in trend
+        and "bear" in macd_state
+        and rsi_value <= 50
+        and momentum <= 0
+    ):
         return "SELL"
+
     return "HOLD"
+
+
+def trend_score(indicators):
+    trend = str(indicators.get("trend", "")).lower()
+
+    if "strong bullish" in trend:
+        return 2
+    if trend == "bullish":
+        return 1
+    if "strong bearish" in trend:
+        return -2
+    if trend == "bearish":
+        return -1
+    return 0
+
+
+def macd_score(indicators):
+    macd_state = str(indicators.get("macd", {}).get("state", "")).lower()
+
+    if "bullish" in macd_state and "strengthening" in macd_state:
+        return 2
+    if "bullish" in macd_state:
+        return 1
+    if "bearish" in macd_state and "strengthening" in macd_state:
+        return -2
+    if "bearish" in macd_state:
+        return -1
+    return 0
+
+
+def momentum_score(indicators):
+    rsi_value = float(indicators.get("rsi_14", 50))
+    momentum = float(indicators.get("momentum_percent", 0))
+
+    if rsi_value >= 58 and momentum > 0:
+        return 2
+    if rsi_value >= 50 and momentum >= 0:
+        return 1
+    if rsi_value <= 42 and momentum < 0:
+        return -2
+    if rsi_value <= 50 and momentum <= 0:
+        return -1
+    return 0
+
+
+def breakout_score(indicators):
+    breakout = str(indicators.get("breakout_status", "")).lower()
+
+    if "bullish breakout" in breakout:
+        return 2
+    if "bearish breakdown" in breakout:
+        return -2
+    return 0
+
+
+def volume_score(indicators):
+    volume_ratio = float(indicators.get("volume", {}).get("volume_ratio", 0))
+    taker_buy_ratio = float(
+        indicators.get("volume", {}).get("taker_buy_ratio_20_percent", 50)
+    )
+
+    if volume_ratio >= 1.2 and taker_buy_ratio >= 52:
+        return 1
+    if volume_ratio >= 1.2 and taker_buy_ratio <= 48:
+        return -1
+    return 0
+
+
+def calculate_score_breakdown(market_data):
+    timeframes = market_data["timeframes"]
+
+    weighted = {"15m": 0.25, "1h": 0.35, "4h": 0.40}
+    components = {
+        "trend": trend_score,
+        "macd": macd_score,
+        "momentum": momentum_score,
+        "breakout": breakout_score,
+        "volume": volume_score,
+    }
+
+    result = {}
+    total_score = 0.0
+    max_possible = 0.0
+
+    for component_name, score_function in components.items():
+        weighted_score = sum(
+            score_function(timeframes[timeframe]) * weight
+            for timeframe, weight in weighted.items()
+        )
+
+        component_max = 2 if component_name != "volume" else 1
+        rounded_score = round_value(weighted_score, 2)
+
+        result[component_name] = {
+            "score": rounded_score,
+            "minimum": -component_max,
+            "maximum": component_max,
+        }
+
+        total_score += weighted_score
+        max_possible += component_max
+
+    alignment_percent = ((total_score + max_possible) / (2 * max_possible)) * 100
+
+    bias = (
+        "Bullish"
+        if total_score >= 2
+        else "Bearish"
+        if total_score <= -2
+        else "Neutral / mixed"
+    )
+
+    return {
+        "trend": result["trend"],
+        "macd": result["macd"],
+        "momentum": result["momentum"],
+        "breakout": result["breakout"],
+        "volume": result["volume"],
+        "total_score": round_value(total_score, 2),
+        "score_range": {"minimum": -9, "maximum": 9},
+        "technical_alignment_percent": round_value(alignment_percent),
+        "bias": bias,
+    }
+
+
+def calculate_timeframe_agreement(market_data):
+    timeframe_signals = {
+        timeframe: timeframe_signal_from_indicators(indicators)
+        for timeframe, indicators in market_data["timeframes"].items()
+    }
+
+    signal_values = list(timeframe_signals.values())
+    buy_count = signal_values.count("BUY")
+    sell_count = signal_values.count("SELL")
+    hold_count = signal_values.count("HOLD")
+
+    dominant_count = max(buy_count, sell_count, hold_count)
+    agreement_percent = round_value((dominant_count / len(signal_values)) * 100)
+
+    if buy_count == 3:
+        direction = "Fully bullish"
+    elif sell_count == 3:
+        direction = "Fully bearish"
+    elif buy_count >= 2:
+        direction = "Mostly bullish"
+    elif sell_count >= 2:
+        direction = "Mostly bearish"
+    else:
+        direction = "Mixed"
+
+    return {
+        "percent": agreement_percent,
+        "direction": direction,
+        "bullish_votes": buy_count,
+        "bearish_votes": sell_count,
+        "hold_votes": hold_count,
+        "signals": timeframe_signals,
+    }
+
+
+def calculate_market_regime(market_data):
+    analyses = list(market_data["timeframes"].values())
+
+    average_adx = average(
+        [float(item.get("adx", {}).get("adx_14", 0)) for item in analyses]
+    )
+    average_atr_percent = average(
+        [float(item.get("atr_percent", 0)) for item in analyses]
+    )
+    average_bb_width = average(
+        [
+            float(item.get("bollinger_bands", {}).get("width_percent", 0))
+            for item in analyses
+        ]
+    )
+
+    trends = [
+        str(item.get("trend", "")).lower()
+        for item in analyses
+    ]
+    bullish_count = sum("bull" in trend for trend in trends)
+    bearish_count = sum("bear" in trend for trend in trends)
+
+    if average_atr_percent >= 2.2 or average_bb_width >= 8:
+        regime = "High Volatility"
+        detail = "Price swings are elevated; use wider invalidation and reduce trade frequency."
+    elif average_adx >= 25 and (bullish_count >= 2 or bearish_count >= 2):
+        regime = "Trending"
+        detail = "Directional trend conditions are present across multiple timeframes."
+    elif average_adx < 18 and average_atr_percent < 0.8:
+        regime = "Low Volatility"
+        detail = "Compressed movement; wait for expansion or a confirmed breakout."
+    else:
+        regime = "Ranging"
+        detail = "Mixed or moderate trend conditions; key support and resistance matter most."
+
+    return {
+        "label": regime,
+        "detail": detail,
+        "average_adx": round_value(average_adx),
+        "average_atr_percent": round_value(average_atr_percent),
+        "average_bollinger_width_percent": round_value(average_bb_width),
+    }
+
+
+def calculate_key_level_distance(market_data):
+    result = {}
+
+    for timeframe, analysis in market_data["timeframes"].items():
+        price = float(analysis.get("price", 0))
+        support = float(
+            analysis.get("support_resistance", {}).get("support_20", 0)
+        )
+        resistance = float(
+            analysis.get("support_resistance", {}).get("resistance_20", 0)
+        )
+
+        support_distance_percent = (
+            ((price - support) / price) * 100
+            if price and support
+            else None
+        )
+        resistance_distance_percent = (
+            ((resistance - price) / price) * 100
+            if price and resistance
+            else None
+        )
+
+        result[timeframe] = {
+            "price": round_value(price),
+            "support": round_value(support),
+            "resistance": round_value(resistance),
+            "support_distance_percent": (
+                round_value(support_distance_percent)
+                if support_distance_percent is not None
+                else None
+            ),
+            "resistance_distance_percent": (
+                round_value(resistance_distance_percent)
+                if resistance_distance_percent is not None
+                else None
+            ),
+        }
+
+    return result
 
 
 def technical_main_signal(market_data):
     timeframes = market_data["timeframes"]
-    analysis_15m, analysis_1h, analysis_4h = timeframes["15m"], timeframes["1h"], timeframes["4h"]
+    analysis_15m = timeframes["15m"]
+    analysis_1h = timeframes["1h"]
+    analysis_4h = timeframes["4h"]
+
     signal_15m = timeframe_signal_from_indicators(analysis_15m)
     signal_1h = timeframe_signal_from_indicators(analysis_1h)
     signal_4h = timeframe_signal_from_indicators(analysis_4h)
+
     buy_count = [signal_15m, signal_1h, signal_4h].count("BUY")
     sell_count = [signal_15m, signal_1h, signal_4h].count("SELL")
+
     if buy_count >= 2 and signal_4h != "SELL":
-        signal, risk = "BUY WATCH", "MEDIUM"
-        reason = "Technical fallback: higher-timeframe trend and momentum are mostly bullish. Wait for entry confirmation near the listed key levels."
-        setup_status, market_bias = "Technical bullish setup — confirmation required", "Bullish technical bias"
+        signal = "BUY WATCH"
+        risk = "MEDIUM"
+        reason = (
+            "Technical fallback: higher-timeframe trend and momentum are mostly "
+            "bullish. Wait for entry confirmation near the listed key levels."
+        )
+        setup_status = "Technical bullish setup — confirmation required"
+        market_bias = "Bullish technical bias"
     elif sell_count >= 2 and signal_4h != "BUY":
-        signal, risk = "SELL WATCH", "MEDIUM"
-        reason = "Technical fallback: higher-timeframe trend and momentum are mostly bearish. Wait for entry confirmation near the listed key levels."
-        setup_status, market_bias = "Technical bearish setup — confirmation required", "Bearish technical bias"
+        signal = "SELL WATCH"
+        risk = "MEDIUM"
+        reason = (
+            "Technical fallback: higher-timeframe trend and momentum are mostly "
+            "bearish. Wait for entry confirmation near the listed key levels."
+        )
+        setup_status = "Technical bearish setup — confirmation required"
+        market_bias = "Bearish technical bias"
     else:
-        signal, risk = "NO TRADE", "HIGH"
-        reason = "Technical fallback: 15m, 1h and 4h signals are mixed or lack enough alignment. Wait for clearer confirmation."
-        setup_status, market_bias = "Mixed technical setup — wait", "Neutral / mixed technical bias"
+        signal = "NO TRADE"
+        risk = "HIGH"
+        reason = (
+            "Technical fallback: 15m, 1h and 4h signals are mixed or lack "
+            "enough alignment. Wait for clearer confirmation."
+        )
+        setup_status = "Mixed technical setup — wait"
+        market_bias = "Neutral / mixed technical bias"
+
     resistance = analysis_15m["support_resistance"]["resistance_20"]
     support = analysis_15m["support_resistance"]["support_20"]
     atr_value = analysis_15m["atr_14"]
+
     if signal == "BUY WATCH":
-        confirmation = f"15m candle close above ${resistance:,.2f} with volume confirmation"
-        entry_idea = f"Educational idea: wait for bullish confirmation above ${resistance:,.2f}."
-        stop_loss = f"Educational invalidation: below ${support:,.2f} or the recent 15m support."
-        target_1, target_2 = f"${resistance + atr_value:,.2f}", f"${resistance + (atr_value * 2):,.2f}"
+        confirmation = (
+            f"15m candle close above ${resistance:,.2f} with volume confirmation"
+        )
+        entry_idea = (
+            f"Educational idea: wait for bullish confirmation above "
+            f"${resistance:,.2f}."
+        )
+        stop_loss = (
+            f"Educational invalidation: below ${support:,.2f} or the recent "
+            "15m support."
+        )
+        target_1 = f"${resistance + atr_value:,.2f}"
+        target_2 = f"${resistance + (atr_value * 2):,.2f}"
     elif signal == "SELL WATCH":
-        confirmation = f"15m candle close below ${support:,.2f} with volume confirmation"
-        entry_idea = f"Educational idea: wait for bearish confirmation below ${support:,.2f}."
-        stop_loss = f"Educational invalidation: above ${resistance:,.2f} or the recent 15m resistance."
-        target_1, target_2 = f"${support - atr_value:,.2f}", f"${support - (atr_value * 2):,.2f}"
+        confirmation = (
+            f"15m candle close below ${support:,.2f} with volume confirmation"
+        )
+        entry_idea = (
+            f"Educational idea: wait for bearish confirmation below "
+            f"${support:,.2f}."
+        )
+        stop_loss = (
+            f"Educational invalidation: above ${resistance:,.2f} or the recent "
+            "15m resistance."
+        )
+        target_1 = f"${support - atr_value:,.2f}"
+        target_2 = f"${support - (atr_value * 2):,.2f}"
     else:
-        confirmation = "Wait for 15m, 1h and 4h trend/momentum alignment."
-        entry_idea = "No educational entry idea while technical signals are mixed."
-        stop_loss, target_1, target_2 = "No trade is preferred until a clearer setup appears.", "--", "--"
+        confirmation = (
+            "Wait for 15m, 1h and 4h trend/momentum alignment."
+        )
+        entry_idea = (
+            "No educational entry idea while technical signals are mixed."
+        )
+        stop_loss = (
+            "No trade is preferred until a clearer setup appears."
+        )
+        target_1 = "--"
+        target_2 = "--"
+
     return {
         "signal": signal,
         "confidence": None,
@@ -419,18 +909,62 @@ def technical_main_signal(market_data):
         "target_1": target_1,
         "target_2": target_2,
         "timeframes": {
-            "15m": {"signal": signal_15m, "summary": f"{analysis_15m['trend']} trend; RSI {analysis_15m['rsi_14']}; {analysis_15m['macd']['state']}.", "key_level": f"${analysis_15m['support_resistance']['support_20']:,.2f} / ${analysis_15m['support_resistance']['resistance_20']:,.2f}"},
-            "1h": {"signal": signal_1h, "summary": f"{analysis_1h['trend']} trend; RSI {analysis_1h['rsi_14']}; {analysis_1h['macd']['state']}.", "key_level": f"${analysis_1h['support_resistance']['support_20']:,.2f} / ${analysis_1h['support_resistance']['resistance_20']:,.2f}"},
-            "4h": {"signal": signal_4h, "summary": f"{analysis_4h['trend']} trend; RSI {analysis_4h['rsi_14']}; {analysis_4h['macd']['state']}.", "key_level": f"${analysis_4h['support_resistance']['support_20']:,.2f} / ${analysis_4h['support_resistance']['resistance_20']:,.2f}"},
+            "15m": {
+                "signal": signal_15m,
+                "summary": (
+                    f"{analysis_15m['trend']} trend; RSI "
+                    f"{analysis_15m['rsi_14']}; "
+                    f"{analysis_15m['macd']['state']}."
+                ),
+                "key_level": (
+                    f"${analysis_15m['support_resistance']['support_20']:,.2f} "
+                    f"/ ${analysis_15m['support_resistance']['resistance_20']:,.2f}"
+                ),
+            },
+            "1h": {
+                "signal": signal_1h,
+                "summary": (
+                    f"{analysis_1h['trend']} trend; RSI "
+                    f"{analysis_1h['rsi_14']}; "
+                    f"{analysis_1h['macd']['state']}."
+                ),
+                "key_level": (
+                    f"${analysis_1h['support_resistance']['support_20']:,.2f} "
+                    f"/ ${analysis_1h['support_resistance']['resistance_20']:,.2f}"
+                ),
+            },
+            "4h": {
+                "signal": signal_4h,
+                "summary": (
+                    f"{analysis_4h['trend']} trend; RSI "
+                    f"{analysis_4h['rsi_14']}; "
+                    f"{analysis_4h['macd']['state']}."
+                ),
+                "key_level": (
+                    f"${analysis_4h['support_resistance']['support_20']:,.2f} "
+                    f"/ ${analysis_4h['support_resistance']['resistance_20']:,.2f}"
+                ),
+            },
         },
     }
 
 
 def build_market_data():
     ticker = get_btc_ticker()
-    analysis_15m = calculate_market_indicators(get_btc_klines(interval="15m", limit=250), "15m")
-    analysis_1h = calculate_market_indicators(get_btc_klines(interval="1h", limit=250), "1h")
-    analysis_4h = calculate_market_indicators(get_btc_klines(interval="4h", limit=250), "4h")
+
+    analysis_15m = calculate_market_indicators(
+        get_btc_klines(interval="15m", limit=250),
+        "15m",
+    )
+    analysis_1h = calculate_market_indicators(
+        get_btc_klines(interval="1h", limit=250),
+        "1h",
+    )
+    analysis_4h = calculate_market_indicators(
+        get_btc_klines(interval="4h", limit=250),
+        "4h",
+    )
+
     return {
         "symbol": "BTCUSDT",
         "current_price_usdt": round_value(ticker["lastPrice"]),
@@ -438,40 +972,103 @@ def build_market_data():
         "high_24h_usdt": round_value(ticker["highPrice"]),
         "low_24h_usdt": round_value(ticker["lowPrice"]),
         "quote_volume_24h_usdt": round_value(ticker["quoteVolume"]),
-        "timeframes": {"15m": analysis_15m, "1h": analysis_1h, "4h": analysis_4h},
+        "timeframes": {
+            "15m": analysis_15m,
+            "1h": analysis_1h,
+            "4h": analysis_4h,
+        },
     }
 
 
 def get_technical_market_data(force_refresh=False):
     now = time.time()
     cache_age = now - technical_cache["updated_at"]
-    if not force_refresh and technical_cache["data"] and cache_age < 30:
-        return technical_cache["data"], True
+
+    if (
+        not force_refresh
+        and technical_cache["data"]
+        and cache_age < TECHNICAL_CACHE_SECONDS
+    ):
+        return technical_cache["data"], True, cache_age, None
+
     try:
         market_data = build_market_data()
         technical_cache["data"] = market_data
         technical_cache["updated_at"] = now
-        return market_data, False
+        return market_data, False, 0.0, None
+
     except (requests.exceptions.RequestException, ValueError) as error:
         if technical_cache["data"]:
-            return technical_cache["data"], True
-        raise HTTPException(status_code=502, detail="Live technical market data is temporarily unavailable.") from error
+            cached_age = now - technical_cache["updated_at"]
+            return technical_cache["data"], True, cached_age, str(error)
+
+        raise HTTPException(
+            status_code=502,
+            detail="Live technical market data is temporarily unavailable.",
+        ) from error
 
 
-def build_technical_response(market_data, cached=False):
+def build_data_health(cached, cache_age, refresh_error=None):
+    if refresh_error:
+        status = (
+            "DELAYED"
+            if cache_age <= TECHNICAL_DELAYED_SECONDS
+            else "ERROR"
+        )
+        message = (
+            "Live refresh failed. Showing the most recent saved technical data."
+        )
+    elif cached:
+        status = "CACHED"
+        message = "Recent technical data is being served from cache."
+    else:
+        status = "LIVE"
+        message = "Fresh Binance market data was received successfully."
+
+    return {
+        "status": status,
+        "message": message,
+        "cached": cached,
+        "cache_age_seconds": round_value(max(cache_age, 0), 1),
+        "refresh_error": refresh_error,
+        "technical_cache_seconds": TECHNICAL_CACHE_SECONDS,
+    }
+
+
+def build_technical_response(
+    market_data,
+    cached=False,
+    cache_age=0.0,
+    refresh_error=None,
+):
     result = technical_main_signal(market_data)
+
     result["market_data"] = market_data
     result["source"] = "Binance live technical analysis"
     result["analysis_mode"] = "technical_fallback"
     result["cached"] = cached
     result["updated_at"] = int(time.time())
-    result["disclaimer"] = "Educational market analysis only. Not financial advice or an automated trading instruction."
+    result["data_health"] = build_data_health(
+        cached,
+        cache_age,
+        refresh_error,
+    )
+    result["score_breakdown"] = calculate_score_breakdown(market_data)
+    result["market_regime"] = calculate_market_regime(market_data)
+    result["timeframe_agreement"] = calculate_timeframe_agreement(market_data)
+    result["key_level_distance"] = calculate_key_level_distance(market_data)
+    result["disclaimer"] = (
+        "Educational market analysis only. Not financial advice or an "
+        "automated trading instruction."
+    )
+
     return result
 
 
 def build_ai_prompt(market_data):
     return f"""
-You are an advanced but cautious BTCUSDT market-analysis assistant for an educational dashboard. Analyze only the supplied live Binance market data.
+You are an advanced but cautious BTCUSDT market-analysis assistant for an
+educational dashboard. Analyze only the supplied live Binance market data.
 
 DATA:
 {json.dumps(market_data, indent=2)}
@@ -479,19 +1076,29 @@ DATA:
 Return only the requested JSON object in simple Hindi-English (Hinglish).
 
 SIGNAL DEFINITIONS:
-- STRONG BUY: 4h and 1h trend are bullish, 15m supports an entry, momentum/volume confirms, and risk is acceptable.
-- BUY WATCH: Higher timeframe bias is bullish but an entry confirmation, pullback completion, breakout, or volume confirmation is still needed.
-- STRONG SELL: 4h and 1h trend are bearish, 15m supports an entry, momentum/volume confirms, and risk is acceptable.
-- SELL WATCH: Higher timeframe bias is bearish but an entry confirmation, rebound rejection, breakdown, or volume confirmation is still needed.
-- NO TRADE: Market is choppy/ranging, timeframes are strongly mixed, key levels are too close, risk is high, or data is unclear.
+- STRONG BUY: 4h and 1h trend are bullish, 15m supports an entry,
+  momentum/volume confirms, and risk is acceptable.
+- BUY WATCH: Higher timeframe bias is bullish but an entry confirmation,
+  pullback completion, breakout, or volume confirmation is still needed.
+- STRONG SELL: 4h and 1h trend are bearish, 15m supports an entry,
+  momentum/volume confirms, and risk is acceptable.
+- SELL WATCH: Higher timeframe bias is bearish but an entry confirmation,
+  rebound rejection, breakdown, or volume confirmation is still needed.
+- NO TRADE: Market is choppy/ranging, timeframes are strongly mixed,
+  key levels are too close, risk is high, or data is unclear.
 
 DECISION RULES:
 1. Use 4h for broad bias, 1h for setup quality, and 15m for entry timing.
-2. Use EMA trend, RSI, MACD, ADX, volume ratio, taker-buy ratio, market structure, candle pattern, breakout status, support, resistance, pivots, Fibonacci levels, and ATR where relevant.
+2. Use EMA trend, RSI, MACD, ADX, volume ratio, taker-buy ratio,
+   market structure, candle pattern, breakout status, support, resistance,
+   pivots, Fibonacci levels, and ATR where relevant.
 3. Never promise profit, certainty, or guaranteed targets.
-4. Entry zone, invalidation/stop loss, and targets are educational ideas only; never automatic orders.
-5. Explain primary evidence and what confirmation is still needed for WATCH signals.
-6. Strong signals should normally have higher confidence than WATCH; use NO TRADE whenever setup is weak or unclear.
+4. Entry zone, invalidation/stop loss, and targets are educational ideas only;
+   never automatic orders.
+5. Explain primary evidence and what confirmation is still needed for WATCH
+   signals.
+6. Strong signals should normally have higher confidence than WATCH;
+   use NO TRADE whenever setup is weak or unclear.
 """
 
 
@@ -499,18 +1106,38 @@ def get_ai_response_schema():
     timeframe_schema = {
         "type": "object",
         "properties": {
-            "signal": {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]},
+            "signal": {
+                "type": "string",
+                "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
+            },
             "summary": {"type": "string"},
             "key_level": {"type": "string"},
         },
         "required": ["signal", "summary", "key_level"],
     }
+
     return {
         "type": "object",
         "properties": {
-            "signal": {"type": "string", "enum": ["STRONG BUY", "BUY WATCH", "NO TRADE", "SELL WATCH", "STRONG SELL"]},
-            "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
-            "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
+            "signal": {
+                "type": "string",
+                "enum": [
+                    "STRONG BUY",
+                    "BUY WATCH",
+                    "NO TRADE",
+                    "SELL WATCH",
+                    "STRONG SELL",
+                ],
+            },
+            "confidence": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+            },
+            "risk": {
+                "type": "string",
+                "enum": ["LOW", "MEDIUM", "HIGH"],
+            },
             "market_bias": {"type": "string"},
             "setup_status": {"type": "string"},
             "reason": {"type": "string"},
@@ -519,40 +1146,151 @@ def get_ai_response_schema():
             "stop_loss_idea": {"type": "string"},
             "target_1": {"type": "string"},
             "target_2": {"type": "string"},
-            "timeframes": {"type": "object", "properties": {"15m": timeframe_schema, "1h": timeframe_schema, "4h": timeframe_schema}, "required": ["15m", "1h", "4h"]},
+            "timeframes": {
+                "type": "object",
+                "properties": {
+                    "15m": timeframe_schema,
+                    "1h": timeframe_schema,
+                    "4h": timeframe_schema,
+                },
+                "required": ["15m", "1h", "4h"],
+            },
         },
-        "required": ["signal", "confidence", "risk", "market_bias", "setup_status", "reason", "confirmation_needed", "entry_idea", "stop_loss_idea", "target_1", "target_2", "timeframes"],
+        "required": [
+            "signal",
+            "confidence",
+            "risk",
+            "market_bias",
+            "setup_status",
+            "reason",
+            "confirmation_needed",
+            "entry_idea",
+            "stop_loss_idea",
+            "target_1",
+            "target_2",
+            "timeframes",
+        ],
     }
 
 
 def build_rrg_data(interval):
-    settings = {"1h": {"limit": 220, "lookback": 60, "tail": 4}, "1d": {"limit": 220, "lookback": 30, "tail": 4}}
+    settings = {
+        "1h": {
+            "limit": 220,
+            "lookback": 60,
+            "tail": 4,
+        },
+        "1d": {
+            "limit": 220,
+            "lookback": 30,
+            "tail": 4,
+        },
+    }
+
     if interval not in settings:
         raise ValueError("Unsupported RRG interval.")
+
     config = settings[interval]
     benchmark_symbol = "ETHUSDT"
     plotted_symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-    candle_sets = {symbol: get_klines(symbol, interval, config["limit"]) for symbol in plotted_symbols}
-    close_sets = {symbol: [float(candle[4]) for candle in candle_sets[symbol]] for symbol in plotted_symbols}
-    timestamps = [int(candle[0]) for candle in candle_sets[benchmark_symbol]]
+
+    candle_sets = {
+        symbol: get_klines(symbol, interval, config["limit"])
+        for symbol in plotted_symbols
+    }
+
+    close_sets = {
+        symbol: [float(candle[4]) for candle in candle_sets[symbol]]
+        for symbol in plotted_symbols
+    }
+
+    timestamps = [
+        int(candle[0])
+        for candle in candle_sets[benchmark_symbol]
+    ]
+
     benchmark = close_sets[benchmark_symbol]
-    lookback, tail, trails = config["lookback"], config["tail"], []
+    lookback = config["lookback"]
+    tail = config["tail"]
+    trails = []
+
     for symbol in plotted_symbols:
         if symbol == benchmark_symbol:
-            points = [{"x": 100.0, "y": 100.0, "timestamp": timestamps[index]} for index in range(max(0, len(timestamps) - tail), len(timestamps))]
-            trails.append({"symbol": benchmark_symbol, "points": points, "direction": "Flat"})
+            points = [
+                {
+                    "x": 100.0,
+                    "y": 100.0,
+                    "timestamp": timestamps[index],
+                }
+                for index in range(max(0, len(timestamps) - tail), len(timestamps))
+            ]
+            trails.append(
+                {
+                    "symbol": benchmark_symbol,
+                    "points": points,
+                    "direction": "Flat",
+                }
+            )
             continue
+
         closes = close_sets[symbol]
-        ratios = [(asset_close / benchmark_close) * 100 for asset_close, benchmark_close in zip(closes, benchmark)]
-        ratio_sma = [average(ratios[index - lookback + 1:index + 1]) if index >= lookback - 1 else None for index in range(len(ratios))]
-        ratio_index = [(ratios[index] / ratio_sma[index]) * 100 if ratio_sma[index] else None for index in range(len(ratios))]
-        momentum_sma = [average([value for value in ratio_index[index - 9:index + 1] if value is not None]) if index >= lookback + 8 and ratio_index[index] is not None else None for index in range(len(ratio_index))]
-        momentum_index = [(ratio_index[index] / momentum_sma[index]) * 100 if momentum_sma[index] else None for index in range(len(ratio_index))]
-        valid_points = [{"x": round_value(ratio_index[index], 2), "y": round_value(momentum_index[index], 2), "timestamp": timestamps[index]} for index in range(len(ratio_index)) if ratio_index[index] is not None and momentum_index[index] is not None]
+
+        ratios = [
+            (asset_close / benchmark_close) * 100
+            for asset_close, benchmark_close in zip(closes, benchmark)
+        ]
+
+        ratio_sma = [
+            average(ratios[index - lookback + 1 : index + 1])
+            if index >= lookback - 1
+            else None
+            for index in range(len(ratios))
+        ]
+
+        ratio_index = [
+            (ratios[index] / ratio_sma[index]) * 100
+            if ratio_sma[index]
+            else None
+            for index in range(len(ratios))
+        ]
+
+        momentum_sma = [
+            average(
+                [
+                    value
+                    for value in ratio_index[index - 9 : index + 1]
+                    if value is not None
+                ]
+            )
+            if index >= lookback + 8 and ratio_index[index] is not None
+            else None
+            for index in range(len(ratio_index))
+        ]
+
+        momentum_index = [
+            (ratio_index[index] / momentum_sma[index]) * 100
+            if momentum_sma[index]
+            else None
+            for index in range(len(ratio_index))
+        ]
+
+        valid_points = [
+            {
+                "x": round_value(ratio_index[index], 2),
+                "y": round_value(momentum_index[index], 2),
+                "timestamp": timestamps[index],
+            }
+            for index in range(len(ratio_index))
+            if ratio_index[index] is not None
+            and momentum_index[index] is not None
+        ]
+
         latest_direction = "Flat"
+
         if len(valid_points) >= 2:
             delta_x = valid_points[-1]["x"] - valid_points[-2]["x"]
             delta_y = valid_points[-1]["y"] - valid_points[-2]["y"]
+
             if abs(delta_x) < 0.03 and abs(delta_y) < 0.03:
                 latest_direction = "Flat"
             elif delta_x >= 0 and delta_y >= 0:
@@ -563,7 +1301,15 @@ def build_rrg_data(interval):
                 latest_direction = "North-West"
             else:
                 latest_direction = "South-West"
-        trails.append({"symbol": symbol, "points": valid_points[-tail:], "direction": latest_direction})
+
+        trails.append(
+            {
+                "symbol": symbol,
+                "points": valid_points[-tail:],
+                "direction": latest_direction,
+            }
+        )
+
     return {
         "benchmark": benchmark_symbol,
         "interval": interval,
@@ -571,231 +1317,233 @@ def build_rrg_data(interval):
         "trails": trails,
         "source": "Binance market data",
         "updated_at": int(time.time()),
-        "disclaimer": "BTC and SOL are compared with ETH as the benchmark in this RRG-style normalized relative-strength visualization. It is not official JdK RRG and is not financial advice.",
+        "disclaimer": (
+            "BTC and SOL are compared with ETH as the benchmark in this "
+            "RRG-style normalized relative-strength visualization. It is not "
+            "official JdK RRG and is not financial advice."
+        ),
     }
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "message": "BTC Signal Website backend running", "market_data_source": "Binance", "gemini_configured": bool(os.getenv("GEMINI_API_KEY"))}
+    return {
+        "status": "ok",
+        "message": "BTC Signal Website backend running",
+        "market_data_source": "Binance",
+        "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
+    }
 
 
 @app.get("/api/btc/price")
 def btc_price(force_refresh: bool = False):
     now = time.time()
     cache_age = now - price_cache["updated_at"]
+
     if not force_refresh and price_cache["data"] and cache_age < 15:
-        return {**price_cache["data"], "cached": True, "cache_age_seconds": round(cache_age, 1)}
+        return {
+            **price_cache["data"],
+            "cached": True,
+            "cache_age_seconds": round(cache_age, 1),
+        }
+
     try:
         ticker = get_btc_ticker()
         current_price = float(ticker["lastPrice"])
-        previous_daily_close, daily_change_percent = get_btc_daily_change(current_price)
+        previous_daily_close, daily_change_percent = get_btc_daily_change(
+            current_price
+        )
+
         result = {
-            "bitcoin": {"usd": current_price, "usd_24h_change": daily_change_percent, "price_change_24h_usd": float(ticker["priceChange"]), "open_price_24h_usd": float(ticker["openPrice"]), "previous_daily_close": previous_daily_close},
+            "bitcoin": {
+                "usd": current_price,
+                "usd_24h_change": daily_change_percent,
+                "price_change_24h_usd": float(ticker["priceChange"]),
+                "open_price_24h_usd": float(ticker["openPrice"]),
+                "previous_daily_close": previous_daily_close,
+            },
             "source": "Binance",
             "daily_change_basis": "Previous completed UTC daily candle close",
             "cached": False,
             "updated_at": int(now),
         }
-        price_cache["data"], price_cache["updated_at"] = result, now
+
+        price_cache["data"] = result
+        price_cache["updated_at"] = now
         return result
+
     except (requests.exceptions.RequestException, ValueError) as error:
         if price_cache["data"]:
-            return {**price_cache["data"], "cached": True, "warning": "Live market feed is temporarily unavailable. Showing last saved price."}
-        raise HTTPException(status_code=502, detail=f"Failed to fetch BTC price from Binance: {str(error)}")
+            return {
+                **price_cache["data"],
+                "cached": True,
+                "warning": (
+                    "Live market feed is temporarily unavailable. "
+                    "Showing last saved price."
+                ),
+            }
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch BTC price from Binance: {str(error)}",
+        )
 
 
 @app.get("/api/btc/chart")
 def btc_chart(days: int = 7, interval: str = "1h"):
     now = time.time()
     allowed_intervals = {"15m", "1h", "1d", "1w"}
+
     if interval not in allowed_intervals:
-        raise HTTPException(status_code=400, detail="Unsupported chart interval.")
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported chart interval.",
+        )
+
     safe_days = max(1, min(days, 3650))
     cache_key = f"{interval}:{safe_days}"
-    candles_needed = {"15m": min(max(safe_days * 96, 48), 1000), "1h": min(max(safe_days * 24, 24), 1000), "1d": min(max(safe_days, 7), 1000), "1w": min(max(math.ceil(safe_days / 7), 8), 1000)}[interval]
+
+    candles_needed = {
+        "15m": min(max(safe_days * 96, 48), 1000),
+        "1h": min(max(safe_days * 24, 24), 1000),
+        "1d": min(max(safe_days, 7), 1000),
+        "1w": min(max(math.ceil(safe_days / 7), 8), 1000),
+    }[interval]
+
     cached_chart = chart_cache["data"].get(cache_key)
+
     if cached_chart and now - cached_chart["updated_at"] < 60:
-        return {**cached_chart, "cached": True}
+        return {
+            **cached_chart,
+            "cached": True,
+        }
+
     try:
-        candles = get_btc_klines(interval=interval, limit=candles_needed)
-        result = {"prices": [[int(candle[0]), float(candle[4])] for candle in candles], "interval": interval, "days": safe_days, "source": "Binance", "cached": False, "updated_at": int(now)}
-        chart_cache["data"][cache_key], chart_cache["updated_at"] = result, now
+        candles = get_btc_klines(
+            interval=interval,
+            limit=candles_needed,
+        )
+
+        result = {
+            "prices": [
+                [int(candle[0]), float(candle[4])]
+                for candle in candles
+            ],
+            "interval": interval,
+            "days": safe_days,
+            "source": "Binance",
+            "cached": False,
+            "updated_at": int(now),
+        }
+
+        chart_cache["data"][cache_key] = result
+        chart_cache["updated_at"] = now
         return result
+
     except requests.exceptions.RequestException as error:
         if cached_chart:
-            return {**cached_chart, "cached": True, "warning": "Live chart feed is temporarily unavailable. Showing last saved chart."}
-        raise HTTPException(status_code=502, detail=f"Failed to fetch BTC chart from Binance: {str(error)}")
+            return {
+                **cached_chart,
+                "cached": True,
+                "warning": (
+                    "Live chart feed is temporarily unavailable. "
+                    "Showing last saved chart."
+                ),
+            }
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch BTC chart from Binance: {str(error)}",
+        )
 
 
 @app.get("/api/technical-signal")
 def technical_signal(force_refresh: bool = False):
-    market_data, cached = get_technical_market_data(force_refresh)
-    return build_technical_response(market_data, cached)
+    market_data, cached, cache_age, refresh_error = get_technical_market_data(
+        force_refresh
+    )
+
+    return build_technical_response(
+        market_data,
+        cached=cached,
+        cache_age=cache_age,
+        refresh_error=refresh_error,
+    )
 
 
 @app.get("/api/rrg")
 def rrg(interval: str = "1d"):
     now = time.time()
+
     if interval not in {"1h", "1d"}:
-        raise HTTPException(status_code=400, detail="RRG interval must be 1h or 1d.")
+        raise HTTPException(
+            status_code=400,
+            detail="RRG interval must be 1h or 1d.",
+        )
+
     cached_data = rrg_cache["data"].get(interval)
     cache_ttl = 300 if interval == "1h" else 900
+
     if cached_data and now - cached_data["updated_at"] < cache_ttl:
-        return {**cached_data, "cached": True}
-    try:
-        result = build_rrg_data(interval)
-        rrg_cache["data"][interval], rrg_cache["updated_at"] = result, now
-        return result
-    except requests.exceptions.RequestException as error:
-        if cached_data:
-            return {**cached_data, "cached": True, "warning": "RRG feed unavailable. Showing cached data."}
-        raise HTTPException(status_code=502, detail=f"Failed to build RRG data: {str(error)}")
-
-@app.get("/api/technical-signal")
-def technical_signal():
-    try:
-        ticker = get_btc_ticker()
-        candles_15m = get_btc_klines(interval="15m", limit=250)
-        candles_1h = get_btc_klines(interval="1h", limit=250)
-        candles_4h = get_btc_klines(interval="4h", limit=250)
-
-        analysis_15m = calculate_market_indicators(candles_15m, "15m")
-        analysis_1h = calculate_market_indicators(candles_1h, "1h")
-        analysis_4h = calculate_market_indicators(candles_4h, "4h")
-
-        def technical_view(analysis):
-            trend = str(analysis.get("trend", "Mixed"))
-            rsi_value = float(analysis.get("rsi_14", 50))
-            macd_state = str(analysis.get("macd", {}).get("state", "Mixed"))
-            volume_ratio = float(analysis.get("volume", {}).get("volume_ratio", 0))
-            breakout = str(analysis.get("breakout_status", "No confirmed breakout"))
-
-            bullish = (
-                "BULL" in trend.upper()
-                and "BULL" in macd_state.upper()
-                and rsi_value >= 52
-            )
-            bearish = (
-                "BEAR" in trend.upper()
-                and "BEAR" in macd_state.upper()
-                and rsi_value <= 48
-            )
-
-            if bullish:
-                signal = "BUY"
-            elif bearish:
-                signal = "SELL"
-            else:
-                signal = "HOLD"
-
-            summary = (
-                f"{trend}; RSI {rsi_value:.1f}; {macd_state}; "
-                f"volume x{volume_ratio:.2f}; {breakout}."
-            )
-
-            key_level = (
-                f"Support ${analysis['support_resistance']['support_20']:,.2f} | "
-                f"Resistance ${analysis['support_resistance']['resistance_20']:,.2f}"
-            )
-
-            return {
-                "signal": signal,
-                "summary": summary,
-                "key_level": key_level
-            }
-
-        view_15m = technical_view(analysis_15m)
-        view_1h = technical_view(analysis_1h)
-        view_4h = technical_view(analysis_4h)
-
-        buy_votes = sum(
-            view["signal"] == "BUY"
-            for view in [view_15m, view_1h, view_4h]
-        )
-        sell_votes = sum(
-            view["signal"] == "SELL"
-            for view in [view_15m, view_1h, view_4h]
-        )
-
-        if buy_votes >= 2:
-            signal = "BUY WATCH"
-            risk = "MEDIUM"
-            reason = "Multiple technical timeframes show bullish alignment. Wait for candle and volume confirmation."
-        elif sell_votes >= 2:
-            signal = "SELL WATCH"
-            risk = "MEDIUM"
-            reason = "Multiple technical timeframes show bearish alignment. Wait for candle and volume confirmation."
-        else:
-            signal = "NO TRADE"
-            risk = "HIGH"
-            reason = "Technical timeframes are mixed. Wait for trend, momentum and volume confirmation."
-
-        support = analysis_1h["support_resistance"]["support_20"]
-        resistance = analysis_1h["support_resistance"]["resistance_20"]
-        current_price = float(ticker["lastPrice"])
-
         return {
-            "signal": signal,
-            "reason": reason,
-            "risk": risk,
-            "entry_idea": (
-                f"Educational idea: observe BTC near ${current_price:,.2f}; "
-                f"consider only a confirmed move around support ${support:,.2f} "
-                f"or resistance ${resistance:,.2f}."
-            ),
-            "stop_loss_idea": (
-                "Educational risk idea: use invalidation beyond the relevant "
-                "support/resistance level; do not use this as an automatic trade order."
-            ),
-            "market_bias": analysis_1h["trend"],
-            "setup_status": signal,
-            "confirmation_needed": (
-                "Require agreement between 15m, 1h and 4h trend, MACD, RSI, "
-                "volume and a confirmed candle close."
-            ),
-            "target_1": f"Resistance zone: ${resistance:,.2f}",
-            "target_2": f"Support zone: ${support:,.2f}",
-            "timeframes": {
-                "15m": view_15m,
-                "1h": view_1h,
-                "4h": view_4h
-            },
-            "market_data": {
-                "symbol": "BTCUSDT",
-                "current_price_usdt": round_value(current_price),
-                "timeframes": {
-                    "15m": analysis_15m,
-                    "1h": analysis_1h,
-                    "4h": analysis_4h
-                }
-            },
-            "source": "Binance live technical analysis",
-            "updated_at": int(time.time())
+            **cached_data,
+            "cached": True,
         }
 
-    except Exception as error:
+    try:
+        result = build_rrg_data(interval)
+        rrg_cache["data"][interval] = result
+        rrg_cache["updated_at"] = result["updated_at"]
+        return result
+
+    except requests.exceptions.RequestException as error:
+        if cached_data:
+            return {
+                **cached_data,
+                "cached": True,
+                "warning": "RRG feed unavailable. Showing cached data.",
+            }
+
         raise HTTPException(
             status_code=502,
-            detail=f"Technical analysis is temporarily unavailable: {type(error).__name__}: {str(error)}"
+            detail=f"Failed to build RRG data: {str(error)}",
         )
+
 
 @app.get("/api/ai-signal")
 def ai_signal():
     now = time.time()
+
     if ai_signal_cache["data"] and now - ai_signal_cache["updated_at"] < 90:
-        return {**ai_signal_cache["data"], "cached": True}
-    market_data, market_data_cached = get_technical_market_data()
+        return {
+            **ai_signal_cache["data"],
+            "cached": True,
+        }
+
+    market_data, market_data_cached, _, _ = get_technical_market_data()
     api_key = os.getenv("GEMINI_API_KEY")
+
     if not api_key:
-        raise HTTPException(status_code=503, detail="Gemini AI is not configured. Live technical fallback is active.")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Gemini AI is not configured. "
+                "Live technical fallback is active."
+            ),
+        )
+
     try:
         client = genai.Client(api_key=api_key)
+
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=build_ai_prompt(market_data),
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=get_ai_response_schema()),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_json_schema=get_ai_response_schema(),
+            ),
         )
+
         result = json.loads(response.text)
         result["market_data"] = market_data
         result["source"] = "Binance market data + Gemini advanced analysis"
@@ -803,68 +1551,162 @@ def ai_signal():
         result["cached"] = False
         result["market_data_cached"] = market_data_cached
         result["updated_at"] = int(now)
-        result["disclaimer"] = "Educational market analysis only. Not financial advice or an automated trading instruction."
-        ai_signal_cache["data"], ai_signal_cache["updated_at"] = result, now
+        result["disclaimer"] = (
+            "Educational market analysis only. Not financial advice or an "
+            "automated trading instruction."
+        )
+
+        ai_signal_cache["data"] = result
+        ai_signal_cache["updated_at"] = now
         return result
+
     except Exception:
-        raise HTTPException(status_code=503, detail="Gemini AI quota or service is temporarily unavailable. Live technical fallback is active.")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Gemini AI quota or service is temporarily unavailable. "
+                "Live technical fallback is active."
+            ),
+        )
 
 
 @app.post("/api/chart-analyser")
 async def chart_analyser(file: UploadFile = File(...)):
     allowed_types = {"image/png", "image/jpeg", "image/webp"}
     max_file_size = 8 * 1024 * 1024
+
     if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Upload a PNG, JPG, or WEBP chart image only.")
+        raise HTTPException(
+            status_code=400,
+            detail="Upload a PNG, JPG, or WEBP chart image only.",
+        )
+
     image_bytes = await file.read()
+
     if not image_bytes:
-        raise HTTPException(status_code=400, detail="The uploaded chart image is empty.")
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded chart image is empty.",
+        )
+
     if len(image_bytes) > max_file_size:
-        raise HTTPException(status_code=413, detail="Chart image is too large. Maximum size is 8 MB.")
+        raise HTTPException(
+            status_code=413,
+            detail="Chart image is too large. Maximum size is 8 MB.",
+        )
+
     api_key = os.getenv("GEMINI_API_KEY")
+
     if not api_key:
-        raise HTTPException(status_code=503, detail="Gemini API key is not configured on the server.")
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini API key is not configured on the server.",
+        )
+
     prompt = """
-You are a cautious technical-analysis assistant for an educational BTC/crypto chart screenshot analyser.
-Analyze only visible information in the uploaded chart image. Do not invent exact prices, indicators, symbols, timeframes, or levels that cannot be read clearly from the image.
+You are a cautious technical-analysis assistant for an educational BTC/crypto
+chart screenshot analyser.
+
+Analyze only visible information in the uploaded chart image. Do not invent
+exact prices, indicators, symbols, timeframes, or levels that cannot be read
+clearly from the image.
+
 Return only a JSON object in simple Hinglish.
+
 Rules:
 1. Output BUY only if a clear bullish setup and visible confirmation are present.
 2. Output SELL only if a clear bearish setup and visible confirmation are present.
-3. Output HOLD if the chart is unclear, cropped, has insufficient context, is sideways, or confirmation is missing.
+3. Output HOLD if the chart is unclear, cropped, has insufficient context,
+   is sideways, or confirmation is missing.
 4. Never promise profit, certainty, or guaranteed targets.
 5. This is educational analysis only, never an automated trade order.
 6. Clearly say "Not visible" when required chart information is absent.
 """
+
     response_schema = {
         "type": "object",
         "properties": {
-            "signal": {"type": "string", "enum": ["BUY", "SELL", "HOLD"]},
-            "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
-            "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
-            "trend": {"type": "string"}, "pattern": {"type": "string"}, "support": {"type": "string"}, "resistance": {"type": "string"}, "reason": {"type": "string"}, "entry_idea": {"type": "string"}, "invalidation_idea": {"type": "string"}, "warning": {"type": "string"},
+            "signal": {
+                "type": "string",
+                "enum": ["BUY", "SELL", "HOLD"],
+            },
+            "confidence": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+            },
+            "risk": {
+                "type": "string",
+                "enum": ["LOW", "MEDIUM", "HIGH"],
+            },
+            "trend": {"type": "string"},
+            "pattern": {"type": "string"},
+            "support": {"type": "string"},
+            "resistance": {"type": "string"},
+            "reason": {"type": "string"},
+            "entry_idea": {"type": "string"},
+            "invalidation_idea": {"type": "string"},
+            "warning": {"type": "string"},
         },
-        "required": ["signal", "confidence", "risk", "trend", "pattern", "support", "resistance", "reason", "entry_idea", "invalidation_idea", "warning"],
+        "required": [
+            "signal",
+            "confidence",
+            "risk",
+            "trend",
+            "pattern",
+            "support",
+            "resistance",
+            "reason",
+            "entry_idea",
+            "invalidation_idea",
+            "warning",
+        ],
     }
+
     try:
         client = genai.Client(api_key=api_key)
+
         response = client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=[prompt, types.Part.from_bytes(data=image_bytes, mime_type=file.content_type)],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=response_schema),
+            contents=[
+                prompt,
+                types.Part.from_bytes(
+                    data=image_bytes,
+                    mime_type=file.content_type,
+                ),
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_json_schema=response_schema,
+            ),
         )
+
         result = json.loads(response.text)
         result["source"] = "Uploaded chart screenshot + Gemini AI analysis"
-        result["disclaimer"] = "Educational chart analysis only. Not financial advice or an automated trading instruction."
+        result["disclaimer"] = (
+            "Educational chart analysis only. Not financial advice or an "
+            "automated trading instruction."
+        )
+
         return result
+
     except Exception:
-        raise HTTPException(status_code=503, detail="Chart Gemini AI is temporarily unavailable. Please try again later.")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Chart Gemini AI is temporarily unavailable. "
+                "Please try again later."
+            ),
+        )
 
 
-app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
+app.mount(
+    "/frontend",
+    StaticFiles(directory="frontend"),
+    name="frontend",
+)
 
 
 @app.get("/")
 def home():
     return FileResponse("frontend/index.html")
-
