@@ -2149,3 +2149,97 @@ canvas {
     width: 100%;
   }
 }
+/* Phase 3: Manual Hindi News Translation */
+.gemini-news-translation {
+  margin-top: 12px;
+  padding: 13px;
+  border: 1px solid rgba(167, 139, 250, 0.42);
+  border-left: 3px solid #a78bfa;
+  border-radius: 11px;
+  background: linear-gradient(
+    135deg,
+    rgba(76, 29, 149, 0.22),
+    rgba(15, 23, 42, 0.72)
+  );
+}
+
+.gemini-news-translation h4 {
+  margin: 0 0 9px;
+  color: #ddd6fe;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.gemini-news-hi-headline,
+.gemini-news-hi-summary {
+  margin: 0;
+  color: #f8fafc;
+  font-family: Arial, "Noto Sans Devanagari", sans-serif;
+  line-height: 1.65;
+}
+
+.gemini-news-hi-headline {
+  font-size: 0.91rem;
+  font-weight: 800;
+}
+
+.gemini-news-hi-summary {
+  margin-top: 8px;
+  color: #dbeafe;
+  font-size: 0.84rem;
+}
+
+.gemini-news-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.translate-news-btn {
+  min-height: 34px;
+  padding: 8px 11px;
+  cursor: pointer;
+  border: 1px solid rgba(196, 181, 253, 0.72);
+  border-radius: 9px;
+  color: #f5f3ff;
+  background: linear-gradient(
+    135deg,
+    rgba(109, 40, 217, 0.88),
+    rgba(37, 99, 235, 0.82)
+  );
+  font-family: Arial, "Noto Sans Devanagari", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.translate-news-btn:hover {
+  border-color: #ddd6fe;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+}
+
+.translate-news-btn:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.translation-status {
+  min-height: 18px;
+  color: #c4b5fd;
+  font-family: Arial, "Noto Sans Devanagari", sans-serif;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 520px) {
+  .gemini-news-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .translate-news-btn {
+    width: 100%;
+  }
+}
