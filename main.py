@@ -27,6 +27,7 @@ GEMINI_MODEL = "gemini-3.6-flash"
 price_cache = {"data": None, "updated_at": 0}
 chart_cache = {"data": {}, "updated_at": 0}
 ai_signal_cache = {"data": None, "updated_at": 0}
+AI_NEWS_LIMIT = 8
 technical_cache = {"data": None, "updated_at": 0}
 rrg_cache = {"data": {}, "updated_at": 0}
 
@@ -634,13 +635,144 @@ def build_technical_response(market_data, cached=False, cache_age=0.0, refresh_e
 
 
 def build_ai_prompt(market_data):
-    return f'''You are an advanced but cautious BTCUSDT market-analysis assistant for an educational dashboard. Analyze only supplied live Binance market data. DATA: {json.dumps(market_data, indent=2)} Return only requested JSON in simple Hinglish. Use 4h for broad bias, 1h for setup quality, 15m for entry timing. Use EMA trend, RSI, MACD, ADX, volume, structure, breakout, support, resistance, pivots, Fibonacci and ATR where relevant. Never promise profit or certainty. Entry, stop and targets are educational ideas only, never automatic orders. SIGNALS: STRONG BUY, BUY WATCH, NO TRADE, SELL WATCH, STRONG SELL.'''
+    return f"""
+You are an advanced but cautious BTCUSDT market-analysis assistant for an educational dashboard.
+
+You must do two things in ONE response:
+1. Analyze ONLY the supplied live Binance technical data for an educational BTCUSDT setup.
+2. Use Google Search Grounding to find fresh, verifiable BTC and broader crypto-market news relevant to the current market. News must be current and must never be invented.
+
+LIVE BINANCE TECHNICAL DATA:
+{json.dumps(market_data, indent=2)}
+
+RULES FOR TECHNICAL ANALYSIS:
+- Use 4h for broad bias, 1h for setup quality, and 15m for entry timing.
+- Consider EMA trend, RSI, MACD, ADX, volume, market structure, breakout, support, resistance, pivots, Fibonacci, and ATR.
+- Never promise profit, certainty, or guaranteed targets.
+- Entry, stop, and targets are educational ideas only; never automated orders.
+- Allowed main signals: STRONG BUY, BUY WATCH, NO TRADE, SELL WATCH, STRONG SELL.
+- Use simple Hinglish in all text fields.
+
+RULES FOR NEWS:
+- Return exactly up to {AI_NEWS_LIMIT} distinct, recent, relevant news items.
+- Prefer established primary/credible sources and use real published URLs only.
+- Avoid duplicates, price-prediction-only articles, and unsupported claims.
+- Each item must explain the likely short-term BTC market relevance, but label this as interpretation—not certainty.
+- If fresh reliable news is unavailable, return an empty news list instead of inventing items.
+- Use compact Hinglish in news summary and market_relevance.
+- Never make an article URL, source name, headline, or time up.
+
+Return only JSON conforming to the provided schema.
+"""
 
 
 def get_ai_response_schema():
-    timeframe_schema = {"type": "object", "properties": {"signal": {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]}, "summary": {"type": "string"}, "key_level": {"type": "string"}}, "required": ["signal", "summary", "key_level"]}
-    return {"type": "object", "properties": {"signal": {"type": "string", "enum": ["STRONG BUY", "BUY WATCH", "NO TRADE", "SELL WATCH", "STRONG SELL"]}, "confidence": {"type": "integer", "minimum": 0, "maximum": 100}, "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]}, "market_bias": {"type": "string"}, "setup_status": {"type": "string"}, "reason": {"type": "string"}, "confirmation_needed": {"type": "string"}, "entry_idea": {"type": "string"}, "stop_loss_idea": {"type": "string"}, "target_1": {"type": "string"}, "target_2": {"type": "string"}, "timeframes": {"type": "object", "properties": {"15m": timeframe_schema, "1h": timeframe_schema, "4h": timeframe_schema}, "required": ["15m", "1h", "4h"]}}, "required": ["signal", "confidence", "risk", "market_bias", "setup_status", "reason", "confirmation_needed", "entry_idea", "stop_loss_idea", "target_1", "target_2", "timeframes"]}
+    timeframe_schema = {
+        "type": "object",
+        "properties": {
+            "signal": {
+                "type": "string",
+                "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
+            },
+            "summary": {"type": "string"},
+            "key_level": {"type": "string"},
+        },
+        "required": ["signal", "summary", "key_level"],
+    }
 
+    news_item_schema = {
+        "type": "object",
+        "properties": {
+            "headline": {"type": "string"},
+            "source": {"type": "string"},
+            "url": {"type": "string"},
+            "published_time": {"type": "string"},
+            "summary": {"type": "string"},
+            "market_impact": {
+                "type": "string",
+                "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
+            },
+            "market_relevance": {"type": "string"},
+        },
+        "required": [
+            "headline",
+            "source",
+            "url",
+            "published_time",
+            "summary",
+            "market_impact",
+            "market_relevance",
+        ],
+    }
+
+    return {
+        "type": "object",
+        "properties": {
+            "signal": {
+                "type": "string",
+                "enum": [
+                    "STRONG BUY",
+                    "BUY WATCH",
+                    "NO TRADE",
+                    "SELL WATCH",
+                    "STRONG SELL",
+                ],
+            },
+            "confidence": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+            },
+            "risk": {
+                "type": "string",
+                "enum": ["LOW", "MEDIUM", "HIGH"],
+            },
+            "market_bias": {"type": "string"},
+            "setup_status": {"type": "string"},
+            "reason": {"type": "string"},
+            "confirmation_needed": {"type": "string"},
+            "entry_idea": {"type": "string"},
+            "stop_loss_idea": {"type": "string"},
+            "target_1": {"type": "string"},
+            "target_2": {"type": "string"},
+            "timeframes": {
+                "type": "object",
+                "properties": {
+                    "15m": timeframe_schema,
+                    "1h": timeframe_schema,
+                    "4h": timeframe_schema,
+                },
+                "required": ["15m", "1h", "4h"],
+            },
+            "news": {
+                "type": "array",
+                "items": news_item_schema,
+                "maxItems": AI_NEWS_LIMIT,
+            },
+            "news_overview": {"type": "string"},
+            "news_market_bias": {
+                "type": "string",
+                "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
+            },
+        },
+        "required": [
+            "signal",
+            "confidence",
+            "risk",
+            "market_bias",
+            "setup_status",
+            "reason",
+            "confirmation_needed",
+            "entry_idea",
+            "stop_loss_idea",
+            "target_1",
+            "target_2",
+            "timeframes",
+            "news",
+            "news_overview",
+            "news_market_bias",
+        ],
+    }
 
 def build_rrg_data(interval):
     settings = {"1h": {"limit": 220, "lookback": 60, "tail": 4}, "1d": {"limit": 220, "lookback": 30, "tail": 4}}
@@ -728,23 +860,155 @@ def rrg(interval: str = "1d"):
         if cached_data: return {**cached_data, "cached": True, "warning": "RRG feed unavailable. Showing cached data."}
         raise HTTPException(status_code=502, detail=f"Failed to build RRG data: {str(error)}")
 
+def normalise_news_items(news_items):
+    clean_items = []
+
+    if not isinstance(news_items, list):
+        return clean_items
+
+    allowed_impacts = {"BULLISH", "BEARISH", "NEUTRAL"}
+
+    for item in news_items[:AI_NEWS_LIMIT]:
+        if not isinstance(item, dict):
+            continue
+
+        url = str(item.get("url", "")).strip()
+        headline = str(item.get("headline", "")).strip()
+
+        if not headline or not url.startswith(("https://", "http://")):
+            continue
+
+        impact = str(item.get("market_impact", "NEUTRAL")).upper()
+
+        clean_items.append(
+            {
+                "headline": headline[:260],
+                "source": str(item.get("source", "Source unavailable")).strip()[:100],
+                "url": url[:1000],
+                "published_time": str(
+                    item.get("published_time", "Time unavailable")
+                ).strip()[:120],
+                "summary": str(item.get("summary", "")).strip()[:700],
+                "market_impact": (
+                    impact if impact in allowed_impacts else "NEUTRAL"
+                ),
+                "market_relevance": str(
+                    item.get("market_relevance", "")
+                ).strip()[:500],
+            }
+        )
+
+    return clean_items
 
 @app.get("/api/ai-signal")
-def ai_signal():
-    now = time.time()
-    if ai_signal_cache["data"] and now - ai_signal_cache["updated_at"] < 90: return {**ai_signal_cache["data"], "cached": True}
-    market_data, market_data_cached, _, _ = get_technical_market_data()
+def get_saved_ai_signal():
+    if not ai_signal_cache["data"]:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No Gemini AI analysis has been run yet. "
+                "Use Run Gemini AI Analysis to generate an analysis and fresh news."
+            ),
+        )
+
+    cache_age = time.time() - ai_signal_cache["updated_at"]
+
+    return {
+        **ai_signal_cache["data"],
+        "cached": True,
+        "cache_age_seconds": round_value(cache_age, 1),
+        "manual_run_only": True,
+    }
+
+
+@app.post("/api/ai-signal/run")
+def run_ai_signal():
     api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key: raise HTTPException(status_code=503, detail="Gemini AI is not configured. Live technical fallback is active.")
+
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini AI is not configured. Add GEMINI_API_KEY on the server.",
+        )
+
     try:
+        market_data, market_data_cached, _, _ = get_technical_market_data(
+            force_refresh=True
+        )
+
         client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(model=GEMINI_MODEL, contents=build_ai_prompt(market_data), config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=get_ai_response_schema()))
+
+        grounding_tool = types.Tool(
+            google_search=types.GoogleSearch()
+        )
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=build_ai_prompt(market_data),
+            config=types.GenerateContentConfig(
+                tools=[grounding_tool],
+                response_mime_type="application/json",
+                response_json_schema=get_ai_response_schema(),
+            ),
+        )
+
         result = json.loads(response.text)
-        result.update({"market_data": market_data, "source": "Binance market data + Gemini advanced analysis", "analysis_mode": "ai", "cached": False, "market_data_cached": market_data_cached, "updated_at": int(now), "disclaimer": "Educational market analysis only. Not financial advice or an automated trading instruction."})
-        ai_signal_cache["data"], ai_signal_cache["updated_at"] = result, now
+        result["news"] = normalise_news_items(result.get("news", []))
+        result["news_overview"] = str(
+            result.get(
+                "news_overview",
+                "Fresh news context was reviewed with the manual Gemini analysis.",
+            )
+        ).strip()
+        result["news_market_bias"] = str(
+            result.get("news_market_bias", "NEUTRAL")
+        ).upper()
+
+        if result["news_market_bias"] not in {
+            "BULLISH",
+            "BEARISH",
+            "NEUTRAL",
+        }:
+            result["news_market_bias"] = "NEUTRAL"
+
+        now = time.time()
+
+        result.update(
+            {
+                "market_data": market_data,
+                "source": (
+                    "Binance market data + Gemini AI analysis + "
+                    "Google Search Grounding"
+                ),
+                "analysis_mode": "ai_manual_with_news",
+                "cached": False,
+                "market_data_cached": market_data_cached,
+                "updated_at": int(now),
+                "news_updated_at": int(now),
+                "manual_run_only": True,
+                "disclaimer": (
+                    "Educational market analysis and news context only. "
+                    "Not financial advice or an automated trading instruction."
+                ),
+            }
+        )
+
+        ai_signal_cache["data"] = result
+        ai_signal_cache["updated_at"] = now
+
         return result
-    except Exception:
-        raise HTTPException(status_code=503, detail="Gemini AI quota or service is temporarily unavailable. Live technical fallback is active.")
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Gemini AI analysis error: {error}")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Gemini AI analysis or grounded news is temporarily unavailable. "
+                "Your latest saved analysis remains available if one exists."
+            ),
+        ) from error
 
 
 @app.post("/api/chart-analyser")
