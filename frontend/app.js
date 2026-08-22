@@ -19,6 +19,7 @@ const PAPER_MIN_TRADE_INR = 100;
 const PAPER_EPSILON = 0.00000001;
 const AI_PLAN_STORAGE_KEY = "btcAiSignalLatestPlanV1";
 const AI_NEWS_STORAGE_KEY = "btcAiSignalLatestNewsV1";
+const NEWS_TRANSLATION_STORAGE_KEY = "btcAiSignalNewsTranslationsV1";
 const LAST_AI_SIGNAL_STORAGE_KEY = "btcAiSignalLastSignalV1";
 const AI_PLAN_VALIDITY_MS = 5 * 60 * 1000;
 const LAYOUT_STORAGE_KEY = "btcAiSignalCustomLayoutV1";
@@ -474,6 +475,58 @@ function getSavedAiNews() {
   }
 }
 
+function getNewsTranslationCache() {
+  try {
+    const raw = localStorage.getItem(NEWS_TRANSLATION_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.error(error);
+    return {};
+  }
+}
+
+function saveNewsTranslationCache(cache) {
+  try {
+    localStorage.setItem(
+      NEWS_TRANSLATION_STORAGE_KEY,
+      JSON.stringify(cache)
+    );
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function getNewsTranslationKey(item = {}) {
+  return [
+    String(item?.source || ""),
+    String(item?.url || ""),
+    String(item?.headline || "")
+  ].join("|");
+}
+
+function getCachedNewsTranslation(item) {
+  const key = getNewsTranslationKey(item);
+  return getNewsTranslationCache()[key] || null;
+}
+
+function saveCachedNewsTranslation(item, translation) {
+  const key = getNewsTranslationKey(item);
+  const cache = getNewsTranslationCache();
+
+  cache[key] = {
+    headline_hi: String(translation?.headline_hi || "").trim(),
+    summary_hi: String(translation?.summary_hi || "").trim(),
+    savedAt: Date.now()
+  };
+
+  const entries = Object.entries(cache)
+    .sort(([, a], [, b]) => Number(b?.savedAt || 0) - Number(a?.savedAt || 0))
+    .slice(0, 100);
+
+  saveNewsTranslationCache(Object.fromEntries(entries));
+}
+
 function renderGeminiNews(aiData = null) {
   const newsData = aiData
     ? {
@@ -559,7 +612,121 @@ function renderGeminiNews(aiData = null) {
       item?.market_relevance || "Interpretation unavailable."
     }`;
 
-    card.append(top, headline, meta, summary, relevance);
+    const translationBox = document.createElement("div");
+    translationBox.className = "gemini-news-translation";
+    translationBox.hidden = true;
+
+    const translationTitle = document.createElement("h4");
+    translationTitle.textContent = "हिंदी अनुवाद";
+
+    const translationHeadline = document.createElement("p");
+    translationHeadline.className = "gemini-news-hi-headline";
+
+    const translationSummary = document.createElement("p");
+    translationSummary.className = "gemini-news-hi-summary";
+
+    translationBox.append(
+      translationTitle,
+      translationHeadline,
+      translationSummary
+    );
+
+    const actions = document.createElement("div");
+    actions.className = "gemini-news-actions";
+
+    const translateButton = document.createElement("button");
+    translateButton.type = "button";
+    translateButton.className = "translate-news-btn";
+    translateButton.textContent = "हिंदी में पढ़ें";
+
+    const translationStatus = document.createElement("span");
+    translationStatus.className = "translation-status";
+    translationStatus.setAttribute("aria-live", "polite");
+
+    const cachedTranslation = getCachedNewsTranslation(item);
+
+    function showTranslation(translation) {
+      translationHeadline.textContent =
+        translation?.headline_hi || item?.headline || "";
+      translationSummary.textContent =
+        translation?.summary_hi || item?.summary || "";
+      translationBox.hidden = false;
+      translateButton.textContent = "हिंदी अनुवाद छुपाएं";
+      translationStatus.textContent = "अनुवाद तैयार है";
+    }
+
+    function hideTranslation() {
+      translationBox.hidden = true;
+      translateButton.textContent = "हिंदी में पढ़ें";
+      translationStatus.textContent = "";
+    }
+
+    if (cachedTranslation?.headline_hi || cachedTranslation?.summary_hi) {
+      showTranslation(cachedTranslation);
+    }
+
+    translateButton.addEventListener("click", async () => {
+      if (!translationBox.hidden) {
+        hideTranslation();
+        return;
+      }
+
+      const alreadyCached = getCachedNewsTranslation(item);
+
+      if (alreadyCached?.headline_hi || alreadyCached?.summary_hi) {
+        showTranslation(alreadyCached);
+        return;
+      }
+
+      translateButton.disabled = true;
+      translateButton.textContent = "अनुवाद हो रहा है...";
+      translationStatus.textContent = "Gemini translation चल रहा है...";
+
+      try {
+        const response = await fetch("/api/news/translate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            headline: item?.headline || "",
+            summary: item?.summary || "",
+            source: item?.source || ""
+          })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            data.detail || "Hindi translation could not be completed."
+          );
+        }
+
+        saveCachedNewsTranslation(item, data);
+        showTranslation(data);
+      } catch (error) {
+        console.error(error);
+        translationStatus.textContent =
+          error.message ||
+          "Translation unavailable. Please try again later.";
+        translateButton.textContent = "हिंदी में पढ़ें";
+      } finally {
+        translateButton.disabled = false;
+      }
+    });
+
+    actions.append(translateButton, translationStatus);
+
+    card.append(
+      top,
+      headline,
+      meta,
+      summary,
+      relevance,
+      translationBox,
+      actions
+    );
 
     const url = String(item?.url || "").trim();
 
