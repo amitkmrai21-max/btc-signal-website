@@ -170,24 +170,223 @@ function setDataHealthBadge(health = {}) {
   badge.textContent = `Data: ${status}${status === "LIVE" ? "" : ageText}`; badge.className = `data-health-badge health-${status.toLowerCase()}`;
 }
 
+function getDynamicGeminiAlignment(technicalData) {
+  const lastAi = getLastAiSignal();
+  const technicalSignal = String(
+    technicalData?.signal || "NO TRADE"
+  ).toUpperCase();
+
+  if (!lastAi?.signal) {
+    return {
+      state: "WAIT",
+      reason: "No recent Gemini AI plan is available. Run Gemini AI Analysis for a fresh comparison.",
+      riskFlag: null
+    };
+  }
+
+  const aiSignal = String(lastAi.signal || "NO TRADE").toUpperCase();
+  const aiBuy = isBuyLike(aiSignal);
+  const aiSell = isSellLike(aiSignal);
+  const technicalBuy = isBuyLike(technicalSignal);
+  const technicalSell = isSellLike(technicalSignal);
+  const aiNoTrade = aiSignal.includes("NO TRADE") || aiSignal.includes("HOLD");
+  const technicalNoTrade =
+    technicalSignal.includes("NO TRADE") || technicalSignal.includes("HOLD");
+
+  if ((aiBuy && technicalBuy) || (aiSell && technicalSell)) {
+    return {
+      state: "PASS",
+      reason: `Gemini ${aiSignal} and live technical ${technicalSignal} are aligned.`,
+      riskFlag: null
+    };
+  }
+
+  if ((aiBuy && technicalSell) || (aiSell && technicalBuy)) {
+    return {
+      state: "FAIL",
+      reason: `Gemini ${aiSignal} conflicts with live technical ${technicalSignal}. Do not force an entry.`,
+      riskFlag: "Gemini AI conflicts with live technical direction"
+    };
+  }
+
+  if (aiNoTrade && technicalNoTrade) {
+    return {
+      state: "PASS",
+      reason: "Gemini AI and live technical analysis both indicate caution / no trade.",
+      riskFlag: null
+    };
+  }
+
+  if (technicalNoTrade) {
+    return {
+      state: "WAIT",
+      reason: `Gemini ${aiSignal} is not confirmed because live technical status is ${technicalSignal}.`,
+      riskFlag: null
+    };
+  }
+
+  if (aiNoTrade) {
+    return {
+      state: "WAIT",
+      reason: `Live technical shows ${technicalSignal}, but Gemini AI remains cautious (${aiSignal}).`,
+      riskFlag: null
+    };
+  }
+
+  return {
+    state: "WAIT",
+    reason: `Gemini ${aiSignal} and live technical ${technicalSignal} need further confirmation.`,
+    riskFlag: null
+  };
+}
+
+function calculateDynamicSetupDecision(setup, items, flags) {
+  const passed = items.filter((item) => item.state === "PASS").length;
+  const waiting = items.filter((item) => item.state === "WAIT").length;
+  const failed = items.filter((item) => item.state === "FAIL").length;
+  const direction = String(setup.direction || "NEUTRAL").toUpperCase();
+
+  const hasGeminiConflict = flags.includes(
+    "Gemini AI conflicts with live technical direction"
+  );
+
+  let grade = "C";
+  let executionState = "WAIT / LOW QUALITY";
+  let decisionReason =
+    "Checklist quality is incomplete. Wait for better alignment rather than forcing a trade.";
+
+  if (hasGeminiConflict || direction === "NEUTRAL" || failed >= 2) {
+    grade = "D";
+    executionState = "AVOID";
+    decisionReason = hasGeminiConflict
+      ? "Gemini AI and live technical direction conflict. Avoid forcing a practice entry."
+      : "Live conditions are mixed or have major checklist failures. Avoid forcing a practice entry.";
+  } else if (passed >= 7 && failed === 0) {
+    grade = "A";
+    executionState = "READY";
+    decisionReason =
+      "Most technical conditions and Gemini alignment are supportive. Still wait for the stated trigger and define invalidation.";
+  } else if (passed >= 5 && failed <= 1) {
+    grade = "B";
+    executionState = "WAIT FOR TRIGGER";
+    decisionReason =
+      "The setup is developing, but a trigger or further confirmation is still needed.";
+  }
+
+  return {
+    passed,
+    waiting,
+    failed,
+    total: items.length,
+    grade,
+    executionState,
+    decisionReason
+  };
+}
+
 function renderSetupQuality(data) {
-  const setup = data?.setup_quality || {}, score = setup?.score || {};
-  const state = String(setup.execution_state || "LOADING").toUpperCase();
-  const grade = String(setup.grade || "--").toUpperCase();
-  const passed = Number(score.passed), waiting = Number(score.waiting), failed = Number(score.failed), total = Number(score.total);
-  const flags = Array.isArray(setup.risk_flags) ? setup.risk_flags : [];
-  const items = Array.isArray(setup.items) ? setup.items : [];
-  setText("setupGrade", grade);
-  setText("setupScore", Number.isFinite(passed) && Number.isFinite(total) ? `${passed} / ${total} checks passed • ${waiting || 0} wait • ${failed || 0} fail` : "Checklist unavailable");
-  setText("setupDirection", setup.direction || "--"); setText("setupDecisionReason", setup.decision_reason || "Waiting for live checklist data...");
-  setText("setupRiskFlagCount", flags.length ? `${flags.length} flag${flags.length === 1 ? "" : "s"}` : "No major flags");
-  setText("setupRiskFlags", flags.length ? flags.join(" • ") : "No major technical risk flags detected by the current checklist.");
+  const setup = data?.setup_quality || {};
+  const originalItems = Array.isArray(setup.items) ? setup.items : [];
+  const items = originalItems.map((item) => ({ ...item }));
+  const flags = Array.isArray(setup.risk_flags) ? [...setup.risk_flags] : [];
+
+  const alignment = getDynamicGeminiAlignment(data);
+
+  const alignmentItem = {
+    key: "ai_alignment",
+    label: "Gemini AI vs live technical alignment",
+    state: alignment.state,
+    reason: alignment.reason
+  };
+
+  const alignmentIndex = items.findIndex(
+    (item) => item?.key === "ai_alignment"
+  );
+
+  if (alignmentIndex >= 0) {
+    items[alignmentIndex] = alignmentItem;
+  } else {
+    items.push(alignmentItem);
+  }
+
+  if (alignment.riskFlag && !flags.includes(alignment.riskFlag)) {
+    flags.push(alignment.riskFlag);
+  }
+
+  const dynamic = calculateDynamicSetupDecision(setup, items, flags);
+
+  setText("setupGrade", dynamic.grade);
+  setText(
+    "setupScore",
+    `${dynamic.passed} / ${dynamic.total} checks passed • ${dynamic.waiting} wait • ${dynamic.failed} fail`
+  );
+  setText("setupDirection", setup.direction || "--");
+  setText("setupDecisionReason", dynamic.decisionReason);
+
+  setText(
+    "setupRiskFlagCount",
+    flags.length
+      ? `${flags.length} flag${flags.length === 1 ? "" : "s"}`
+      : "No major flags"
+  );
+
+  setText(
+    "setupRiskFlags",
+    flags.length
+      ? flags.join(" • ")
+      : "No major technical risk flags detected by the current checklist."
+  );
+
   const badge = getElement("setupExecutionState");
-  if (badge) { const valid = ["READY", "WAIT FOR TRIGGER", "WAIT / LOW QUALITY", "AVOID"].includes(state) ? state : "LOADING"; badge.textContent = valid; badge.className = `setup-execution-badge setup-state-${valid.toLowerCase().replace(/[^a-z]+/g, "-")}`; }
-  const checklist = getElement("setupChecklist"); if (!checklist) return;
+
+  if (badge) {
+    badge.textContent = dynamic.executionState;
+    badge.className = `setup-execution-badge setup-state-${dynamic.executionState
+      .toLowerCase()
+      .replace(/[^a-z]+/g, "-")}`;
+  }
+
+  const checklist = getElement("setupChecklist");
+
+  if (!checklist) return;
+
   checklist.innerHTML = "";
-  if (!items.length) { const empty = document.createElement("p"); empty.className = "setup-checklist-loading"; empty.textContent = "Setup checklist data is not available yet."; checklist.appendChild(empty); return; }
-  items.forEach((item) => { const itemState = ["PASS", "WAIT", "FAIL"].includes(String(item?.state || "").toUpperCase()) ? String(item.state).toUpperCase() : "WAIT"; const row = document.createElement("article"); row.className = `setup-check-item setup-check-${itemState.toLowerCase()}`; const top = document.createElement("div"); top.className = "setup-check-top"; const label = document.createElement("h3"); label.textContent = item?.label || "Checklist item"; const stateBadge = document.createElement("span"); stateBadge.className = "setup-check-state"; stateBadge.textContent = itemState; const reason = document.createElement("p"); reason.textContent = item?.reason || "No detail available."; top.append(label, stateBadge); row.append(top, reason); checklist.appendChild(row); });
+
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "setup-checklist-loading";
+    empty.textContent = "Setup checklist data is not available yet.";
+    checklist.appendChild(empty);
+    return;
+  }
+
+  items.forEach((item) => {
+    const itemState = ["PASS", "WAIT", "FAIL"].includes(
+      String(item?.state || "").toUpperCase()
+    )
+      ? String(item.state).toUpperCase()
+      : "WAIT";
+
+    const row = document.createElement("article");
+    row.className = `setup-check-item setup-check-${itemState.toLowerCase()}`;
+
+    const top = document.createElement("div");
+    top.className = "setup-check-top";
+
+    const label = document.createElement("h3");
+    label.textContent = item?.label || "Checklist item";
+
+    const stateBadge = document.createElement("span");
+    stateBadge.className = "setup-check-state";
+    stateBadge.textContent = itemState;
+
+    const reason = document.createElement("p");
+    reason.textContent = item?.reason || "No detail available.";
+
+    top.append(label, stateBadge);
+    row.append(top, reason);
+    checklist.appendChild(row);
+  });
 }
 
 function renderTechnicalIntelligence(data) {
