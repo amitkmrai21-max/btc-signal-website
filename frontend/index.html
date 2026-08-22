@@ -521,6 +521,143 @@
       </section>
     </div>
 
+    <section class="card alerts-card">
+      <div class="section-heading">
+        <div>
+          <h2>Price &amp; Signal Alerts</h2>
+          <p>
+            Alerts run only while this dashboard is open. They use live BTC price
+            and technical refreshes; no Gemini request is made.
+          </p>
+        </div>
+
+        <span id="notificationPermissionBadge" class="notification-permission-badge">
+          Notifications: Checking...
+        </span>
+      </div>
+
+      <div class="alert-controls">
+        <button id="enableNotificationsBtn" class="enable-notifications-btn" type="button">
+          Enable Browser Alerts
+        </button>
+
+        <button id="testNotificationBtn" class="test-notification-btn" type="button">
+          Test Alert
+        </button>
+      </div>
+
+      <p id="notificationStatus" class="notification-status">
+        Browser notification status is being checked...
+      </p>
+
+      <div class="price-alert-grid">
+        <article class="price-alert-panel">
+          <h3>BTC Price Above</h3>
+          <p>Alert when live BTC/USD reaches or moves above your target.</p>
+
+          <label for="priceAboveInput">Target price (USD)</label>
+
+          <div class="price-alert-action-row">
+            <input
+              id="priceAboveInput"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="Example: 80000"
+            />
+
+            <button id="savePriceAboveBtn" class="save-price-alert-btn" type="button">
+              Save Above Alert
+            </button>
+          </div>
+
+          <p id="priceAboveStatus" class="price-alert-status">
+            No above-price alert is active.
+          </p>
+        </article>
+
+        <article class="price-alert-panel">
+          <h3>BTC Price Below</h3>
+          <p>Alert when live BTC/USD reaches or falls below your target.</p>
+
+          <label for="priceBelowInput">Target price (USD)</label>
+
+          <div class="price-alert-action-row">
+            <input
+              id="priceBelowInput"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="Example: 70000"
+            />
+
+            <button id="savePriceBelowBtn" class="save-price-alert-btn" type="button">
+              Save Below Alert
+            </button>
+          </div>
+
+          <p id="priceBelowStatus" class="price-alert-status">
+            No below-price alert is active.
+          </p>
+        </article>
+      </div>
+
+      <div class="signal-alert-settings">
+        <h3>Technical Change Alerts</h3>
+        <p>
+          Select what to watch. These alerts compare the latest live technical
+          response with the previous one while this browser tab is open.
+        </p>
+
+        <label class="alert-toggle-row" for="signalChangeAlertToggle">
+          <input id="signalChangeAlertToggle" type="checkbox" checked />
+          <span>
+            <strong>Signal changes</strong>
+            <small>Example: BUY WATCH changes to NO TRADE or SELL WATCH.</small>
+          </span>
+        </label>
+
+        <label class="alert-toggle-row" for="riskChangeAlertToggle">
+          <input id="riskChangeAlertToggle" type="checkbox" checked />
+          <span>
+            <strong>Risk changes</strong>
+            <small>Example: MEDIUM risk changes to HIGH risk.</small>
+          </span>
+        </label>
+
+        <label class="alert-toggle-row" for="setupGradeAlertToggle">
+          <input id="setupGradeAlertToggle" type="checkbox" checked />
+          <span>
+            <strong>Setup-grade changes</strong>
+            <small>Example: Setup grade B changes to C or D.</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="alert-summary-grid">
+        <article class="alert-summary-item">
+          <span>Current BTC price</span>
+          <strong id="alertCurrentBtcPrice">$--</strong>
+        </article>
+
+        <article class="alert-summary-item">
+          <span>Technical watch status</span>
+          <strong id="alertTechnicalWatchStatus">Waiting for technical data</strong>
+        </article>
+
+        <article class="alert-summary-item">
+          <span>Last alert</span>
+          <strong id="lastAlertStatus">No alert triggered yet</strong>
+        </article>
+      </div>
+
+      <p class="alerts-note">
+        Browser alerts are educational dashboard notifications only, not trade
+        instructions. They do not work after this website/tab is fully closed,
+        because this version does not use a background push-notification service.
+      </p>
+    </section>
+    
     <section class="card paper-trading-card">
       <div class="section-heading">
         <div>
