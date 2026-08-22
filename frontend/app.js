@@ -20,6 +20,8 @@ const PAPER_EPSILON = 0.00000001;
 const AI_PLAN_STORAGE_KEY = "btcAiSignalLatestPlanV1";
 const AI_NEWS_STORAGE_KEY = "btcAiSignalLatestNewsV1";
 const NEWS_TRANSLATION_STORAGE_KEY = "btcAiSignalNewsTranslationsV1";
+const ALERT_SETTINGS_STORAGE_KEY = "btcAiSignalAlertSettingsV1";
+const ALERT_RUNTIME_STORAGE_KEY = "btcAiSignalAlertRuntimeV1";
 const LAST_AI_SIGNAL_STORAGE_KEY = "btcAiSignalLastSignalV1";
 const AI_PLAN_VALIDITY_MS = 5 * 60 * 1000;
 const LAYOUT_STORAGE_KEY = "btcAiSignalCustomLayoutV1";
@@ -437,7 +439,504 @@ function addPaperTrade(p, type, amountInr, btcAmount) { p.history.unshift({ type
 function renderPaperHistory(history) { const box = getElement("paperTradeHistory"); if (!box) return; if (!history.length) { box.textContent = "No virtual trades yet."; return; } box.innerHTML = ""; history.forEach((trade) => { const item = document.createElement("div"); const date = new Date(trade.timestamp).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); item.className = `history-item ${trade.type.includes("SELL") || trade.type.includes("SHORT") ? "history-sell" : "history-buy"}`; item.textContent = `${trade.type} • ${formatInr(trade.amountInr)} • ${formatBtc(trade.btcAmount)} • ${date}`; box.appendChild(item); }); }
 function renderPaperTrading() { const p = loadPaperPortfolio(), mark = Number(currentBtcPriceInr) || 0, value = p.cashInr + p.btcHolding * mark - p.shortBtcHolding * mark, pnl = value - DEFAULT_PAPER_CASH, pct = (pnl / DEFAULT_PAPER_CASH) * 100; const longAvg = p.btcHolding > PAPER_EPSILON ? p.totalCostInr / p.btcHolding : 0, shortAvg = p.shortBtcHolding > PAPER_EPSILON ? p.shortProceedsInr / p.shortBtcHolding : 0; const position = p.btcHolding > PAPER_EPSILON ? "LONG BTC" : p.shortBtcHolding > PAPER_EPSILON ? "SHORT BTC" : "No open position"; setText("paperCash", formatInr(p.cashInr)); setText("paperBtcHolding", formatBtc(p.btcHolding)); setText("paperShortBtcHolding", formatBtc(p.shortBtcHolding)); setText("paperPositionType", position); setText("paperAvgPrice", p.btcHolding > PAPER_EPSILON ? formatInr(longAvg) : "No long position"); setText("paperShortAvgPrice", p.shortBtcHolding > PAPER_EPSILON ? formatInr(shortAvg) : "No short position"); setText("paperPortfolioValue", formatInr(value)); const pos = getElement("paperPositionType"), pnlElement = getElement("paperPnl"); if (pos) pos.style.color = position === "LONG BTC" ? "#22c55e" : position === "SHORT BTC" ? "#ef4444" : "#cbd5e1"; if (pnlElement) { const prefix = pnl >= 0 ? "+" : ""; pnlElement.textContent = `${prefix}${formatInr(pnl)} (${prefix}${pct.toFixed(2)}%)`; pnlElement.style.color = pnl >= 0 ? "#22c55e" : "#ef4444"; } renderPaperHistory(p.history); }
 
-function updatePrice(data) { const btc = data?.bitcoin, price = Number(btc?.usd), change = Number(btc?.usd_24h_change || 0); if (!Number.isFinite(price)) throw new Error("Live BTC price was not received."); currentBtcPriceUsd = price; currentBtcPriceInr = price * USD_INR_RATE; setText("btcPrice", formatUsd(price)); const changeBox = getElement("btcChange"); if (changeBox) { changeBox.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`; changeBox.style.color = change >= 0 ? "#22c55e" : "#ef4444"; } setText("marketUpdatedAt", `Live price updated: ${formatUpdatedAt(data.updated_at)}${data.cached ? " (cached)" : ""}`); renderPaperTrading(); }
+function getDefaultAlertSettings() {
+  return {
+    priceAbove: null,
+    priceBelow: null,
+    signalChangeEnabled: true,
+    riskChangeEnabled: true,
+    setupGradeChangeEnabled: true
+  };
+}
+
+function getAlertSettings() {
+  try {
+    const raw = localStorage.getItem(ALERT_SETTINGS_STORAGE_KEY);
+    const saved = raw ? JSON.parse(raw) : {};
+    const defaults = getDefaultAlertSettings();
+
+    return {
+      ...defaults,
+      ...saved,
+      priceAbove:
+        Number(saved?.priceAbove) > 0 ? Number(saved.priceAbove) : null,
+      priceBelow:
+        Number(saved?.priceBelow) > 0 ? Number(saved.priceBelow) : null,
+      signalChangeEnabled: saved?.signalChangeEnabled !== false,
+      riskChangeEnabled: saved?.riskChangeEnabled !== false,
+      setupGradeChangeEnabled: saved?.setupGradeChangeEnabled !== false
+    };
+  } catch (error) {
+    console.error(error);
+    return getDefaultAlertSettings();
+  }
+}
+
+function saveAlertSettings(settings) {
+  try {
+    localStorage.setItem(
+      ALERT_SETTINGS_STORAGE_KEY,
+      JSON.stringify(settings)
+    );
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function getDefaultAlertRuntime() {
+  return {
+    lastPrice: null,
+    aboveTriggeredFor: null,
+    belowTriggeredFor: null,
+    previousTechnicalSignal: null,
+    previousRisk: null,
+    previousSetupGrade: null,
+    lastAlertMessage: "",
+    lastAlertAt: null
+  };
+}
+
+function getAlertRuntime() {
+  try {
+    const raw = localStorage.getItem(ALERT_RUNTIME_STORAGE_KEY);
+    const saved = raw ? JSON.parse(raw) : {};
+    return { ...getDefaultAlertRuntime(), ...saved };
+  } catch (error) {
+    console.error(error);
+    return getDefaultAlertRuntime();
+  }
+}
+
+function saveAlertRuntime(runtime) {
+  try {
+    localStorage.setItem(
+      ALERT_RUNTIME_STORAGE_KEY,
+      JSON.stringify(runtime)
+    );
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function getNotificationPermission() {
+  if (!("Notification" in window)) return "unsupported";
+  return Notification.permission;
+}
+
+function updateNotificationUi(message = "") {
+  const badge = getElement("notificationPermissionBadge");
+  const status = getElement("notificationStatus");
+  const enableButton = getElement("enableNotificationsBtn");
+  const testButton = getElement("testNotificationBtn");
+  const permission = getNotificationPermission();
+
+  const labels = {
+    granted: "Notifications: Enabled",
+    denied: "Notifications: Blocked",
+    default: "Notifications: Permission needed",
+    unsupported: "Notifications: Unsupported"
+  };
+
+  if (badge) {
+    badge.textContent = labels[permission] || labels.default;
+    badge.className = `notification-permission-badge notification-${permission}`;
+  }
+
+  if (enableButton) {
+    enableButton.hidden = permission === "granted" || permission === "unsupported";
+    enableButton.disabled = permission === "denied";
+  }
+
+  if (testButton) {
+    testButton.disabled = permission !== "granted";
+  }
+
+  if (status) {
+    if (message) {
+      status.textContent = message;
+    } else if (permission === "granted") {
+      status.textContent =
+        "Browser alerts are enabled for this dashboard while it remains open.";
+    } else if (permission === "denied") {
+      status.textContent =
+        "Notifications are blocked in browser settings. Allow notifications for this site, then reload.";
+    } else if (permission === "unsupported") {
+      status.textContent =
+        "This browser does not support desktop/browser notifications.";
+    } else {
+      status.textContent =
+        "Enable browser alerts to receive price and technical-change notifications.";
+    }
+  }
+}
+
+function sendBrowserAlert(title, body, options = {}) {
+  const runtime = getAlertRuntime();
+  const message = `${title}: ${body}`;
+
+  runtime.lastAlertMessage = message;
+  runtime.lastAlertAt = Date.now();
+  saveAlertRuntime(runtime);
+
+  setText(
+    "lastAlertStatus",
+    `${message} • ${new Date(runtime.lastAlertAt).toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit"
+    })}`
+  );
+
+  if (getNotificationPermission() !== "granted") {
+    updateNotificationUi(
+      "Alert condition detected, but browser notifications are not enabled."
+    );
+    return false;
+  }
+
+  try {
+    const notification = new Notification(title, {
+      body,
+      icon: "/frontend/image-1.png",
+      tag: options.tag || "btc-ai-signal-alert",
+      renotify: true
+    });
+
+    notification.onclick = () => {
+      window.focus();
+      notification.close();
+    };
+
+    return true;
+  } catch (error) {
+    console.error(error);
+    updateNotificationUi("Browser could not display the notification.");
+    return false;
+  }
+}
+
+async function requestBrowserNotifications() {
+  if (!("Notification" in window)) {
+    updateNotificationUi(
+      "This browser does not support desktop/browser notifications."
+    );
+    return;
+  }
+
+  if (Notification.permission === "denied") {
+    updateNotificationUi(
+      "Notifications are blocked. Open browser site settings, allow notifications, then reload."
+    );
+    return;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+
+    updateNotificationUi(
+      permission === "granted"
+        ? "Browser alerts enabled. Use Test Alert to verify."
+        : "Permission was not granted. Alerts will remain on-screen only."
+    );
+  } catch (error) {
+    console.error(error);
+    updateNotificationUi("Could not request notification permission.");
+  }
+}
+
+function formatAlertTarget(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? formatUsd(number) : "Not set";
+}
+
+function renderAlertSettings() {
+  const settings = getAlertSettings();
+  const runtime = getAlertRuntime();
+
+  const aboveInput = getElement("priceAboveInput");
+  const belowInput = getElement("priceBelowInput");
+  const signalToggle = getElement("signalChangeAlertToggle");
+  const riskToggle = getElement("riskChangeAlertToggle");
+  const setupToggle = getElement("setupGradeAlertToggle");
+
+  if (aboveInput) aboveInput.value = settings.priceAbove || "";
+  if (belowInput) belowInput.value = settings.priceBelow || "";
+  if (signalToggle) signalToggle.checked = settings.signalChangeEnabled;
+  if (riskToggle) riskToggle.checked = settings.riskChangeEnabled;
+  if (setupToggle) setupToggle.checked = settings.setupGradeChangeEnabled;
+
+  setText(
+    "priceAboveStatus",
+    settings.priceAbove
+      ? `Active: alert at or above ${formatAlertTarget(settings.priceAbove)}.`
+      : "No above-price alert is active."
+  );
+
+  setText(
+    "priceBelowStatus",
+    settings.priceBelow
+      ? `Active: alert at or below ${formatAlertTarget(settings.priceBelow)}.`
+      : "No below-price alert is active."
+  );
+
+  setText(
+    "lastAlertStatus",
+    runtime.lastAlertMessage
+      ? `${runtime.lastAlertMessage} • ${new Date(
+          runtime.lastAlertAt
+        ).toLocaleString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit"
+        })}`
+      : "No alert triggered yet"
+  );
+
+  updateNotificationUi();
+}
+
+function savePriceAlert(type) {
+  const inputId = type === "above" ? "priceAboveInput" : "priceBelowInput";
+  const input = getElement(inputId);
+  const value = Number(input?.value);
+  const settings = getAlertSettings();
+  const runtime = getAlertRuntime();
+
+  if (!Number.isFinite(value) || value <= 0) {
+    settings[type === "above" ? "priceAbove" : "priceBelow"] = null;
+
+    if (type === "above") runtime.aboveTriggeredFor = null;
+    else runtime.belowTriggeredFor = null;
+
+    saveAlertSettings(settings);
+    saveAlertRuntime(runtime);
+    renderAlertSettings();
+
+    setText(
+      type === "above" ? "priceAboveStatus" : "priceBelowStatus",
+      `Alert cleared. Enter a valid target to save a new ${
+        type === "above" ? "above-price" : "below-price"
+      } alert.`
+    );
+    return;
+  }
+
+  const key = type === "above" ? "priceAbove" : "priceBelow";
+  settings[key] = value;
+
+  if (type === "above") runtime.aboveTriggeredFor = null;
+  else runtime.belowTriggeredFor = null;
+
+  saveAlertSettings(settings);
+  saveAlertRuntime(runtime);
+  renderAlertSettings();
+
+  setText(
+    type === "above" ? "priceAboveStatus" : "priceBelowStatus",
+    `Saved: alert at or ${type === "above" ? "above" : "below"} ${formatUsd(
+      value
+    )}.`
+  );
+}
+
+function updateAlertToggle(settingKey, checked) {
+  const settings = getAlertSettings();
+  settings[settingKey] = Boolean(checked);
+  saveAlertSettings(settings);
+  renderAlertSettings();
+}
+
+function checkPriceAlerts(price) {
+  const currentPrice = Number(price);
+
+  if (!Number.isFinite(currentPrice) || currentPrice <= 0) return;
+
+  const settings = getAlertSettings();
+  const runtime = getAlertRuntime();
+  const previousPrice = Number(runtime.lastPrice);
+
+  setText("alertCurrentBtcPrice", formatUsd(currentPrice));
+
+  if (
+    settings.priceAbove &&
+    currentPrice >= settings.priceAbove &&
+    runtime.aboveTriggeredFor !== settings.priceAbove &&
+    (!Number.isFinite(previousPrice) || previousPrice < settings.priceAbove)
+  ) {
+    runtime.aboveTriggeredFor = settings.priceAbove;
+    runtime.lastPrice = currentPrice;
+    saveAlertRuntime(runtime);
+
+    sendBrowserAlert(
+      "BTC Price Alert",
+      `BTC reached ${formatUsd(currentPrice)}, at or above your target of ${formatUsd(
+        settings.priceAbove
+      )}.`,
+      { tag: `btc-above-${settings.priceAbove}` }
+    );
+  }
+
+  if (
+    settings.priceBelow &&
+    currentPrice <= settings.priceBelow &&
+    runtime.belowTriggeredFor !== settings.priceBelow &&
+    (!Number.isFinite(previousPrice) || previousPrice > settings.priceBelow)
+  ) {
+    runtime.belowTriggeredFor = settings.priceBelow;
+    runtime.lastPrice = currentPrice;
+    saveAlertRuntime(runtime);
+
+    sendBrowserAlert(
+      "BTC Price Alert",
+      `BTC reached ${formatUsd(currentPrice)}, at or below your target of ${formatUsd(
+        settings.priceBelow
+      )}.`,
+      { tag: `btc-below-${settings.priceBelow}` }
+    );
+  }
+
+  if (
+    settings.priceAbove &&
+    currentPrice < settings.priceAbove &&
+    runtime.aboveTriggeredFor === settings.priceAbove
+  ) {
+    runtime.aboveTriggeredFor = null;
+  }
+
+  if (
+    settings.priceBelow &&
+    currentPrice > settings.priceBelow &&
+    runtime.belowTriggeredFor === settings.priceBelow
+  ) {
+    runtime.belowTriggeredFor = null;
+  }
+
+  runtime.lastPrice = currentPrice;
+  saveAlertRuntime(runtime);
+}
+
+function getSetupGradeForAlerts() {
+  const grade = String(
+    getElement("setupGrade")?.textContent || ""
+  ).toUpperCase();
+
+  return ["A", "B", "C", "D"].includes(grade) ? grade : null;
+}
+
+function checkTechnicalAlerts(data) {
+  if (!data) return;
+
+  const settings = getAlertSettings();
+  const runtime = getAlertRuntime();
+  const signal = String(data?.signal || "").toUpperCase() || null;
+  const risk = String(data?.risk || "").toUpperCase() || null;
+  const grade = getSetupGradeForAlerts();
+
+  setText(
+    "alertTechnicalWatchStatus",
+    `${signal || "Unknown"} • Risk ${risk || "--"} • Grade ${grade || "--"}`
+  );
+
+  if (
+    settings.signalChangeEnabled &&
+    runtime.previousTechnicalSignal &&
+    signal &&
+    runtime.previousTechnicalSignal !== signal
+  ) {
+    sendBrowserAlert(
+      "BTC Technical Signal Changed",
+      `${runtime.previousTechnicalSignal} changed to ${signal}. Review live technical conditions before taking any action.`,
+      { tag: "btc-signal-change" }
+    );
+  }
+
+  if (
+    settings.riskChangeEnabled &&
+    runtime.previousRisk &&
+    risk &&
+    runtime.previousRisk !== risk
+  ) {
+    sendBrowserAlert(
+      "BTC Risk Level Changed",
+      `Risk changed from ${runtime.previousRisk} to ${risk}.`,
+      { tag: "btc-risk-change" }
+    );
+  }
+
+  if (
+    settings.setupGradeChangeEnabled &&
+    runtime.previousSetupGrade &&
+    grade &&
+    runtime.previousSetupGrade !== grade
+  ) {
+    sendBrowserAlert(
+      "BTC Setup Grade Changed",
+      `Setup grade changed from ${runtime.previousSetupGrade} to ${grade}.`,
+      { tag: "btc-grade-change" }
+    );
+  }
+
+  runtime.previousTechnicalSignal = signal;
+  runtime.previousRisk = risk;
+  runtime.previousSetupGrade = grade;
+  saveAlertRuntime(runtime);
+}
+
+function setupAlerts() {
+  const enableButton = getElement("enableNotificationsBtn");
+  const testButton = getElement("testNotificationBtn");
+  const saveAboveButton = getElement("savePriceAboveBtn");
+  const saveBelowButton = getElement("savePriceBelowBtn");
+  const signalToggle = getElement("signalChangeAlertToggle");
+  const riskToggle = getElement("riskChangeAlertToggle");
+  const setupToggle = getElement("setupGradeAlertToggle");
+
+  if (enableButton) {
+    enableButton.addEventListener("click", requestBrowserNotifications);
+  }
+
+  if (testButton) {
+    testButton.addEventListener("click", () => {
+      sendBrowserAlert(
+        "BTC AI Signal Test Alert",
+        "Browser alerts are working. This is a test notification.",
+        { tag: "btc-ai-signal-test" }
+      );
+    });
+  }
+
+  if (saveAboveButton) {
+    saveAboveButton.addEventListener("click", () => savePriceAlert("above"));
+  }
+
+  if (saveBelowButton) {
+    saveBelowButton.addEventListener("click", () => savePriceAlert("below"));
+  }
+
+  if (signalToggle) {
+    signalToggle.addEventListener("change", () =>
+      updateAlertToggle("signalChangeEnabled", signalToggle.checked)
+    );
+  }
+
+  if (riskToggle) {
+    riskToggle.addEventListener("change", () =>
+      updateAlertToggle("riskChangeEnabled", riskToggle.checked)
+    );
+  }
+
+  if (setupToggle) {
+    setupToggle.addEventListener("change", () =>
+      updateAlertToggle("setupGradeChangeEnabled", setupToggle.checked)
+    );
+  }
+
+  renderAlertSettings();
+}
+function updatePrice(data) { const btc = data?.bitcoin, price = Number(btc?.usd), change = Number(btc?.usd_24h_change || 0); if (!Number.isFinite(price)) throw new Error("Live BTC price was not received."); currentBtcPriceUsd = price; currentBtcPriceInr = price * USD_INR_RATE; setText("btcPrice", formatUsd(price)); const changeBox = getElement("btcChange"); if (changeBox) { changeBox.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`; changeBox.style.color = change >= 0 ? "#22c55e" : "#ef4444"; } setText("marketUpdatedAt", `Live price updated: ${formatUpdatedAt(data.updated_at)}${data.cached ? " (cached)" : ""}`);  renderPaperTrading(); checkPriceAlerts(price); }
+  
 
 function getNewsImpactClass(impact) {
   const normalized = String(impact || "NEUTRAL").toUpperCase();
@@ -831,5 +1330,5 @@ function setupTechnicalRetryButton(){const button=getElement("retryTechnicalBtn"
 function setupLayoutEditor(){const container=getElement("customizableSections"),edit=getElement("editLayoutBtn"),save=getElement("saveLayoutBtn"),reset=getElement("resetLayoutBtn");if(!container||!edit||!save||!reset)return;let editMode=false,dragged=null;const cards=()=>[...container.querySelectorAll(":scope > .layout-editable")];const height=(card,h)=>{card.classList.remove("layout-height-compact","layout-height-normal","layout-height-tall");card.classList.add(`layout-height-${h}`);};const toolbar=(card)=>{if(card.querySelector(".layout-editor-toolbar"))return;const bar=document.createElement("div");bar.className="layout-editor-toolbar";bar.innerHTML='<button class="layout-editor-btn layout-drag-handle" type="button">Move</button><button class="layout-editor-btn" type="button" data-height="compact">Compact</button><button class="layout-editor-btn" type="button" data-height="normal">Normal</button><button class="layout-editor-btn" type="button" data-height="tall">Tall</button>';card.prepend(bar);bar.querySelectorAll("[data-height]").forEach((b)=>b.addEventListener("click",(e)=>{e.preventDefault();e.stopPropagation();height(card,b.dataset.height);}));};const drag=(card)=>{if(card.dataset.layoutDragReady)return;card.dataset.layoutDragReady="true";card.addEventListener("dragstart",(e)=>{if(!editMode){e.preventDefault();return;}dragged=card;card.classList.add("is-dragging");e.dataTransfer.effectAllowed="move";});card.addEventListener("dragend",()=>{card.classList.remove("is-dragging");cards().forEach((c)=>c.classList.remove("drag-over"));dragged=null;});card.addEventListener("dragover",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();card.classList.add("drag-over");});card.addEventListener("dragleave",()=>card.classList.remove("drag-over"));card.addEventListener("drop",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();const box=card.getBoundingClientRect();container.insertBefore(dragged,e.clientY>box.top+box.height/2?card.nextSibling:card);card.classList.remove("drag-over");});};const mode=(on)=>{editMode=on;container.classList.toggle("layout-edit-mode",on);cards().forEach((card)=>{toolbar(card);drag(card);card.draggable=on;if(!on)card.classList.remove("is-dragging","drag-over");});edit.hidden=on;save.hidden=!on;reset.hidden=!on;};const restore=()=>{try{const stored=JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY)||"[]");if(!Array.isArray(stored))return;stored.forEach((item)=>{const card=container.querySelector(`:scope > .layout-editable[data-layout-id="${item.id}"]`);if(card){container.appendChild(card);height(card,["compact","normal","tall"].includes(item.height)?item.height:"normal");}});}catch(error){console.warn("Saved dashboard layout could not be restored.",error);}};edit.addEventListener("click",()=>mode(true));save.addEventListener("click",()=>{localStorage.setItem(LAYOUT_STORAGE_KEY,JSON.stringify(cards().map((card)=>({id:card.dataset.layoutId,height:["compact","normal","tall"].find((h)=>card.classList.contains(`layout-height-${h}`))||"normal"}))));mode(false);});reset.addEventListener("click",()=>{localStorage.removeItem(LAYOUT_STORAGE_KEY);window.location.reload();});restore();}
 
 renderGeminiNews();
-const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addEventListener("click",refreshAllData);setupGeminiAiButton();setupTechnicalRetryButton();setText("signal-date",formatDateForSignal());setupPaperTrading();setupTimeframeButtons();setupZoomButtons();setupRrgButtons();setupChartAnalyser();setupLayoutEditor();if(!renderSavedAiPlanIfActive()){setSignalSource("Gemini AI ready — run manual analysis when needed","neutral");setSignal("NO TRADE","Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan.");}refreshAllData();setInterval(loadPrice,30000);setInterval(loadChart,60000);setInterval(()=>refreshTechnicalAnalysis("Automatic technical refresh."),60000);setInterval(loadRrg,300000);setInterval(()=>{if(isAiPlanActive())setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`,"ai");},1000);
+const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addEventListener("click",refreshAllData);setupGeminiAiButton();setupTechnicalRetryButton();setupAlerts();setText("signal-date",formatDateForSignal());setupPaperTrading();setupTimeframeButtons();setupZoomButtons();setupRrgButtons();setupChartAnalyser();setupLayoutEditor();if(!renderSavedAiPlanIfActive()){setSignalSource("Gemini AI ready — run manual analysis when needed","neutral");setSignal("NO TRADE","Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan.");}refreshAllData();setInterval(loadPrice,30000);setInterval(loadChart,60000);setInterval(()=>refreshTechnicalAnalysis("Automatic technical refresh."),60000);setInterval(loadRrg,300000);setInterval(()=>{if(isAiPlanActive())setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`,"ai");},1000);
 
