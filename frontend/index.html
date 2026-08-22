@@ -341,26 +341,11 @@
         </div>
 
         <div class="technical-score-grid">
-          <article class="score-row">
-            <span>Trend</span>
-            <strong id="scoreTrend">--</strong>
-          </article>
-          <article class="score-row">
-            <span>MACD</span>
-            <strong id="scoreMacd">--</strong>
-          </article>
-          <article class="score-row">
-            <span>Momentum / RSI</span>
-            <strong id="scoreMomentum">--</strong>
-          </article>
-          <article class="score-row">
-            <span>Breakout</span>
-            <strong id="scoreBreakout">--</strong>
-          </article>
-          <article class="score-row">
-            <span>Volume</span>
-            <strong id="scoreVolume">--</strong>
-          </article>
+          <article class="score-row"><span>Trend</span><strong id="scoreTrend">--</strong></article>
+          <article class="score-row"><span>MACD</span><strong id="scoreMacd">--</strong></article>
+          <article class="score-row"><span>Momentum / RSI</span><strong id="scoreMomentum">--</strong></article>
+          <article class="score-row"><span>Breakout</span><strong id="scoreBreakout">--</strong></article>
+          <article class="score-row"><span>Volume</span><strong id="scoreVolume">--</strong></article>
         </div>
 
         <div class="key-distance-heading">
@@ -370,10 +355,7 @@
 
         <div class="key-distance-grid">
           <article class="key-distance-card">
-            <div class="key-distance-title-row">
-              <h3>15 Min</h3>
-              <strong id="level15mPrice">$--</strong>
-            </div>
+            <div class="key-distance-title-row"><h3>15 Min</h3><strong id="level15mPrice">$--</strong></div>
             <p><span>Support</span><strong id="level15mSupport">$--</strong></p>
             <p><span>Distance</span><strong id="level15mSupportDistance">--</strong></p>
             <p><span>Resistance</span><strong id="level15mResistance">$--</strong></p>
@@ -381,10 +363,7 @@
           </article>
 
           <article class="key-distance-card">
-            <div class="key-distance-title-row">
-              <h3>1 Hour</h3>
-              <strong id="level1hPrice">$--</strong>
-            </div>
+            <div class="key-distance-title-row"><h3>1 Hour</h3><strong id="level1hPrice">$--</strong></div>
             <p><span>Support</span><strong id="level1hSupport">$--</strong></p>
             <p><span>Distance</span><strong id="level1hSupportDistance">--</strong></p>
             <p><span>Resistance</span><strong id="level1hResistance">$--</strong></p>
@@ -392,16 +371,53 @@
           </article>
 
           <article class="key-distance-card">
-            <div class="key-distance-title-row">
-              <h3>4 Hour</h3>
-              <strong id="level4hPrice">$--</strong>
-            </div>
+            <div class="key-distance-title-row"><h3>4 Hour</h3><strong id="level4hPrice">$--</strong></div>
             <p><span>Support</span><strong id="level4hSupport">$--</strong></p>
             <p><span>Distance</span><strong id="level4hSupportDistance">--</strong></p>
             <p><span>Resistance</span><strong id="level4hResistance">$--</strong></p>
             <p><span>Distance</span><strong id="level4hResistanceDistance">--</strong></p>
           </article>
         </div>
+      </section>
+
+            <section class="card setup-quality-card layout-editable" data-layout-id="setup-quality">
+        <div class="section-heading">
+          <div>
+            <h2>Setup Quality &amp; Trade Checklist</h2>
+            <p>Educational checklist based on current live technical conditions. It does not place trades or guarantee outcomes.</p>
+          </div>
+
+          <span id="setupExecutionState" class="setup-execution-badge setup-state-loading">Loading...</span>
+        </div>
+
+        <div class="setup-quality-overview">
+          <article class="setup-grade-panel">
+            <span class="technical-label">Setup Grade</span>
+            <strong id="setupGrade">--</strong>
+            <p id="setupScore">-- / 9 checks passed</p>
+          </article>
+
+          <article class="setup-decision-panel">
+            <span class="technical-label">Checklist Decision</span>
+            <strong id="setupDirection">--</strong>
+            <p id="setupDecisionReason">Waiting for live technical checklist data...</p>
+          </article>
+
+          <article class="setup-flags-panel">
+            <span class="technical-label">Risk Flags</span>
+            <strong id="setupRiskFlagCount">--</strong>
+            <p id="setupRiskFlags">Waiting for checklist data...</p>
+          </article>
+        </div>
+
+        <div id="setupChecklist" class="setup-checklist" aria-live="polite">
+          <p class="setup-checklist-loading">Loading live setup checklist...</p>
+        </div>
+
+        <p class="setup-quality-note">
+          READY still means wait for the stated trigger and use only the virtual
+          paper-trading simulator. This dashboard is educational, not financial advice.
+        </p>
       </section>
 
       <section class="card signal-comparison-card layout-editable" data-layout-id="signal-confirmation">
@@ -535,10 +551,13 @@
         </div>
 
         <p class="paper-short-help">
-          Buy opens/adds a long position or covers an existing short. Sell closes a long position or opens a 1x virtual short. Educational simulation only.
+          Buy opens/adds a long position or covers an existing short. Sell closes a long position
+          or opens a 1x virtual short. Educational simulation only.
         </p>
 
-        <p id="paperTradeStatus" class="paper-status">Load live price, then enter a virtual INR amount.</p>
+        <p id="paperTradeStatus" class="paper-status">
+          Load live price, then enter a virtual INR amount.
+        </p>
       </div>
 
       <div class="paper-history-wrap">
