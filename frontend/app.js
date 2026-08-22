@@ -18,6 +18,7 @@ const DEFAULT_PAPER_CASH = 100000;
 const PAPER_MIN_TRADE_INR = 100;
 const PAPER_EPSILON = 0.00000001;
 const AI_PLAN_STORAGE_KEY = "btcAiSignalLatestPlanV1";
+const AI_NEWS_STORAGE_KEY = "btcAiSignalLatestNewsV1";
 const LAST_AI_SIGNAL_STORAGE_KEY = "btcAiSignalLastSignalV1";
 const AI_PLAN_VALIDITY_MS = 5 * 60 * 1000;
 const LAYOUT_STORAGE_KEY = "btcAiSignalCustomLayoutV1";
@@ -437,11 +438,204 @@ function renderPaperTrading() { const p = loadPaperPortfolio(), mark = Number(cu
 
 function updatePrice(data) { const btc = data?.bitcoin, price = Number(btc?.usd), change = Number(btc?.usd_24h_change || 0); if (!Number.isFinite(price)) throw new Error("Live BTC price was not received."); currentBtcPriceUsd = price; currentBtcPriceInr = price * USD_INR_RATE; setText("btcPrice", formatUsd(price)); const changeBox = getElement("btcChange"); if (changeBox) { changeBox.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`; changeBox.style.color = change >= 0 ? "#22c55e" : "#ef4444"; } setText("marketUpdatedAt", `Live price updated: ${formatUpdatedAt(data.updated_at)}${data.cached ? " (cached)" : ""}`); renderPaperTrading(); }
 
+function getNewsImpactClass(impact) {
+  const normalized = String(impact || "NEUTRAL").toUpperCase();
+
+  if (normalized === "BULLISH") return "news-impact-bullish";
+  if (normalized === "BEARISH") return "news-impact-bearish";
+
+  return "news-impact-neutral";
+}
+
+function saveAiNews(aiData) {
+  const snapshot = {
+    news: Array.isArray(aiData?.news) ? aiData.news : [],
+    overview: aiData?.news_overview || "",
+    marketBias: aiData?.news_market_bias || "NEUTRAL",
+    updatedAt: aiData?.news_updated_at
+      ? Number(aiData.news_updated_at) * 1000
+      : Date.now()
+  };
+
+  try {
+    localStorage.setItem(AI_NEWS_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function getSavedAiNews() {
+  try {
+    const raw = localStorage.getItem(AI_NEWS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function renderGeminiNews(aiData = null) {
+  const newsData = aiData
+    ? {
+        news: Array.isArray(aiData.news) ? aiData.news : [],
+        overview: aiData.news_overview || "",
+        marketBias: aiData.news_market_bias || "NEUTRAL",
+        updatedAt: aiData.news_updated_at
+          ? Number(aiData.news_updated_at) * 1000
+          : Date.now()
+      }
+    : getSavedAiNews();
+
+  const container = getElement("geminiNewsList");
+  const overview = getElement("geminiNewsOverview");
+  const bias = getElement("geminiNewsBias");
+  const updated = getElement("geminiNewsUpdated");
+
+  if (!container || !overview || !bias || !updated) return;
+
+  const items = Array.isArray(newsData?.news) ? newsData.news : [];
+  const marketBias = String(newsData?.marketBias || "NEUTRAL").toUpperCase();
+  const updatedAt = Number(newsData?.updatedAt);
+
+  overview.textContent =
+    newsData?.overview ||
+    "News will update only when you run Gemini AI Analysis.";
+
+  bias.textContent = `News bias: ${marketBias}`;
+  bias.className = `news-bias-badge ${getNewsImpactClass(marketBias)}`;
+
+  updated.textContent = Number.isFinite(updatedAt)
+    ? `Last news update: ${new Date(updatedAt).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit"
+      })} • Updated only with manual Gemini analysis`
+    : "News updates only when you run Gemini AI Analysis.";
+
+  container.innerHTML = "";
+
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "gemini-news-empty";
+    empty.textContent =
+      "No saved Gemini news context yet. Run Gemini AI Analysis to fetch current BTC/crypto news.";
+    container.appendChild(empty);
+    return;
+  }
+
+  items.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "gemini-news-item";
+
+    const top = document.createElement("div");
+    top.className = "gemini-news-item-top";
+
+    const source = document.createElement("span");
+    source.className = "gemini-news-source";
+    source.textContent = item?.source || "Source unavailable";
+
+    const impact = document.createElement("span");
+    const impactValue = String(item?.market_impact || "NEUTRAL").toUpperCase();
+    impact.className = `news-impact-badge ${getNewsImpactClass(impactValue)}`;
+    impact.textContent = impactValue;
+
+    top.append(source, impact);
+
+    const headline = document.createElement("h3");
+    headline.textContent = item?.headline || "Crypto market update";
+
+    const meta = document.createElement("p");
+    meta.className = "gemini-news-meta";
+    meta.textContent = item?.published_time || "Time unavailable";
+
+    const summary = document.createElement("p");
+    summary.className = "gemini-news-summary";
+    summary.textContent = item?.summary || "No summary available.";
+
+    const relevance = document.createElement("p");
+    relevance.className = "gemini-news-relevance";
+    relevance.textContent = `Market context: ${
+      item?.market_relevance || "Interpretation unavailable."
+    }`;
+
+    card.append(top, headline, meta, summary, relevance);
+
+    const url = String(item?.url || "").trim();
+
+    if (/^https?:\/\//i.test(url)) {
+      const link = document.createElement("a");
+      link.className = "gemini-news-link";
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Read original article ↗";
+      card.appendChild(link);
+    }
+
+    container.appendChild(card);
+  });
+}
+
 function updateAiAnalysis(data, fromSavedPlan = false) { const m15 = data?.market_data?.timeframes?.["15m"] || {}, m1h = data?.market_data?.timeframes?.["1h"] || {}; latestTechnicalMarket = { "15m": m15, "1h": m1h }; setSignal(data.signal, data.reason); setText("aiConfidence", `${Number(data.confidence || 0)}%`); setText("entryIdea", data.entry_idea); setText("stopLossIdea", data.stop_loss_idea); setText("disclaimerText", data.disclaimer); setRiskBadge(data.risk); ["15m", "1h", "4h"].forEach((frame) => { const item = data?.timeframes?.[frame] || {}, key = frame === "15m" ? "15m" : frame; setMiniSignal(`signal${key}`, item.signal); setText(`summary${key}`, item.summary); setText(`keyLevel${key}`, item.key_level); }); setText("marketBias", data.market_bias); setText("setupStatus", data.setup_status); setText("confirmationNeeded", data.confirmation_needed); setText("target1", data.target_1); setText("target2", data.target_2); updateIndicators(m15, m1h); setSignalSource(fromSavedPlan ? `AI plan active • expires in ${getAiPlanRemainingLabel()}` : `Fresh Gemini AI plan • expires in ${getAiPlanRemainingLabel()}`, "ai"); setText("analysisUpdatedAt", `Last AI analysis: ${formatUpdatedAt(data.updated_at)}${data.cached ? " (API cached)" : ""} • plan valid ${getAiPlanRemainingLabel()}`); if (latestTechnicalResponse) renderSetupQuality(latestTechnicalResponse); }
 
 async function loadPrice(force = false) { const response = await fetch(force ? "/api/btc/price?force_refresh=true" : "/api/btc/price", { cache: "no-store" }); if (!response.ok) throw new Error("Price API could not be loaded."); updatePrice(await response.json()); }
 async function loadChart() { const selected = timeframeSettings[activeTimeframe], response = await fetch(`/api/btc/chart?days=${selected.days}&interval=${selected.interval}`, { cache: "no-store" }); if (!response.ok) throw new Error("Chart API could not be loaded."); const chart = await response.json(), prices = Array.isArray(chart.prices) ? chart.prices : []; if (!prices.length) throw new Error("No chart data was received."); const step = Math.max(1, Math.ceil(prices.length / selected.maxPoints)), points = prices.filter((_, index) => index % step === 0 || index === prices.length - 1); renderChart(points.map((p) => new Date(p[0]).toLocaleString("en-IN", selected.dateOptions)), points.map((p) => p[1]), selected.label); }
-async function loadAiAnalysis() { if (aiRefreshInProgress) return; aiRefreshInProgress = true; setText("analysisUpdatedAt", "Updating Gemini AI analysis..."); try { const response = await fetch("/api/ai-signal", { cache: "no-store" }), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.detail || data.message || `AI signal request failed (${response.status}).`); saveLastAiSignal(data); saveAiPlan(data); updateAiAnalysis(data); } catch (error) { console.error(error); if (renderSavedAiPlanIfActive()) { setSignalSource(`Gemini refresh failed — last AI plan active for ${getAiPlanRemainingLabel()}`, "ai"); setText("analysisUpdatedAt", "Gemini refresh failed; using last successful AI plan."); return; } loadTechnicalFallback("Gemini AI is temporarily unavailable."); } finally { aiRefreshInProgress = false; } }
+async function loadAiAnalysis() {
+  if (aiRefreshInProgress) return;
+
+  aiRefreshInProgress = true;
+  setText(
+    "analysisUpdatedAt",
+    "Running Gemini AI analysis and checking fresh news..."
+  );
+
+  try {
+    const response = await fetch("/api/ai-signal/run", {
+      method: "POST",
+      cache: "no-store"
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail ||
+          data.message ||
+          `AI signal request failed (${response.status}).`
+      );
+    }
+
+    saveLastAiSignal(data);
+    saveAiPlan(data);
+    saveAiNews(data);
+
+    updateAiAnalysis(data);
+    renderGeminiNews(data);
+  } catch (error) {
+    console.error(error);
+
+    const savedNews = getSavedAiNews();
+
+    if (renderSavedAiPlanIfActive()) {
+      renderGeminiNews(savedNews ? null : null);
+      setSignalSource(
+        `Gemini refresh failed — last AI plan active for ${getAiPlanRemainingLabel()}`,
+        "ai"
+      );
+      setText(
+        "analysisUpdatedAt",
+        "Gemini refresh failed; using last successful AI plan and saved news."
+      );
+      return;
+    }
+
+    renderGeminiNews(savedNews ? null : null);
+    loadTechnicalFallback("Gemini AI is temporarily unavailable.");
+  } finally {
+    aiRefreshInProgress = false;
+  }
+}
 async function refreshFastData() { try { await Promise.all([loadPrice(true), loadChart()]); } catch (error) { console.error(error); setText("marketUpdatedAt", "Live price/chart could not be updated. Please try again."); } }
 async function refreshTechnicalAnalysis(prefix = "Live technical analysis refreshed.") { return loadTechnicalFallback(prefix, true); }
 async function refreshAllData() { if (technicalRefreshInProgress) return; try { await Promise.all([refreshFastData(), refreshTechnicalAnalysis("Live technical analysis refreshed.")]); } catch (error) { console.error("Technical refresh error:", error); } loadRrg().catch((error) => console.error("RRG refresh error:", error)); }
@@ -469,5 +663,6 @@ function setupTechnicalRetryButton(){const button=getElement("retryTechnicalBtn"
 
 function setupLayoutEditor(){const container=getElement("customizableSections"),edit=getElement("editLayoutBtn"),save=getElement("saveLayoutBtn"),reset=getElement("resetLayoutBtn");if(!container||!edit||!save||!reset)return;let editMode=false,dragged=null;const cards=()=>[...container.querySelectorAll(":scope > .layout-editable")];const height=(card,h)=>{card.classList.remove("layout-height-compact","layout-height-normal","layout-height-tall");card.classList.add(`layout-height-${h}`);};const toolbar=(card)=>{if(card.querySelector(".layout-editor-toolbar"))return;const bar=document.createElement("div");bar.className="layout-editor-toolbar";bar.innerHTML='<button class="layout-editor-btn layout-drag-handle" type="button">Move</button><button class="layout-editor-btn" type="button" data-height="compact">Compact</button><button class="layout-editor-btn" type="button" data-height="normal">Normal</button><button class="layout-editor-btn" type="button" data-height="tall">Tall</button>';card.prepend(bar);bar.querySelectorAll("[data-height]").forEach((b)=>b.addEventListener("click",(e)=>{e.preventDefault();e.stopPropagation();height(card,b.dataset.height);}));};const drag=(card)=>{if(card.dataset.layoutDragReady)return;card.dataset.layoutDragReady="true";card.addEventListener("dragstart",(e)=>{if(!editMode){e.preventDefault();return;}dragged=card;card.classList.add("is-dragging");e.dataTransfer.effectAllowed="move";});card.addEventListener("dragend",()=>{card.classList.remove("is-dragging");cards().forEach((c)=>c.classList.remove("drag-over"));dragged=null;});card.addEventListener("dragover",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();card.classList.add("drag-over");});card.addEventListener("dragleave",()=>card.classList.remove("drag-over"));card.addEventListener("drop",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();const box=card.getBoundingClientRect();container.insertBefore(dragged,e.clientY>box.top+box.height/2?card.nextSibling:card);card.classList.remove("drag-over");});};const mode=(on)=>{editMode=on;container.classList.toggle("layout-edit-mode",on);cards().forEach((card)=>{toolbar(card);drag(card);card.draggable=on;if(!on)card.classList.remove("is-dragging","drag-over");});edit.hidden=on;save.hidden=!on;reset.hidden=!on;};const restore=()=>{try{const stored=JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY)||"[]");if(!Array.isArray(stored))return;stored.forEach((item)=>{const card=container.querySelector(`:scope > .layout-editable[data-layout-id="${item.id}"]`);if(card){container.appendChild(card);height(card,["compact","normal","tall"].includes(item.height)?item.height:"normal");}});}catch(error){console.warn("Saved dashboard layout could not be restored.",error);}};edit.addEventListener("click",()=>mode(true));save.addEventListener("click",()=>{localStorage.setItem(LAYOUT_STORAGE_KEY,JSON.stringify(cards().map((card)=>({id:card.dataset.layoutId,height:["compact","normal","tall"].find((h)=>card.classList.contains(`layout-height-${h}`))||"normal"}))));mode(false);});reset.addEventListener("click",()=>{localStorage.removeItem(LAYOUT_STORAGE_KEY);window.location.reload();});restore();}
 
+renderGeminiNews();
 const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addEventListener("click",refreshAllData);setupGeminiAiButton();setupTechnicalRetryButton();setText("signal-date",formatDateForSignal());setupPaperTrading();setupTimeframeButtons();setupZoomButtons();setupRrgButtons();setupChartAnalyser();setupLayoutEditor();if(!renderSavedAiPlanIfActive()){setSignalSource("Gemini AI ready — run manual analysis when needed","neutral");setSignal("NO TRADE","Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan.");}refreshAllData();setInterval(loadPrice,30000);setInterval(loadChart,60000);setInterval(()=>refreshTechnicalAnalysis("Automatic technical refresh."),60000);setInterval(loadRrg,300000);setInterval(()=>{if(isAiPlanActive())setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`,"ai");},1000);
 
