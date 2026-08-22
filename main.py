@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
 import requests
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -1083,7 +1083,87 @@ def run_ai_signal():
                 "Your latest saved analysis remains available if one exists."
             ),
         ) from error
+@app.post("/api/news/translate")
+def translate_news_to_hindi(payload: dict = Body(...)):
+    headline = str(payload.get("headline", "")).strip()
+    summary = str(payload.get("summary", "")).strip()
+    source = str(payload.get("source", "")).strip()
 
+    if not headline:
+        raise HTTPException(
+            status_code=400,
+            detail="News headline is required for translation.",
+        )
+
+    max_headline_length = 300
+    max_summary_length = 1200
+
+    headline = headline[:max_headline_length]
+    summary = summary[:max_summary_length]
+    source = source[:100]
+
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini AI is not configured on the server.",
+        )
+
+    prompt = f"""
+Translate the following crypto news headline and short publisher summary
+into simple, natural Hindi written in Devanagari.
+
+Rules:
+- Preserve names, numbers, tickers, prices, dates and factual meaning exactly.
+- Do not add market predictions, investment advice, opinions or new facts.
+- Do not translate source names or ticker symbols such as BTC, ETH or ETF.
+- If the summary contains leftover HTML tags, ignore the tags and translate only visible text.
+- Return only JSON.
+
+Source: {source}
+Headline: {headline}
+Summary: {summary}
+"""
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "headline_hi": {"type": "string"},
+            "summary_hi": {"type": "string"},
+        },
+        "required": ["headline_hi", "summary_hi"],
+    }
+
+    try:
+        client = genai.Client(api_key=api_key)
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_json_schema=schema,
+            ),
+        )
+
+        result = json.loads(response.text)
+
+        return {
+            "headline_hi": str(result.get("headline_hi", "")).strip(),
+            "summary_hi": str(result.get("summary_hi", "")).strip(),
+        }
+
+    except Exception as error:
+        print(f"Gemini Hindi translation error: {error}")
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Hindi translation is temporarily unavailable. "
+                "Please try again later."
+            ),
+        ) from error
 
 @app.post("/api/chart-analyser")
 async def chart_analyser(file: UploadFile = File(...)):
