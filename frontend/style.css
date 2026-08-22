@@ -2243,3 +2243,291 @@ canvas {
     width: 100%;
   }
 }
+/* Phase 3A — Price and technical alerts */
+
+.alerts-card {
+  display: grid;
+  gap: 18px;
+}
+
+.alerts-card h2,
+.alerts-card h3 {
+  margin: 0;
+}
+
+.alerts-card h3 {
+  font-size: 1rem;
+  color: #f8fafc;
+}
+
+.alerts-card p {
+  margin: 0;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.section-heading > div {
+  display: grid;
+  gap: 7px;
+}
+
+.section-heading > div p {
+  max-width: 780px;
+  color: #94a3b8;
+  line-height: 1.55;
+}
+
+.notification-permission-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid #475569;
+  border-radius: 999px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.7);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.notification-granted {
+  color: #bbf7d0;
+  border-color: rgba(34, 197, 94, 0.7);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.notification-denied {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.7);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.notification-default {
+  color: #fde68a;
+  border-color: rgba(250, 204, 21, 0.7);
+  background: rgba(250, 204, 21, 0.1);
+}
+
+.notification-unsupported {
+  color: #cbd5e1;
+  border-color: #475569;
+  background: rgba(71, 85, 105, 0.18);
+}
+
+.alert-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.enable-notifications-btn,
+.test-notification-btn,
+.save-price-alert-btn {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #f8fafc;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+
+.enable-notifications-btn {
+  border-color: rgba(34, 197, 94, 0.65);
+  background: linear-gradient(
+    135deg,
+    rgba(22, 163, 74, 0.95),
+    rgba(34, 197, 94, 0.75)
+  );
+}
+
+.test-notification-btn {
+  border-color: rgba(96, 165, 250, 0.65);
+  background: rgba(30, 64, 175, 0.55);
+}
+
+.save-price-alert-btn {
+  border-color: rgba(250, 204, 21, 0.7);
+  background: rgba(161, 98, 7, 0.55);
+}
+
+.enable-notifications-btn:hover,
+.test-notification-btn:hover,
+.save-price-alert-btn:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+.enable-notifications-btn:disabled,
+.test-notification-btn:disabled,
+.save-price-alert-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+
+.notification-status,
+.price-alert-status {
+  color: #94a3b8;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.price-alert-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.price-alert-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.54);
+}
+
+.price-alert-panel > p {
+  color: #94a3b8;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.price-alert-panel label {
+  color: #cbd5e1;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.price-alert-action-row {
+  display: flex;
+  gap: 10px;
+}
+
+.price-alert-action-row input {
+  min-width: 0;
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #475569;
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+  color: #f8fafc;
+  background: rgba(2, 6, 23, 0.78);
+  font: inherit;
+}
+
+.price-alert-action-row input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16);
+}
+
+.signal-alert-settings {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.54);
+}
+
+.signal-alert-settings > p {
+  color: #94a3b8;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.alert-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  cursor: pointer;
+}
+
+.alert-toggle-row input {
+  width: 17px;
+  height: 17px;
+  margin: 3px 0 0;
+  accent-color: #22c55e;
+  cursor: pointer;
+}
+
+.alert-toggle-row span {
+  display: grid;
+  gap: 4px;
+}
+
+.alert-toggle-row strong {
+  color: #e2e8f0;
+  font-size: 0.92rem;
+}
+
+.alert-toggle-row small {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.alert-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.alert-summary-item {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.5);
+}
+
+.alert-summary-item span {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.alert-summary-item strong {
+  overflow-wrap: anywhere;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.alerts-note {
+  padding-top: 2px;
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .section-heading {
+    flex-direction: column;
+  }
+
+  .price-alert-grid,
+  .alert-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .price-alert-action-row {
+    flex-direction: column;
+  }
+
+  .save-price-alert-btn {
+    width: 100%;
+  }
+}
