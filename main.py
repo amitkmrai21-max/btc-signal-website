@@ -2,6 +2,8 @@ import json
 import math
 import os
 import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 import requests
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -28,6 +30,18 @@ price_cache = {"data": None, "updated_at": 0}
 chart_cache = {"data": {}, "updated_at": 0}
 ai_signal_cache = {"data": None, "updated_at": 0}
 AI_NEWS_LIMIT = 8
+RSS_NEWS_SOURCES = [
+    {
+        "name": "CoinDesk",
+        "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    },
+    {
+        "name": "Cointelegraph",
+        "url": "https://cointelegraph.com/rss",
+    },
+]
+
+RSS_NEWS_TIMEOUT_SECONDS = 12
 technical_cache = {"data": None, "updated_at": 0}
 rrg_cache = {"data": {}, "updated_at": 0}
 
@@ -638,31 +652,20 @@ def build_ai_prompt(market_data):
     return f"""
 You are an advanced but cautious BTCUSDT market-analysis assistant for an educational dashboard.
 
-You must do two things in ONE response:
-1. Analyze ONLY the supplied live Binance technical data for an educational BTCUSDT setup.
-2. Use Google Search Grounding to find fresh, verifiable BTC and broader crypto-market news relevant to the current market. News must be current and must never be invented.
+Analyze ONLY the supplied live Binance technical data below. Do not use web search,
+external news, or information not present in this prompt.
 
 LIVE BINANCE TECHNICAL DATA:
 {json.dumps(market_data, indent=2)}
 
-RULES FOR TECHNICAL ANALYSIS:
+RULES:
 - Use 4h for broad bias, 1h for setup quality, and 15m for entry timing.
-- Consider EMA trend, RSI, MACD, ADX, volume, market structure, breakout, support, resistance, pivots, Fibonacci, and ATR.
+- Consider EMA trend, RSI, MACD, ADX, volume, market structure, breakout,
+  support, resistance, pivots, Fibonacci, and ATR where relevant.
+- Return only requested JSON in simple Hinglish.
 - Never promise profit, certainty, or guaranteed targets.
-- Entry, stop, and targets are educational ideas only; never automated orders.
+- Entry, stop and targets are educational ideas only, never automated orders.
 - Allowed main signals: STRONG BUY, BUY WATCH, NO TRADE, SELL WATCH, STRONG SELL.
-- Use simple Hinglish in all text fields.
-
-RULES FOR NEWS:
-- Return exactly up to {AI_NEWS_LIMIT} distinct, recent, relevant news items.
-- Prefer established primary/credible sources and use real published URLs only.
-- Avoid duplicates, price-prediction-only articles, and unsupported claims.
-- Each item must explain the likely short-term BTC market relevance, but label this as interpretation—not certainty.
-- If fresh reliable news is unavailable, return an empty news list instead of inventing items.
-- Use compact Hinglish in news summary and market_relevance.
-- Never make an article URL, source name, headline, or time up.
-
-Return only JSON conforming to the provided schema.
 """
 
 
@@ -678,31 +681,6 @@ def get_ai_response_schema():
             "key_level": {"type": "string"},
         },
         "required": ["signal", "summary", "key_level"],
-    }
-
-    news_item_schema = {
-        "type": "object",
-        "properties": {
-            "headline": {"type": "string"},
-            "source": {"type": "string"},
-            "url": {"type": "string"},
-            "published_time": {"type": "string"},
-            "summary": {"type": "string"},
-            "market_impact": {
-                "type": "string",
-                "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
-            },
-            "market_relevance": {"type": "string"},
-        },
-        "required": [
-            "headline",
-            "source",
-            "url",
-            "published_time",
-            "summary",
-            "market_impact",
-            "market_relevance",
-        ],
     }
 
     return {
@@ -744,16 +722,6 @@ def get_ai_response_schema():
                 },
                 "required": ["15m", "1h", "4h"],
             },
-            "news": {
-                "type": "array",
-                "items": news_item_schema,
-                "maxItems": AI_NEWS_LIMIT,
-            },
-            "news_overview": {"type": "string"},
-            "news_market_bias": {
-                "type": "string",
-                "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
-            },
         },
         "required": [
             "signal",
@@ -768,9 +736,6 @@ def get_ai_response_schema():
             "target_1",
             "target_2",
             "timeframes",
-            "news",
-            "news_overview",
-            "news_market_bias",
         ],
     }
 
@@ -860,45 +825,172 @@ def rrg(interval: str = "1d"):
         if cached_data: return {**cached_data, "cached": True, "warning": "RRG feed unavailable. Showing cached data."}
         raise HTTPException(status_code=502, detail=f"Failed to build RRG data: {str(error)}")
 
-def normalise_news_items(news_items):
-    clean_items = []
+def strip_html(text):
+    text = str(text or "")
+    text = text.replace("&nbsp;", " ")
+    text = text.replace("&amp;", "&")
+    text = text.replace("&quot;", '"')
+    text = text.replace("&#39;", "'")
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt;", ">")
+    return " ".join(text.replace("<", " <").split())
 
-    if not isinstance(news_items, list):
-        return clean_items
 
-    allowed_impacts = {"BULLISH", "BEARISH", "NEUTRAL"}
+def parse_rss_time(value):
+    if not value:
+        return None
 
-    for item in news_items[:AI_NEWS_LIMIT]:
-        if not isinstance(item, dict):
-            continue
+    try:
+        parsed = parsedate_to_datetime(value)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError, IndexError):
+        return None
 
-        url = str(item.get("url", "")).strip()
-        headline = str(item.get("headline", "")).strip()
 
-        if not headline or not url.startswith(("https://", "http://")):
-            continue
+def format_rss_time(value):
+    parsed = parse_rss_time(value)
 
-        impact = str(item.get("market_impact", "NEUTRAL")).upper()
+    if not parsed:
+        return "Published time unavailable"
 
-        clean_items.append(
-            {
-                "headline": headline[:260],
-                "source": str(item.get("source", "Source unavailable")).strip()[:100],
-                "url": url[:1000],
-                "published_time": str(
-                    item.get("published_time", "Time unavailable")
-                ).strip()[:120],
-                "summary": str(item.get("summary", "")).strip()[:700],
-                "market_impact": (
-                    impact if impact in allowed_impacts else "NEUTRAL"
-                ),
-                "market_relevance": str(
-                    item.get("market_relevance", "")
-                ).strip()[:500],
-            }
+    return parsed.strftime("%d %b %Y, %I:%M %p UTC")
+
+
+def get_xml_tag_text(node, tag_name):
+    tag = node.find(tag_name)
+
+    if tag is None or not tag.text:
+        return ""
+
+    return tag.text.strip()
+
+
+def fetch_rss_news():
+    import xml.etree.ElementTree as element_tree
+
+    collected = []
+    seen_urls = set()
+    now = datetime.now(timezone.utc)
+    keywords = (
+        "bitcoin",
+        "btc",
+        "crypto",
+        "ethereum",
+        "eth",
+        "solana",
+        "sol",
+        "market",
+        "fed",
+        "etf",
+        "regulation",
+        "stablecoin",
+    )
+
+    for source in RSS_NEWS_SOURCES:
+        try:
+            response = requests.get(
+                source["url"],
+                timeout=RSS_NEWS_TIMEOUT_SECONDS,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 BTC-AI-Signal-News/1.0 "
+                        "(RSS reader; educational dashboard)"
+                    )
+                },
+            )
+            response.raise_for_status()
+
+            root = element_tree.fromstring(response.content)
+            items = root.findall(".//item")
+
+            for item in items[:20]:
+                headline = strip_html(get_xml_tag_text(item, "title"))
+                url = get_xml_tag_text(item, "link")
+                description = strip_html(
+                    get_xml_tag_text(item, "description")
+                )
+                published_raw = get_xml_tag_text(item, "pubDate")
+                published_at = parse_rss_time(published_raw)
+
+                if not headline or not url.startswith(("https://", "http://")):
+                    continue
+
+                normalized_url = url.split("?")[0].rstrip("/")
+
+                if normalized_url in seen_urls:
+                    continue
+
+                searchable = f"{headline} {description}".lower()
+
+                if not any(keyword in searchable for keyword in keywords):
+                    continue
+
+                if published_at and (now - published_at).days > 7:
+                    continue
+
+                seen_urls.add(normalized_url)
+
+                collected.append(
+                    {
+                        "headline": headline[:260],
+                        "source": source["name"],
+                        "url": url[:1000],
+                        "published_time": format_rss_time(published_raw),
+                        "summary": (
+                            description[:650]
+                            if description
+                            else "Open the original article for the publisher summary."
+                        ),
+                        "market_impact": "NEUTRAL",
+                        "market_relevance": (
+                            "Publisher headline and summary only. "
+                            "Review the original article before drawing conclusions."
+                        ),
+                        "_published_at": (
+                            published_at.timestamp()
+                            if published_at
+                            else 0
+                        ),
+                    }
+                )
+        except (
+            requests.exceptions.RequestException,
+            element_tree.ParseError,
+            ValueError,
+        ) as error:
+            print(f"RSS news source unavailable ({source['name']}): {error}")
+
+    collected.sort(
+        key=lambda item: item.get("_published_at", 0),
+        reverse=True,
+    )
+
+    result = []
+
+    for item in collected[:AI_NEWS_LIMIT]:
+        item.pop("_published_at", None)
+        result.append(item)
+
+    return result
+
+
+def build_rss_news_overview(news_items):
+    if not news_items:
+        return (
+            "RSS news sources are temporarily unavailable or no recent "
+            "BTC/crypto headlines matched the dashboard filter."
         )
 
-    return clean_items
+    sources = sorted(
+        {item.get("source", "RSS source") for item in news_items}
+    )
+
+    return (
+        f"Latest manual news snapshot from {', '.join(sources)}. "
+        "Headlines are publisher-provided; use original links for full context."
+    )
 
 @app.get("/api/ai-signal")
 def get_saved_ai_signal():
@@ -936,58 +1028,40 @@ def run_ai_signal():
             force_refresh=True
         )
 
-        client = genai.Client(api_key=api_key)
+        rss_news = fetch_rss_news()
+        now = time.time()
 
-        grounding_tool = types.Tool(
-            google_search=types.GoogleSearch()
-        )
+        client = genai.Client(api_key=api_key)
 
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=build_ai_prompt(market_data),
             config=types.GenerateContentConfig(
-                tools=[grounding_tool],
                 response_mime_type="application/json",
                 response_json_schema=get_ai_response_schema(),
             ),
         )
 
         result = json.loads(response.text)
-        result["news"] = normalise_news_items(result.get("news", []))
-        result["news_overview"] = str(
-            result.get(
-                "news_overview",
-                "Fresh news context was reviewed with the manual Gemini analysis.",
-            )
-        ).strip()
-        result["news_market_bias"] = str(
-            result.get("news_market_bias", "NEUTRAL")
-        ).upper()
-
-        if result["news_market_bias"] not in {
-            "BULLISH",
-            "BEARISH",
-            "NEUTRAL",
-        }:
-            result["news_market_bias"] = "NEUTRAL"
-
-        now = time.time()
 
         result.update(
             {
+                "news": rss_news,
+                "news_overview": build_rss_news_overview(rss_news),
+                "news_market_bias": "NEUTRAL",
                 "market_data": market_data,
                 "source": (
                     "Binance market data + Gemini AI analysis + "
-                    "Google Search Grounding"
+                    "CoinDesk/Cointelegraph RSS news"
                 ),
-                "analysis_mode": "ai_manual_with_news",
+                "analysis_mode": "ai_manual_with_rss_news",
                 "cached": False,
                 "market_data_cached": market_data_cached,
                 "updated_at": int(now),
                 "news_updated_at": int(now),
                 "manual_run_only": True,
                 "disclaimer": (
-                    "Educational market analysis and news context only. "
+                    "Educational market analysis and publisher news context only. "
                     "Not financial advice or an automated trading instruction."
                 ),
             }
@@ -1005,7 +1079,7 @@ def run_ai_signal():
         raise HTTPException(
             status_code=503,
             detail=(
-                "Gemini AI analysis or grounded news is temporarily unavailable. "
+                "Gemini AI is temporarily unavailable. "
                 "Your latest saved analysis remains available if one exists."
             ),
         ) from error
