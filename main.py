@@ -873,6 +873,7 @@ def fetch_rss_news():
     collected = []
     seen_urls = set()
     now = datetime.now(timezone.utc)
+
     keywords = (
         "bitcoin",
         "btc",
@@ -886,32 +887,90 @@ def fetch_rss_news():
         "etf",
         "regulation",
         "stablecoin",
+        "blockchain",
+        "digital asset",
     )
 
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (compatible; BTC-AI-Signal-News/1.0; "
+            "+https://example.com)"
+        ),
+        "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+    }
+
     for source in RSS_NEWS_SOURCES:
+        source_name = source.get("name", "Crypto news")
+        source_url = source.get("url", "")
+
         try:
             response = requests.get(
-                source["url"],
+                source_url,
                 timeout=RSS_NEWS_TIMEOUT_SECONDS,
-                headers={
-                    "User-Agent": (
-                        "Mozilla/5.0 BTC-AI-Signal-News/1.0 "
-                        "(RSS reader; educational dashboard)"
-                    )
-                },
+                headers=headers,
             )
             response.raise_for_status()
 
             root = element_tree.fromstring(response.content)
-            items = root.findall(".//item")
 
-            for item in items[:20]:
-                headline = strip_html(get_xml_tag_text(item, "title"))
-                url = get_xml_tag_text(item, "link")
-                description = strip_html(
-                    get_xml_tag_text(item, "description")
-                )
-                published_raw = get_xml_tag_text(item, "pubDate")
+            # Supports regular RSS feeds (<item>) and Atom feeds (<entry>).
+            rss_items = root.findall(".//item")
+            atom_entries = root.findall(".//{http://www.w3.org/2005/Atom}entry")
+            feed_items = rss_items if rss_items else atom_entries
+
+            source_count = 0
+
+            for item in feed_items[:50]:
+                is_atom = item.tag.endswith("entry")
+
+                if is_atom:
+                    headline = strip_html(
+                        get_xml_tag_text(item, "{http://www.w3.org/2005/Atom}title")
+                    )
+
+                    link_element = item.find(
+                        "{http://www.w3.org/2005/Atom}link[@rel='alternate']"
+                    )
+                    if link_element is None:
+                        link_element = item.find(
+                            "{http://www.w3.org/2005/Atom}link"
+                        )
+
+                    url = (
+                        link_element.get("href", "").strip()
+                        if link_element is not None
+                        else ""
+                    )
+
+                    description = strip_html(
+                        get_xml_tag_text(
+                            item,
+                            "{http://www.w3.org/2005/Atom}summary",
+                        )
+                        or get_xml_tag_text(
+                            item,
+                            "{http://www.w3.org/2005/Atom}content",
+                        )
+                    )
+
+                    published_raw = (
+                        get_xml_tag_text(
+                            item,
+                            "{http://www.w3.org/2005/Atom}published",
+                        )
+                        or get_xml_tag_text(
+                            item,
+                            "{http://www.w3.org/2005/Atom}updated",
+                        )
+                    )
+                else:
+                    headline = strip_html(get_xml_tag_text(item, "title"))
+                    url = get_xml_tag_text(item, "link")
+                    description = strip_html(
+                        get_xml_tag_text(item, "description")
+                    )
+                    published_raw = get_xml_tag_text(item, "pubDate")
+
                 published_at = parse_rss_time(published_raw)
 
                 if not headline or not url.startswith(("https://", "http://")):
@@ -927,7 +986,7 @@ def fetch_rss_news():
                 if not any(keyword in searchable for keyword in keywords):
                     continue
 
-                if published_at and (now - published_at).days > 7:
+                if published_at and (now - published_at).total_seconds() > 7 * 24 * 60 * 60:
                     continue
 
                 seen_urls.add(normalized_url)
@@ -935,7 +994,7 @@ def fetch_rss_news():
                 collected.append(
                     {
                         "headline": headline[:260],
-                        "source": source["name"],
+                        "source": source_name,
                         "url": url[:1000],
                         "published_time": format_rss_time(published_raw),
                         "summary": (
@@ -955,12 +1014,20 @@ def fetch_rss_news():
                         ),
                     }
                 )
+
+                source_count += 1
+
+            print(
+                f"RSS news loaded from {source_name}: "
+                f"{source_count} matching recent articles."
+            )
+
         except (
             requests.exceptions.RequestException,
             element_tree.ParseError,
             ValueError,
         ) as error:
-            print(f"RSS news source unavailable ({source['name']}): {error}")
+            print(f"RSS news source unavailable ({source_name}): {error}")
 
     collected.sort(
         key=lambda item: item.get("_published_at", 0),
@@ -972,6 +1039,8 @@ def fetch_rss_news():
     for item in collected[:AI_NEWS_LIMIT]:
         item.pop("_published_at", None)
         result.append(item)
+
+    print(f"RSS news total selected: {len(result)}")
 
     return result
 
