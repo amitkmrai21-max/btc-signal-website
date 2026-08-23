@@ -1163,7 +1163,7 @@ def run_ai_signal():
         rss_news = fetch_rss_news()
         now = time.time()
         client = genai.Client(api_key=api_key)
-
+        technical_result = technical_main_signal(market_data)
         response = None
         last_error = None
 
@@ -1174,7 +1174,6 @@ def run_ai_signal():
             try:
                 response = client.models.generate_content(
                     model=GEMINI_MODEL,
-                    technical_result = technical_main_signal(market_data)
                     contents=build_ai_prompt(market_data, technical_result),
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
