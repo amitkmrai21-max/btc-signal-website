@@ -29,7 +29,7 @@ GEMINI_MODEL = "gemini-3.6-flash"
 price_cache = {"data": None, "updated_at": 0}
 chart_cache = {"data": {}, "updated_at": 0}
 ai_signal_cache = {"data": None, "updated_at": 0}
-AI_NEWS_LIMIT = 8
+AI_NEWS_LIMIT = 15
 RSS_NEWS_SOURCES = [
     {
         "name": "CoinDesk",
