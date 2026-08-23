@@ -1332,9 +1332,11 @@ function setupLayoutEditor(){const container=getElement("customizableSections"),
 renderGeminiNews();
 const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addEventListener("click",refreshAllData);setupGeminiAiButton();setupTechnicalRetryButton();setupAlerts();setText("signal-date",formatDateForSignal());setupPaperTrading();setupTimeframeButtons();setupZoomButtons();setupRrgButtons();setupChartAnalyser();setupLayoutEditor();if(!renderSavedAiPlanIfActive()){setSignalSource("Gemini AI ready — run manual analysis when needed","neutral");setSignal("NO TRADE","Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan.");}refreshAllData();setInterval(loadPrice,30000);setInterval(loadChart,60000);setInterval(()=>{if(isAiPlanActive()){setText("technicalRefreshStatus",`Auto technical refresh paused — Gemini AI plan active (${getAiPlanRemainingLabel()} remaining).`);return;}refreshTechnicalAnalysis("Automatic technical refresh.");},60000);setInterval(loadRrg,300000);setInterval(()=>{if(isAiPlanActive())setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`,"ai");},1000);
 
-/* ===== Dashboard tabs and settings addon: start ===== */
+/* ===== Dashboard tabs and settings ===== */
 (() => {
-  function initialiseDashboardTabsAndSettings() {
+  const STORAGE_KEY = "btcAiSignalDashboardPreferences";
+
+  function initDashboard() {
     const tabs = [...document.querySelectorAll(".app-tab[data-tab]")];
     const panels = [...document.querySelectorAll(".tab-panel[data-panel]")];
 
@@ -1350,17 +1352,15 @@ const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addE
     const accentButtons = [...document.querySelectorAll("[data-accent-choice]")];
     const textSizeButtons = [...document.querySelectorAll("[data-text-size-choice]")];
 
-    const storageKey = "btcAiSignalDashboardPreferences";
-
-    let savedSettings = {};
+    let settings = {};
 
     try {
-      savedSettings = JSON.parse(localStorage.getItem(storageKey) || "{}") || {};
+      settings = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") || {};
     } catch (error) {
-      savedSettings = {};
+      settings = {};
     }
 
-    function getSettings() {
+    function getCurrentSettings() {
       return {
         name: nameInput?.value.trim() || "",
         theme: document.body.dataset.theme || "dark",
@@ -1372,25 +1372,25 @@ const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addE
 
     function saveSettings() {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(getSettings()));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(getCurrentSettings()));
       } catch (error) {
-        // Settings can still work for the current page even if browser storage is unavailable.
+        // Browser storage unavailable: current session will still work.
       }
     }
 
-    function setActiveChoice(buttons, value, attributeName) {
+    function updateChoiceState(buttons, selectedValue, dataKey) {
       buttons.forEach((button) => {
-        const isActive = button.dataset[attributeName] === value;
-        button.classList.toggle("active", isActive);
-        button.setAttribute("aria-pressed", String(isActive));
+        const active = button.dataset[dataKey] === selectedValue;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
       });
     }
 
-    function applySettings(settings) {
-      const theme = settings.theme || "dark";
-      const accent = settings.accent || "blue";
-      const textSize = settings.textSize || "normal";
-      const name = settings.name || "";
+    function applySettings(nextSettings = {}) {
+      const theme = nextSettings.theme || "dark";
+      const accent = nextSettings.accent || "blue";
+      const textSize = nextSettings.textSize || "normal";
+      const name = nextSettings.name || "";
 
       document.body.dataset.theme = theme;
       document.body.dataset.accent = accent;
@@ -1400,25 +1400,25 @@ const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addE
         nameInput.value = name;
       }
 
-      setActiveChoice(themeButtons, theme, "themeChoice");
-      setActiveChoice(accentButtons, accent, "accentChoice");
-      setActiveChoice(textSizeButtons, textSize, "textSizeChoice");
+      updateChoiceState(themeButtons, theme, "themeChoice");
+      updateChoiceState(accentButtons, accent, "accentChoice");
+      updateChoiceState(textSizeButtons, textSize, "textSizeChoice");
     }
 
-    function activateTab(tabName, shouldSave = true) {
-      const targetPanelExists = panels.some((panel) => panel.dataset.panel === tabName);
-      const nextTab = targetPanelExists ? tabName : "dashboard";
+    function showTab(tabName, shouldSave = true) {
+      const validTab = panels.some((panel) => panel.dataset.panel === tabName);
+      const targetTab = validTab ? tabName : "dashboard";
 
       tabs.forEach((tab) => {
-        const isActive = tab.dataset.tab === nextTab;
-        tab.classList.toggle("active", isActive);
-        tab.setAttribute("aria-selected", String(isActive));
+        const active = tab.dataset.tab === targetTab;
+        tab.classList.toggle("active", active);
+        tab.setAttribute("aria-selected", String(active));
       });
 
       panels.forEach((panel) => {
-        const isActive = panel.dataset.panel === nextTab;
-        panel.classList.toggle("active", isActive);
-        panel.hidden = !isActive;
+        const active = panel.dataset.panel === targetTab;
+        panel.classList.toggle("active", active);
+        panel.hidden = !active;
       });
 
       if (shouldSave) {
@@ -1426,37 +1426,37 @@ const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addE
       }
     }
 
-    function openDrawer() {
+    function openSettings() {
       drawer?.classList.add("open");
       menuButton?.setAttribute("aria-expanded", "true");
     }
 
-    function closeDrawer() {
+    function closeSettings() {
       drawer?.classList.remove("open");
       menuButton?.setAttribute("aria-expanded", "false");
     }
 
-    applySettings(savedSettings);
-    activateTab(savedSettings.activeTab || "dashboard", false);
+    applySettings(settings);
+    showTab(settings.activeTab || "dashboard", false);
 
     tabs.forEach((tab) => {
       tab.addEventListener("click", () => {
-        activateTab(tab.dataset.tab);
+        showTab(tab.dataset.tab);
       });
     });
 
-    menuButton?.addEventListener("click", openDrawer);
-    closeButton?.addEventListener("click", closeDrawer);
+    menuButton?.addEventListener("click", openSettings);
+    closeButton?.addEventListener("click", closeSettings);
 
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
-        closeDrawer();
+        closeSettings();
       }
     });
 
     saveNameButton?.addEventListener("click", () => {
       applySettings({
-        ...getSettings(),
+        ...getCurrentSettings(),
         name: nameInput?.value.trim() || ""
       });
       saveSettings();
@@ -1472,7 +1472,7 @@ const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addE
     themeButtons.forEach((button) => {
       button.addEventListener("click", () => {
         applySettings({
-          ...getSettings(),
+          ...getCurrentSettings(),
           theme: button.dataset.themeChoice || "dark"
         });
         saveSettings();
@@ -1482,7 +1482,7 @@ const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addE
     accentButtons.forEach((button) => {
       button.addEventListener("click", () => {
         applySettings({
-          ...getSettings(),
+          ...getCurrentSettings(),
           accent: button.dataset.accentChoice || "blue"
         });
         saveSettings();
@@ -1492,7 +1492,7 @@ const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addE
     textSizeButtons.forEach((button) => {
       button.addEventListener("click", () => {
         applySettings({
-          ...getSettings(),
+          ...getCurrentSettings(),
           textSize: button.dataset.textSizeChoice || "normal"
         });
         saveSettings();
@@ -1501,9 +1501,9 @@ const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addE
 
     resetSettingsButton?.addEventListener("click", () => {
       try {
-        localStorage.removeItem(storageKey);
+        localStorage.removeItem(STORAGE_KEY);
       } catch (error) {
-        // Reset the active settings in the current browser session.
+        // Continue resetting in the active browser session.
       }
 
       applySettings({
@@ -1513,15 +1513,14 @@ const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addE
         textSize: "normal"
       });
 
-      activateTab("dashboard", false);
-      closeDrawer();
+      showTab("dashboard", false);
+      closeSettings();
     });
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initialiseDashboardTabsAndSettings);
+    document.addEventListener("DOMContentLoaded", initDashboard);
   } else {
-    initialiseDashboardTabsAndSettings();
+    initDashboard();
   }
 })();
-/* ===== Dashboard tabs and settings addon: end ===== */
