@@ -983,7 +983,7 @@ def fetch_rss_news():
                 if not headline or not url.startswith(("https://", "http://")):
                     continue
 
-                               normalized_url = url.split("?")[0].rstrip("/")
+                normalized_url = url.split("?")[0].rstrip("/")
 
                 if normalized_url in seen_urls:
                     continue
@@ -995,7 +995,9 @@ def fetch_rss_news():
                 if not is_relevant and source_name not in ("CoinDesk", "Cointelegraph", "Decrypt", "Bitcoin Magazine"):
                     continue
 
-                if published_at and (now - published_at).total_seconds() > 7 * 24 * 60 * 60:
+                if published_at and (
+                    now - published_at
+                ).total_seconds() > 7 * 24 * 60 * 60:
                     continue
 
                 seen_urls.add(normalized_url)
