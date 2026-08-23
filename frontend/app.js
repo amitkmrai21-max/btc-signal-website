@@ -248,33 +248,49 @@ function calculateDynamicSetupDecision(setup, items, flags) {
   const passed = items.filter((item) => item.state === "PASS").length;
   const waiting = items.filter((item) => item.state === "WAIT").length;
   const failed = items.filter((item) => item.state === "FAIL").length;
-  const direction = String(setup.direction || "NEUTRAL").toUpperCase();
+
+  const direction = String(setup?.direction || "NEUTRAL").toUpperCase();
 
   const hasGeminiConflict = flags.includes(
     "Gemini AI conflicts with live technical direction"
   );
 
   let grade = "C";
-  let executionState = "WAIT / LOW QUALITY";
+  let executionState = "WAIT FOR CONFIRMATION";
   let decisionReason =
-    "Checklist quality is incomplete. Wait for better alignment rather than forcing a trade.";
+    "The setup is mixed. Wait for stronger trend, momentum and volume confirmation.";
 
-  if (hasGeminiConflict || direction === "NEUTRAL" || failed >= 2) {
+  if (hasGeminiConflict || failed >= 4) {
     grade = "D";
     executionState = "AVOID";
+
     decisionReason = hasGeminiConflict
       ? "Gemini AI and live technical direction conflict. Avoid forcing a practice entry."
-      : "Live conditions are mixed or have major checklist failures. Avoid forcing a practice entry.";
+      : "Too many checklist conditions are failing. Avoid forcing a practice entry.";
   } else if (passed >= 7 && failed === 0) {
     grade = "A";
     executionState = "READY";
+
     decisionReason =
-      "Most technical conditions and Gemini alignment are supportive. Still wait for the stated trigger and define invalidation.";
+      "Most technical conditions and Gemini alignment are supportive. Wait for the stated trigger and define invalidation.";
   } else if (passed >= 5 && failed <= 1) {
     grade = "B";
     executionState = "WAIT FOR TRIGGER";
+
     decisionReason =
-      "The setup is developing, but a trigger or further confirmation is still needed.";
+      "The setup is developing well, but a price trigger or one more confirmation is still needed.";
+  } else if (passed >= 3 && failed <= 2) {
+    grade = "C";
+    executionState = "WAIT FOR CONFIRMATION";
+
+    decisionReason =
+      "Some conditions are supportive, but the setup is not sufficiently aligned yet.";
+  } else if (direction === "NEUTRAL" && failed >= 3) {
+    grade = "D";
+    executionState = "AVOID";
+
+    decisionReason =
+      "The market is mixed and several checklist conditions are failing. Wait for clearer alignment.";
   }
 
   return {
