@@ -988,10 +988,19 @@ def fetch_rss_news():
                 if normalized_url in seen_urls:
                     continue
 
-                searchable = f"{headline} {description}".lower()
+               searchable = f"{headline} {description}".lower()
 
-                if not any(keyword in searchable for keyword in keywords):
-                    continue
+               is_relevant = any(keyword in searchable for keyword in keywords)
+
+               # These sources are crypto-specific, so do not discard their
+               # newest articles just because an exact keyword is absent.
+               if not is_relevant and source_name not in {
+                  "CoinDesk",
+                  "Cointelegraph",
+                  "Decrypt",
+                  "Bitcoin Magazine",
+             }:
+                  continue
 
                 if published_at and (now - published_at).total_seconds() > 7 * 24 * 60 * 60:
                     continue
