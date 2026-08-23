@@ -39,8 +39,15 @@ RSS_NEWS_SOURCES = [
         "name": "Cointelegraph",
         "url": "https://cointelegraph.com/rss",
     },
+    {
+        "name": "Decrypt",
+        "url": "https://decrypt.co/feed",
+    },
+    {
+        "name": "Bitcoin Magazine",
+        "url": "https://bitcoinmagazine.com/.rss/full/",
+    },
 ]
-
 RSS_NEWS_TIMEOUT_SECONDS = 12
 technical_cache = {"data": None, "updated_at": 0}
 rrg_cache = {"data": {}, "updated_at": 0}
@@ -1176,6 +1183,7 @@ def run_ai_signal():
                 "Your latest saved analysis remains available if one exists."
             ),
         ) from error
+        
 @app.post("/api/news/translate")
 def translate_news_to_hindi(payload: dict = Body(...)):
     headline = str(payload.get("headline", "")).strip()
