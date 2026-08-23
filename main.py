@@ -1030,17 +1030,38 @@ def run_ai_signal():
 
         rss_news = fetch_rss_news()
         now = time.time()
-
         client = genai.Client(api_key=api_key)
 
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=build_ai_prompt(market_data),
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_json_schema=get_ai_response_schema(),
-            ),
-        )
+        response = None
+        last_error = None
+
+        for attempt, delay_seconds in enumerate((0, 2, 5), start=1):
+            if delay_seconds:
+                time.sleep(delay_seconds)
+
+            try:
+                response = client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=build_ai_prompt(market_data),
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_json_schema=get_ai_response_schema(),
+                    ),
+                )
+
+                if not response or not getattr(response, "text", None):
+                    raise ValueError("Gemini returned an empty response.")
+
+                break
+
+            except Exception as error:
+                last_error = error
+                print(f"Gemini attempt {attempt}/3 failed: {error}")
+
+        if response is None or not getattr(response, "text", None):
+            raise RuntimeError(
+                f"Gemini failed after 3 attempts: {last_error}"
+            )
 
         result = json.loads(response.text)
 
@@ -1074,12 +1095,15 @@ def run_ai_signal():
 
     except HTTPException:
         raise
+
     except Exception as error:
-        print(f"Gemini AI analysis error: {error}")
+        print(f"Gemini AI analysis error after retries: {error}")
+
         raise HTTPException(
             status_code=503,
             detail=(
-                "Gemini AI is temporarily unavailable. "
+                "Gemini AI could not respond after 3 attempts. "
+                "Please wait a moment and try again. "
                 "Your latest saved analysis remains available if one exists."
             ),
         ) from error
