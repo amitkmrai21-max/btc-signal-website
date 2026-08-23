@@ -682,24 +682,49 @@ def build_technical_response(market_data, cached=False, cache_age=0.0, refresh_e
     return result
 
 
-def build_ai_prompt(market_data):
+def build_ai_prompt(market_data, technical_result):
+    technical_timeframes = technical_result.get("timeframes", {})
+
     return f"""
 You are an advanced but cautious BTCUSDT market-analysis assistant for an educational dashboard.
 
-Analyze ONLY the supplied live Binance technical data below. Do not use web search,
-external news, or information not present in this prompt.
+Analyze ONLY the supplied live Binance technical data and deterministic technical
+classification below. Do not use web search, external news, or information not
+present in this prompt.
 
 LIVE BINANCE TECHNICAL DATA:
 {json.dumps(market_data, indent=2)}
 
-RULES:
+DETERMINISTIC MULTI-TIMEFRAME TECHNICAL CLASSIFICATION:
+{json.dumps(technical_result, indent=2)}
+
+PRIMARY DECISION RULES:
+- Treat the deterministic classification as the primary directional constraint.
+- If its signal is "BUY WATCH", return only "BUY WATCH" or "NO TRADE".
+- If its signal is "SELL WATCH", return only "SELL WATCH" or "NO TRADE".
+- If its signal is "NO TRADE", return only "NO TRADE".
+- Return "STRONG BUY" only when 4h, 1h, and 15m are all bullish and the supplied
+  confirmation trigger is already satisfied by the supplied data.
+- Return "STRONG SELL" only when 4h, 1h, and 15m are all bearish and the supplied
+  confirmation trigger is already satisfied by the supplied data.
+- Never upgrade a BUY WATCH or SELL WATCH to STRONG BUY or STRONG SELL unless the
+  supplied technical classification itself supports that upgrade.
+- Do not invent a price, volume reading, candle close, news event, or confirmation
+  that is not supplied.
+
+ANALYSIS RULES:
 - Use 4h for broad bias, 1h for setup quality, and 15m for entry timing.
 - Consider EMA trend, RSI, MACD, ADX, volume, market structure, breakout,
   support, resistance, pivots, Fibonacci, and ATR where relevant.
-- Return only requested JSON in simple Hinglish.
+- Explain the exact missing condition in "confirmation_needed".
+- Put a practical, educational condition in "entry_idea"; if the setup is
+  unconfirmed or mixed, say to wait rather than entering now.
+- Put the invalidation level or condition in "stop_loss_idea".
+- Set "confidence" conservatively: 0-44 for NO TRADE/mixed, 45-69 for WATCH,
+  and 70+ only for confirmed all-timeframe alignment.
+- Return only the JSON required by the response schema, in simple Hinglish.
 - Never promise profit, certainty, or guaranteed targets.
 - Entry, stop and targets are educational ideas only, never automated orders.
-- Allowed main signals: STRONG BUY, BUY WATCH, NO TRADE, SELL WATCH, STRONG SELL.
 """
 
 
@@ -1149,7 +1174,8 @@ def run_ai_signal():
             try:
                 response = client.models.generate_content(
                     model=GEMINI_MODEL,
-                    contents=build_ai_prompt(market_data),
+                    technical_result = technical_main_signal(market_data)
+                    contents=build_ai_prompt(market_data, technical_result),
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         response_json_schema=get_ai_response_schema(),
