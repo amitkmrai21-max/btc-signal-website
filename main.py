@@ -394,10 +394,37 @@ def timeframe_signal_from_indicators(indicators):
     macd_state = str(indicators.get("macd", {}).get("state", "")).lower()
     rsi_value = float(indicators.get("rsi_14", 50))
     momentum = float(indicators.get("momentum_percent", 0))
-    if "bull" in trend and "bull" in macd_state and rsi_value >= 50 and momentum >= 0:
+
+    bullish_score = 0
+    bearish_score = 0
+
+    if "bull" in trend:
+        bullish_score += 2
+    elif "bear" in trend:
+        bearish_score += 2
+
+    if "bull" in macd_state:
+        bullish_score += 1
+    elif "bear" in macd_state:
+        bearish_score += 1
+
+    if rsi_value >= 52:
+        bullish_score += 1
+    elif rsi_value <= 48:
+        bearish_score += 1
+
+    if momentum > 0:
+        bullish_score += 1
+    elif momentum < 0:
+        bearish_score += 1
+
+    # A trend-backed score of 3+ creates a directional timeframe signal.
+    if bullish_score >= 3 and bullish_score > bearish_score:
         return "BUY"
-    if "bear" in trend and "bear" in macd_state and rsi_value <= 50 and momentum <= 0:
+
+    if bearish_score >= 3 and bearish_score > bullish_score:
         return "SELL"
+
     return "HOLD"
 
 
