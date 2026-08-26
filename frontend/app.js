@@ -1,5 +1,17 @@
 let btcChart;
 let rrgChart;
+let liveCandlestickChart = null;
+let liveCandlestickSeries = null;
+let liveChartSocket = null;
+let liveChartResizeObserver = null;
+let liveChartReconnectTimer = null;
+let liveChartReconnectAttempts = 0;
+let liveChartActiveTimeframe = "15m";
+let liveChartIsLoading = false;
+
+const LIVE_CHART_SYMBOL = "btcusdt";
+const LIVE_CHART_HISTORY_LIMIT = 300;
+const LIVE_CHART_RECONNECT_MAX_DELAY = 15000;
 let activeTimeframe = "1D";
 let activeRrgTimeframe = "1d";
 let currentBtcPriceUsd = null;
@@ -41,6 +53,370 @@ const rrgColors = {
 };
 
 function getElement(id) { return document.getElementById(id); }
+function setLiveChartConnection(status, message) {
+  const badge = getElement("liveChartConnection");
+  const statusLine = getElement("liveChartStatus");
+
+  if (badge) {
+    badge.textContent = message;
+    badge.className = `live-chart-connection live-${status}`;
+  }
+
+  if (statusLine && message) {
+    statusLine.textContent = message;
+  }
+}
+
+function formatLiveChartTimeframe(timeframe) {
+  const labels = {
+    "1m": "1m",
+    "5m": "5m",
+    "15m": "15m",
+    "1h": "1h",
+    "4h": "4h",
+    "1d": "1d"
+  };
+
+  return labels[timeframe] || timeframe;
+}
+
+function updateLiveChartStats(candle, isClosed = false) {
+  if (!candle) return;
+
+  const open = Number(candle.open);
+  const close = Number(candle.close);
+  const high = Number(candle.high);
+  const low = Number(candle.low);
+
+  setText("liveChartPrice", formatUsd(close));
+  setText(
+    "liveChartCandleStatus",
+    `${isClosed ? "Closed" : "Live"} • O ${formatUsd(open)} • H ${formatUsd(high)} • L ${formatUsd(low)}`
+  );
+}
+
+function closeLiveChartSocket() {
+  if (liveChartReconnectTimer) {
+    clearTimeout(liveChartReconnectTimer);
+    liveChartReconnectTimer = null;
+  }
+
+  if (liveChartSocket) {
+    liveChartSocket.onopen = null;
+    liveChartSocket.onmessage = null;
+    liveChartSocket.onerror = null;
+    liveChartSocket.onclose = null;
+
+    try {
+      liveChartSocket.close();
+    } catch (error) {
+      console.error(error);
+    }
+
+    liveChartSocket = null;
+  }
+}
+
+function resetLiveChartView() {
+  if (liveCandlestickChart) {
+    liveCandlestickChart.timeScale().fitContent();
+  }
+}
+
+function createLiveCandlestickChart() {
+  const container = getElement("liveCandlestickChart");
+
+  if (!container || !window.LightweightCharts) {
+    setLiveChartConnection(
+      "error",
+      "Chart library could not be loaded. Refresh the page and try again."
+    );
+    return false;
+  }
+
+  if (liveChartResizeObserver) {
+    liveChartResizeObserver.disconnect();
+    liveChartResizeObserver = null;
+  }
+
+  if (liveCandlestickChart) {
+    liveCandlestickChart.remove();
+    liveCandlestickChart = null;
+    liveCandlestickSeries = null;
+  }
+
+  const chartOptions = {
+    width: Math.max(container.clientWidth, 320),
+    height: 520,
+    layout: {
+      background: { color: "#07111f" },
+      textColor: "#cbd5e1",
+      fontFamily: "Arial, sans-serif"
+    },
+    grid: {
+      vertLines: { color: "rgba(148, 163, 184, 0.12)" },
+      horzLines: { color: "rgba(148, 163, 184, 0.12)" }
+    },
+    rightPriceScale: {
+      borderColor: "rgba(148, 163, 184, 0.22)"
+    },
+    timeScale: {
+      borderColor: "rgba(148, 163, 184, 0.22)",
+      timeVisible: true,
+      secondsVisible: false
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal
+    },
+    handleScroll: true,
+    handleScale: true
+  };
+
+  liveCandlestickChart = LightweightCharts.createChart(
+    container,
+    chartOptions
+  );
+
+  liveCandlestickSeries = liveCandlestickChart.addCandlestickSeries({
+    upColor: "#22c55e",
+    downColor: "#ef4444",
+    borderVisible: false,
+    wickUpColor: "#4ade80",
+    wickDownColor: "#f87171",
+    priceLineVisible: true,
+    lastValueVisible: true,
+    priceFormat: {
+      type: "price",
+      precision: 2,
+      minMove: 0.01
+    }
+  });
+
+  liveChartResizeObserver = new ResizeObserver((entries) => {
+    const entry = entries[0];
+
+    if (!entry || !liveCandlestickChart) return;
+
+    liveCandlestickChart.applyOptions({
+      width: Math.max(entry.contentRect.width, 320)
+    });
+  });
+
+  liveChartResizeObserver.observe(container);
+
+  return true;
+}
+
+async function loadLiveChartHistory() {
+  if (liveChartIsLoading) return;
+
+  liveChartIsLoading = true;
+
+  const refreshButton = getElement("liveChartRefreshBtn");
+
+  if (refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.textContent = "Loading...";
+  }
+
+  setLiveChartConnection(
+    "connecting",
+    `Loading ${formatLiveChartTimeframe(liveChartActiveTimeframe)} candles...`
+  );
+
+  try {
+    const url =
+      `https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT` +
+      `&interval=${encodeURIComponent(liveChartActiveTimeframe)}` +
+      `&limit=${LIVE_CHART_HISTORY_LIMIT}`;
+
+    const response = await fetch(url, { cache: "no-store" });
+
+    if (!response.ok) {
+      throw new Error("Binance historical candles could not be loaded.");
+    }
+
+    const rawCandles = await response.json();
+
+    if (!Array.isArray(rawCandles) || !rawCandles.length) {
+      throw new Error("No historical candle data was received.");
+    }
+
+    if (!createLiveCandlestickChart()) {
+      return;
+    }
+
+    const chartData = rawCandles.map((candle) => ({
+      time: Math.floor(Number(candle[0]) / 1000),
+      open: Number(candle[1]),
+      high: Number(candle[2]),
+      low: Number(candle[3]),
+      close: Number(candle[4])
+    }));
+
+    liveCandlestickSeries.setData(chartData);
+    resetLiveChartView();
+
+    const latest = chartData[chartData.length - 1];
+
+    updateLiveChartStats(latest, false);
+    setText(
+      "liveChartTimeframe",
+      formatLiveChartTimeframe(liveChartActiveTimeframe)
+    );
+
+    setLiveChartConnection(
+      "connecting",
+      "Historical candles loaded. Connecting live feed..."
+    );
+
+    connectLiveChartSocket();
+  } catch (error) {
+    console.error(error);
+
+    setLiveChartConnection(
+      "error",
+      error.message || "Live chart candles could not be loaded."
+    );
+  } finally {
+    liveChartIsLoading = false;
+
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.textContent = "Refresh Candles";
+    }
+  }
+}
+
+function scheduleLiveChartReconnect() {
+  if (liveChartReconnectTimer) return;
+
+  const delay = Math.min(
+    LIVE_CHART_RECONNECT_MAX_DELAY,
+    1000 * Math.pow(2, liveChartReconnectAttempts)
+  );
+
+  liveChartReconnectAttempts += 1;
+
+  setLiveChartConnection(
+    "connecting",
+    `Live feed reconnecting in ${Math.ceil(delay / 1000)}s...`
+  );
+
+  liveChartReconnectTimer = setTimeout(() => {
+    liveChartReconnectTimer = null;
+    connectLiveChartSocket();
+  }, delay);
+}
+
+function connectLiveChartSocket() {
+  closeLiveChartSocket();
+
+  const stream =
+    `${LIVE_CHART_SYMBOL}@kline_${liveChartActiveTimeframe}`;
+
+  const socketUrl = `wss://stream.binance.com:9443/ws/${stream}`;
+
+  try {
+    liveChartSocket = new WebSocket(socketUrl);
+  } catch (error) {
+    console.error(error);
+    scheduleLiveChartReconnect();
+    return;
+  }
+
+  liveChartSocket.onopen = () => {
+    liveChartReconnectAttempts = 0;
+
+    setLiveChartConnection(
+      "live",
+      `Live • BTCUSDT ${formatLiveChartTimeframe(liveChartActiveTimeframe)}`
+    );
+  };
+
+  liveChartSocket.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      const candle = payload?.k;
+
+      if (!candle || !liveCandlestickSeries) return;
+
+      const chartCandle = {
+        time: Math.floor(Number(candle.t) / 1000),
+        open: Number(candle.o),
+        high: Number(candle.h),
+        low: Number(candle.l),
+        close: Number(candle.c)
+      };
+
+      liveCandlestickSeries.update(chartCandle);
+      updateLiveChartStats(chartCandle, Boolean(candle.x));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  liveChartSocket.onerror = () => {
+    setLiveChartConnection(
+      "connecting",
+      "Live feed connection issue. Retrying..."
+    );
+  };
+
+  liveChartSocket.onclose = () => {
+    liveChartSocket = null;
+    scheduleLiveChartReconnect();
+  };
+}
+
+function setLiveChartTimeframe(timeframe) {
+  const allowed = ["1m", "5m", "15m", "1h", "4h", "1d"];
+
+  if (!allowed.includes(timeframe)) return;
+
+  liveChartActiveTimeframe = timeframe;
+
+  document.querySelectorAll("[data-live-timeframe]").forEach((button) => {
+    button.classList.toggle(
+      "active",
+      button.dataset.liveTimeframe === timeframe
+    );
+  });
+
+  setText("liveChartTimeframe", formatLiveChartTimeframe(timeframe));
+
+  closeLiveChartSocket();
+  loadLiveChartHistory();
+}
+
+function setupLiveChart() {
+  const container = getElement("liveCandlestickChart");
+
+  if (!container) return;
+
+  document.querySelectorAll("[data-live-timeframe]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setLiveChartTimeframe(button.dataset.liveTimeframe);
+    });
+  });
+
+  const resetButton = getElement("liveChartResetBtn");
+
+  if (resetButton) {
+    resetButton.addEventListener("click", resetLiveChartView);
+  }
+
+  const refreshButton = getElement("liveChartRefreshBtn");
+
+  if (refreshButton) {
+    refreshButton.addEventListener("click", () => {
+      closeLiveChartSocket();
+      loadLiveChartHistory();
+    });
+  }
+
+  loadLiveChartHistory();
+}
 function setText(id, value) { const element = getElement(id); if (element) element.textContent = value ?? "--"; }
 function formatDateForSignal() { return new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); }
 function formatUpdatedAt(timestamp) { return timestamp ? new Date(timestamp * 1000).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Update time unavailable"; }
@@ -1445,10 +1821,17 @@ function setupChartAnalyser(){const input=getElement("chartImageInput"),preview=
 function setupGeminiAiButton(){const button=getElement("geminiAiBtn");if(!button)return;button.addEventListener("click",async()=>{if(aiRefreshInProgress)return;button.disabled=true;button.textContent="Running Gemini AI...";try{await loadAiAnalysis();}finally{button.disabled=false;button.textContent="Run Gemini AI Analysis";}});}
 function setupTechnicalRetryButton(){const button=getElement("retryTechnicalBtn");if(button)button.addEventListener("click",async()=>{button.disabled=true;await refreshTechnicalAnalysis("Retrying live technical analysis.");button.disabled=false;});}
 
-function setupLayoutEditor(){const container=getElement("customizableSections"),edit=getElement("editLayoutBtn"),save=getElement("saveLayoutBtn"),reset=getElement("resetLayoutBtn");if(!container||!edit||!save||!reset)return;let editMode=false,dragged=null;const cards=()=>[...container.querySelectorAll(":scope > .layout-editable")];const height=(card,h)=>{card.classList.remove("layout-height-compact","layout-height-normal","layout-height-tall");card.classList.add(`layout-height-${h}`);};const toolbar=(card)=>{if(card.querySelector(".layout-editor-toolbar"))return;const bar=document.createElement("div");bar.className="layout-editor-toolbar";bar.innerHTML='<button class="layout-editor-btn layout-drag-handle" type="button">Move</button><button class="layout-editor-btn" type="button" data-height="compact">Compact</button><button class="layout-editor-btn" type="button" data-height="normal">Normal</button><button class="layout-editor-btn" type="button" data-height="tall">Tall</button>';card.prepend(bar);bar.querySelectorAll("[data-height]").forEach((b)=>b.addEventListener("click",(e)=>{e.preventDefault();e.stopPropagation();height(card,b.dataset.height);}));};const drag=(card)=>{if(card.dataset.layoutDragReady)return;card.dataset.layoutDragReady="true";card.addEventListener("dragstart",(e)=>{if(!editMode){e.preventDefault();return;}dragged=card;card.classList.add("is-dragging");e.dataTransfer.effectAllowed="move";});card.addEventListener("dragend",()=>{card.classList.remove("is-dragging");cards().forEach((c)=>c.classList.remove("drag-over"));dragged=null;});card.addEventListener("dragover",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();card.classList.add("drag-over");});card.addEventListener("dragleave",()=>card.classList.remove("drag-over"));card.addEventListener("drop",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();const box=card.getBoundingClientRect();container.insertBefore(dragged,e.clientY>box.top+box.height/2?card.nextSibling:card);card.classList.remove("drag-over");});};const mode=(on)=>{editMode=on;container.classList.toggle("layout-edit-mode",on);cards().forEach((card)=>{toolbar(card);drag(card);card.draggable=on;if(!on)card.classList.remove("is-dragging","drag-over");});edit.hidden=on;save.hidden=!on;reset.hidden=!on;};const restore=()=>{try{const stored=JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY)||"[]");if(!Array.isArray(stored))return;stored.forEach((item)=>{const card=container.querySelector(`:scope > .layout-editable[data-layout-id="${item.id}"]`);if(card){container.appendChild(card);height(card,["compact","normal","tall"].includes(item.height)?item.height:"normal");}});}catch(error){console.warn("Saved dashboard layout could not be restored.",error);}};edit.addEventListener("click",()=>mode(true));save.addEventListener("click",()=>{localStorage.setItem(LAYOUT_STORAGE_KEY,JSON.stringify(cards().map((card)=>({id:card.dataset.layoutId,height:["compact","normal","tall"].find((h)=>card.classList.contains(`layout-height-${h}`))||"normal"}))));mode(false);});reset.addEventListener("click",()=>{localStorage.removeItem(LAYOUT_STORAGE_KEY);window.location.reload();});restore();}
+function setupLayoutEditor(){const
+  container=getElement("customizableSections"),edit=getElement("editLayoutBtn"),save=getElement("saveLayoutBtn"),reset=getElement("resetLayoutBtn");if(!container||!edit||!save||!reset)return;let editMode=false,dragged=null;const cards=()=>[...container.querySelectorAll(":scope > .layout-editable")];const height=(card,h)=>{card.classList.remove("layout-height-compact","layout-height-normal","layout-height-tall");card.classList.add(`layout-height-${h}`);};const toolbar=(card)=>{if(card.querySelector(".layout-editor-toolbar"))return;const bar=document.createElement("div");bar.className="layout-editor-toolbar";bar.innerHTML='<button class="layout-editor-btn layout-drag-handle" type="button">Move</button><button class="layout-editor-btn" type="button" data-height="compact">Compact</button><button class="layout-editor-btn" type="button" data-height="normal">Normal</button><button class="layout-editor-btn" type="button" data-height="tall">Tall</button>';card.prepend(bar);bar.querySelectorAll("[data-height]").forEach((b)=>b.addEventListener("click",(e)=>{e.preventDefault();e.stopPropagation();height(card,b.dataset.height);}));};const drag=(card)=>{if(card.dataset.layoutDragReady)return;card.dataset.layoutDragReady="true";card.addEventListener("dragstart",(e)=>{if(!editMode){e.preventDefault();return;}dragged=card;card.classList.add("is-dragging");e.dataTransfer.effectAllowed="move";});card.addEventListener("dragend",()=>{card.classList.remove("is-dragging");cards().forEach((c)=>c.classList.remove("drag-over"));dragged=null;});card.addEventListener("dragover",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();card.classList.add("drag-over");});card.addEventListener("dragleave",()=>card.classList.remove("drag-over"));card.addEventListener("drop",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();const box=card.getBoundingClientRect();container.insertBefore(dragged,e.clientY>box.top+box.height/2?card.nextSibling:card);card.classList.remove("drag-over");});};const mode=(on)=>{editMode=on;container.classList.toggle("layout-edit-mode",on);cards().forEach((card)=>{toolbar(card);drag(card);card.draggable=on;if(!on)card.classList.remove("is-dragging","drag-over");});edit.hidden=on;save.hidden=!on;reset.hidden=!on;};const restore=()=>{try{const stored=JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY)||"[]");if(!Array.isArray(stored))return;stored.forEach((item)=>{const card=container.querySelector(`:scope > .layout-editable[data-layout-id="${item.id}"]`);if(card){container.appendChild(card);height(card,["compact","normal","tall"].includes(item.height)?item.height:"normal");}});}catch(error){console.warn("Saved dashboard layout could not be restored.",error);}};edit.addEventListener("click",()=>mode(true));save.addEventListener("click",()=>{localStorage.setItem(LAYOUT_STORAGE_KEY,JSON.stringify(cards().map((card)=>({id:card.dataset.layoutId,height:["compact","normal","tall"].find((h)=>card.classList.contains(`layout-height-${h}`))||"normal"}))));mode(false);});reset.addEventListener("click",()=>{localStorage.removeItem(LAYOUT_STORAGE_KEY);window.location.reload();});restore();}
 
 renderGeminiNews();
-const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addEventListener("click",refreshAllData);setupGeminiAiButton();setupTechnicalRetryButton();setupAlerts();setText("signal-date",formatDateForSignal());setupPaperTrading();setupTimeframeButtons();setupZoomButtons();setupRrgButtons();setupChartAnalyser();setupLayoutEditor();if(!renderSavedAiPlanIfActive()){setSignalSource("Gemini AI ready — run manual analysis when needed","neutral");setSignal("NO TRADE","Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan.");}refreshAllData();setInterval(loadPrice,30000);setInterval(loadChart,60000);setInterval(()=>{if(isAiPlanActive()){setText("technicalRefreshStatus",`Auto technical refresh paused — Gemini AI plan active (${getAiPlanRemainingLabel()} remaining).`);return;}refreshTechnicalAnalysis("Automatic technical refresh.");},60000);setInterval(loadRrg,300000);setInterval(()=>{if(isAiPlanActive())setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`,"ai");},1000);
+const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addEventListener("click",refreshAllData);setupGeminiAiButton();
+setupTechnicalRetryButton();
+setupAlerts();
+setupLiveChart();
+setText("signal-date",formatDateForSignal());
+setupPaperTrading();
+setupTimeframeButtons();setupZoomButtons();setupRrgButtons();setupChartAnalyser();setupLayoutEditor();if(!renderSavedAiPlanIfActive()){setSignalSource("Gemini AI ready — run manual analysis when needed","neutral");setSignal("NO TRADE","Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan.");}refreshAllData();setInterval(loadPrice,30000);setInterval(loadChart,60000);setInterval(()=>{if(isAiPlanActive()){setText("technicalRefreshStatus",`Auto technical refresh paused — Gemini AI plan active (${getAiPlanRemainingLabel()} remaining).`);return;}refreshTechnicalAnalysis("Automatic technical refresh.");},60000);setInterval(loadRrg,300000);setInterval(()=>{if(isAiPlanActive())setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`,"ai");},1000);
 
 /* ===== Dashboard tabs and settings ===== */
 (() => {
