@@ -858,20 +858,14 @@ def calculate_market_indicators(candles, interval):
     last_close = closes[-1]
     ema_20_value, ema_50_value, ema_200_value = ema(closes, 20), ema(closes, 50), ema(closes, 200)
     sma_20_value, sma_50_value = sma(closes, 20), sma(closes, 50)
-    atr_value = atr(highs, lows, closes)
-   swing_failure_structure = (
-    calculate_swing_failure_structure(
-        candles,
-        atr_value,
-        volume_ratio=volume_ratio,
-        rsi_value=rsi(closes, 14),
-        macd_state=macd(closes)["state"],
-        trend_1h="",
-        trend_4h="",
+      atr_value = atr(highs, lows, closes)
+
+    swing_failure_structure = (
+        calculate_swing_failure_structure(candles, atr_value)
+        if interval == "15m"
+        else None
     )
-    if interval == "15m"
-    else None
-)
+
     average_volume_20 = average(volumes[-20:-1])
     current_volume = volumes[-1]
     volume_ratio = current_volume / average_volume_20 if average_volume_20 else 0
