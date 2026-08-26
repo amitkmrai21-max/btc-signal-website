@@ -408,18 +408,26 @@ def find_pivot_lows(lows, left_right=3):
     return pivots
 
 
-def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3):
+def calculate_swing_failure_structure(
+    candles,
+    atr_value,
+    swing_left_right=3,
+    volume_ratio=0,
+    rsi_value=50,
+    macd_state="",
+    trend_1h="",
+    trend_4h="",
+):
     """
-    Current 15m Swing Structure Break + Retest engine.
+    15m current swing break + retest engine with fakeout filters.
 
-    Important:
-    - Uses the latest confirmed LOCAL 15m swing high and swing low.
-    - Does not use a daily high or daily low.
-    - A wick through a swing level does not confirm a break.
-    - Break confirmation requires a completed candle BODY close beyond
-      the swing level by 0.15 ATR.
-    - Final BUY / SELL appears only after a break, retest, and
-      directional rejection/hold confirmation.
+    Final BUY / SELL requires:
+    - 0.30 ATR body-close break
+    - 15m breakout volume >= 1.20x average
+    - second 15m close in break direction
+    - 1h same direction; 4h not strongly opposite
+    - retest plus directional confirmation candle
+    - 15m RSI and MACD aligned
     """
     if len(candles) < 60:
         raise ValueError(
@@ -430,32 +438,70 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3):
     highs = [float(candle[2]) for candle in candles]
     lows = [float(candle[3]) for candle in candles]
     closes = [float(candle[4]) for candle in candles]
+    volumes = [float(candle[5]) for candle in candles]
 
     pivot_highs = find_pivot_highs(highs, swing_left_right)
     pivot_lows = find_pivot_lows(lows, swing_left_right)
 
     current_price = closes[-1]
-    atr_buffer = max(float(atr_value) * 0.15, 0.01)
+    atr_buffer = max(float(atr_value) * 0.30, 0.01)
     retest_tolerance = max(float(atr_value) * 0.25, 0.01)
+
+    normalized_macd = str(macd_state or "").lower()
+    normalized_trend_1h = str(trend_1h or "").lower()
+    normalized_trend_4h = str(trend_4h or "").lower()
+
+    bullish_momentum_ok = (
+        float(rsi_value) >= 50
+        and "bullish" in normalized_macd
+    )
+
+    bearish_momentum_ok = (
+        float(rsi_value) <= 50
+        and "bearish" in normalized_macd
+    )
+
+    bullish_1h_ok = "bullish" in normalized_trend_1h
+    bearish_1h_ok = "bearish" in normalized_trend_1h
+
+    bullish_4h_blocked = "strong bearish" in normalized_trend_4h
+    bearish_4h_blocked = "strong bullish" in normalized_trend_4h
+
+    average_break_volume = average(volumes[-21:-1])
+    current_break_volume = volumes[-1]
+    calculated_volume_ratio = (
+        current_break_volume / average_break_volume
+        if average_break_volume
+        else 0
+    )
+
+    effective_volume_ratio = max(
+        float(volume_ratio or 0),
+        calculated_volume_ratio,
+    )
+
+    volume_ok = effective_volume_ratio >= 1.20
 
     def rounded(value):
         return round_value(value) if value is not None else None
 
-    def result(
-        signal="NO TRADE",
-        direction="NEUTRAL",
-        status="STRUCTURE TRACKING",
-        prior_high=None,
-        prior_low=None,
-        protected_level=None,
-        break_level_text="Waiting for current swing levels",
-        retest_level=None,
-        invalidation_level=None,
-        conclusion="Waiting for confirmed local 15m swing structure.",
-        reason="No final trade signal yet.",
-        break_level=None,
-        failed_high=None,
-        failed_low=None,
+    def build_filter_result(
+        direction,
+        signal,
+        status,
+        prior_high,
+        prior_low,
+        protected_level,
+        break_level,
+        retest_level,
+        invalidation_level,
+        conclusion,
+        reason,
+        quality,
+        passed_filters,
+        waiting_filters,
+        failed_filters,
+        break_event,
     ):
         return {
             "timeframe": "15m",
@@ -464,85 +510,123 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3):
             "atr_buffer": rounded(atr_buffer),
             "prior_swing_high": rounded(prior_high),
             "prior_swing_low": rounded(prior_low),
-            "failed_high": rounded(failed_high),
-            "failed_low": rounded(failed_low),
+            "failed_high": None,
+            "failed_low": None,
+            "break_event": break_event,
             "protected_break_level": rounded(protected_level),
             "break_level": rounded(break_level),
-            "break_level_text": break_level_text,
+            "break_level_text": (
+                f"Body close above ${break_level:,.2f}"
+                if direction == "BULLISH"
+                else f"Body close below ${break_level:,.2f}"
+            ),
             "break_status": status,
             "retest_level": rounded(retest_level),
             "invalidation_level": rounded(invalidation_level),
             "signal": signal,
             "direction": direction,
+            "quality": quality,
             "final_conclusion": conclusion,
-            "confirmation_rule": (
-                "Wick alone does not count. A completed 15m candle body must "
-                "close beyond the current swing level by at least 0.15 ATR. "
-                "Final BUY or SELL requires break, retest, and confirmation."
-            ),
             "reason": reason,
+            "confirmation_rule": (
+                "Final signal needs: 0.30 ATR body-close break, volume >= 1.20x, "
+                "a second direction close, 1h alignment, no strong 4h conflict, "
+                "retest, and a confirmation candle. Wick alone never counts."
+            ),
+            "filter_checklist": {
+                "passed": passed_filters,
+                "waiting": waiting_filters,
+                "failed": failed_filters,
+                "volume_ratio": rounded(effective_volume_ratio),
+                "volume_required": 1.20,
+                "rsi_15m": rounded(rsi_value),
+                "macd_15m": macd_state,
+                "trend_1h": trend_1h,
+                "trend_4h": trend_4h,
+            },
         }
 
     if not pivot_highs or not pivot_lows:
-        return result(
-            status="STRUCTURE TRACKING",
-            conclusion="WAIT — confirmed current 15m swing high/low are still forming.",
-            reason="No confirmed local pivot pair is available yet."
+        return build_filter_result(
+            "NEUTRAL",
+            "NO TRADE",
+            "STRUCTURE TRACKING",
+            None,
+            None,
+            None,
+            current_price,
+            None,
+            None,
+            "NO TRADE — waiting for confirmed 15m swing pivots.",
+            "No confirmed local swing high and low are available yet.",
+            "LOW",
+            [],
+            ["Confirmed local swing high/low"],
+            [],
+            "No confirmed swing structure yet",
         )
 
-    # Current active local levels only:
-    # latest confirmed pivot high = active resistance
-    # latest confirmed pivot low = active support
     active_high_index = pivot_highs[-1]
     active_low_index = pivot_lows[-1]
-
     active_high = highs[active_high_index]
     active_low = lows[active_low_index]
 
-    # Need an ordered recent structure. If same side has later pivot,
-    # still use the latest confirmed high/low pair as the active range.
     bullish_break_level = active_high + atr_buffer
     bearish_break_level = active_low - atr_buffer
 
-    # Search most recent confirmed bullish body-close break.
     bullish_break_index = None
+    bearish_break_index = None
+
     for index in range(active_high_index + 1, len(candles)):
         if closes[index] > bullish_break_level:
             bullish_break_index = index
 
-    # Search most recent confirmed bearish body-close break.
-    bearish_break_index = None
     for index in range(active_low_index + 1, len(candles)):
         if closes[index] < bearish_break_level:
             bearish_break_index = index
 
-    # Determine newest break event. If neither exists, price is still
-    # inside current swing structure and only WATCH is allowed.
     if bullish_break_index is None and bearish_break_index is None:
         midpoint = (active_high + active_low) / 2
-        inside_signal = "BUY WATCH" if current_price >= midpoint else "SELL WATCH"
+        signal = "BUY WATCH" if current_price >= midpoint else "SELL WATCH"
+        direction = "BULLISH" if signal == "BUY WATCH" else "BEARISH"
 
-        return result(
-            signal=inside_signal,
-            direction="BULLISH" if inside_signal == "BUY WATCH" else "BEARISH",
-            status="INSIDE STRUCTURE",
-            prior_high=active_high,
-            prior_low=active_low,
-            protected_level=active_high if inside_signal == "BUY WATCH" else active_low,
-            break_level_text=(
-                f"Buy break: close above ${bullish_break_level:,.2f} | "
-                f"Sell break: close below ${bearish_break_level:,.2f}"
+        break_level = (
+            bullish_break_level
+            if direction == "BULLISH"
+            else bearish_break_level
+        )
+
+        protected_level = (
+            active_high
+            if direction == "BULLISH"
+            else active_low
+        )
+
+        return build_filter_result(
+            direction,
+            signal,
+            "INSIDE STRUCTURE",
+            active_high,
+            active_low,
+            protected_level,
+            break_level,
+            protected_level,
+            active_low if direction == "BULLISH" else active_high,
+            (
+                f"{signal} — price is inside the active 15m swing range. "
+                "No final trade; wait for a confirmed break and retest."
             ),
-            retest_level=active_high if inside_signal == "BUY WATCH" else active_low,
-            invalidation_level=active_low if inside_signal == "BUY WATCH" else active_high,
-            conclusion=(
-                f"{inside_signal} — price is inside the current 15m swing range. "
-                "Wait for a body-close break and then a retest confirmation."
-            ),
-            reason=(
-                "Current local swing levels are active. No candle body has closed "
-                "beyond the ATR-buffered break level."
-            )
+            "No current swing level has a body-close break beyond the 0.30 ATR buffer.",
+            "LOW",
+            [],
+            [
+                "0.30 ATR body-close break",
+                "Break volume >= 1.20x",
+                "Second 15m direction close",
+                "Retest confirmation",
+            ],
+            [],
+            "No confirmed break yet",
         )
 
     newest_is_bullish = (
@@ -553,195 +637,212 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3):
         )
     )
 
-    # BULLISH: close above active swing high + ATR, then retest high as support.
     if newest_is_bullish:
+        break_index = bullish_break_index
+        direction = "BULLISH"
+        watch_signal = "BUY WATCH"
+        final_signal = "BUY"
+        protected_level = active_high
+        break_level = bullish_break_level
+        invalidation_level = active_low
+
+        second_close_ok = any(
+            closes[index] > active_high
+            for index in range(break_index + 1, len(candles))
+        )
+
         retest_seen = False
-        final_buy_index = None
-        failed_break_index = None
+        final_confirmation = False
+        failed_break = False
 
-        for index in range(bullish_break_index + 1, len(candles)):
-            candle_open = opens[index]
-            candle_high = highs[index]
-            candle_low = lows[index]
-            candle_close = closes[index]
+        for index in range(break_index + 1, len(candles)):
+            if closes[index] < active_high - retest_tolerance:
+                failed_break = True
 
-            # Price accepted back inside old range after bullish break.
-            if candle_close < active_high - retest_tolerance:
-                failed_break_index = index
-
-            # Retest means candle probes the broken high / new support zone.
-            if candle_low <= active_high + retest_tolerance:
+            if lows[index] <= active_high + retest_tolerance:
                 retest_seen = True
 
-            # Final BUY: retest occurred and a bullish candle body closes
-            # above the old swing high / support zone.
             if (
                 retest_seen
-                and candle_close > candle_open
-                and candle_close > active_high
-                and candle_low <= active_high + retest_tolerance
+                and closes[index] > opens[index]
+                and closes[index] > active_high
+                and lows[index] <= active_high + retest_tolerance
             ):
-                final_buy_index = index
+                final_confirmation = True
 
-        if final_buy_index is not None:
-            return result(
-                signal="BUY",
-                direction="BULLISH",
-                status="BUY CONFIRMED",
-                prior_high=active_high,
-                prior_low=active_low,
-                protected_level=active_high,
-                break_level=bullish_break_level,
-                break_level_text=f"Body close above ${bullish_break_level:,.2f}",
-                retest_level=active_high,
-                invalidation_level=active_low,
-                conclusion=(
-                    "BUY — 15m bullish break, retest, and support hold are confirmed. "
-                    "Run Gemini AI Analysis now; act only if Gemini also supports BUY."
-                ),
-                reason=(
-                    "A 15m candle body broke above the current swing high with ATR "
-                    "buffer, price retested the old high, and a bullish candle held "
-                    "the level as support."
-                )
-            )
+        momentum_ok = bullish_momentum_ok
+        trend_1h_ok = bullish_1h_ok
+        trend_4h_ok = not bullish_4h_blocked
 
-        if failed_break_index is not None:
-            return result(
-                signal="BUY WATCH",
-                direction="BULLISH",
-                status="BREAK FAILED / BACK INSIDE",
-                prior_high=active_high,
-                prior_low=active_low,
-                protected_level=active_high,
-                break_level=bullish_break_level,
-                break_level_text=f"Body close above ${bullish_break_level:,.2f}",
-                retest_level=active_high,
-                invalidation_level=active_low,
-                conclusion=(
-                    "BUY WATCH — bullish break moved back inside the prior range. "
-                    "Do not buy; wait for a fresh valid break and retest."
-                ),
-                reason=(
-                    "The bullish break did not hold because price accepted back below "
-                    "the old swing-high support zone."
-                )
-            )
+    else:
+        break_index = bearish_break_index
+        direction = "BEARISH"
+        watch_signal = "SELL WATCH"
+        final_signal = "SELL"
+        protected_level = active_low
+        break_level = bearish_break_level
+        invalidation_level = active_high
 
-        return result(
-            signal="BUY WATCH",
-            direction="BULLISH",
-            status="BULLISH BREAK / RETEST PENDING",
-            prior_high=active_high,
-            prior_low=active_low,
-            protected_level=active_high,
-            break_level=bullish_break_level,
-            break_level_text=f"Body close above ${bullish_break_level:,.2f}",
-            retest_level=active_high,
-            invalidation_level=active_low,
-            conclusion=(
-                "BUY WATCH — bullish 15m break is confirmed. Wait for price to retest "
-                "the old swing high as support; final BUY needs a bullish hold candle."
-            ),
-            reason=(
-                "A completed 15m candle body closed above the active swing high with "
-                "the ATR buffer. Retest confirmation is still required."
-            )
+        second_close_ok = any(
+            closes[index] < active_low
+            for index in range(break_index + 1, len(candles))
         )
 
-    # BEARISH: close below active swing low - ATR, then retest low as resistance.
-    retest_seen = False
-    final_sell_index = None
-    failed_break_index = None
+        retest_seen = False
+        final_confirmation = False
+        failed_break = False
 
-    for index in range(bearish_break_index + 1, len(candles)):
-        candle_open = opens[index]
-        candle_high = highs[index]
-        candle_low = lows[index]
-        candle_close = closes[index]
+        for index in range(break_index + 1, len(candles)):
+            if closes[index] > active_low + retest_tolerance:
+                failed_break = True
 
-        # Price accepted back inside old range after bearish break.
-        if candle_close > active_low + retest_tolerance:
-            failed_break_index = index
+            if highs[index] >= active_low - retest_tolerance:
+                retest_seen = True
 
-        # Retest means candle probes the broken low / new resistance zone.
-        if candle_high >= active_low - retest_tolerance:
-            retest_seen = True
+            if (
+                retest_seen
+                and closes[index] < opens[index]
+                and closes[index] < active_low
+                and highs[index] >= active_low - retest_tolerance
+            ):
+                final_confirmation = True
 
-        # Final SELL: retest occurred and bearish candle body closes
-        # below old swing low / resistance zone.
-        if (
-            retest_seen
-            and candle_close < candle_open
-            and candle_close < active_low
-            and candle_high >= active_low - retest_tolerance
-        ):
-            final_sell_index = index
+        momentum_ok = bearish_momentum_ok
+        trend_1h_ok = bearish_1h_ok
+        trend_4h_ok = not bearish_4h_blocked
 
-    if final_sell_index is not None:
-        return result(
-            signal="SELL",
-            direction="BEARISH",
-            status="SELL CONFIRMED",
-            prior_high=active_high,
-            prior_low=active_low,
-            protected_level=active_low,
-            break_level=bearish_break_level,
-            break_level_text=f"Body close below ${bearish_break_level:,.2f}",
-            retest_level=active_low,
-            invalidation_level=active_high,
-            conclusion=(
-                "SELL — 15m bearish break, retest, and resistance rejection are confirmed. "
-                "Run Gemini AI Analysis now; act only if Gemini also supports SELL."
+    passed = ["0.30 ATR body-close break"]
+    waiting = []
+    failed = []
+
+    if volume_ok:
+        passed.append(f"Break volume x{effective_volume_ratio:.2f} >= 1.20x")
+    else:
+        failed.append(f"Break volume x{effective_volume_ratio:.2f} below 1.20x")
+
+    if second_close_ok:
+        passed.append("Second 15m candle close confirmed")
+    else:
+        waiting.append("Second 15m direction close")
+
+    if trend_1h_ok:
+        passed.append("1h trend aligned")
+    else:
+        failed.append(f"1h trend not aligned: {trend_1h or 'unknown'}")
+
+    if trend_4h_ok:
+        passed.append("No strong opposite 4h trend")
+    else:
+        failed.append(f"Strong opposite 4h trend: {trend_4h}")
+
+    if momentum_ok:
+        passed.append("15m RSI + MACD aligned")
+    else:
+        failed.append("15m RSI + MACD not aligned")
+
+    if retest_seen:
+        passed.append("Retest detected")
+    else:
+        waiting.append("Retest pending")
+
+    if final_confirmation:
+        passed.append("Retest confirmation candle")
+    else:
+        waiting.append("Retest confirmation candle")
+
+    if failed_break:
+        return build_filter_result(
+            direction,
+            watch_signal,
+            "BREAK FAILED / BACK INSIDE",
+            active_high,
+            active_low,
+            protected_level,
+            break_level,
+            protected_level,
+            invalidation_level,
+            (
+                f"{watch_signal} — break moved back inside the prior swing range. "
+                "Do not enter; wait for a fresh break and retest."
             ),
-            reason=(
-                "A 15m candle body broke below the current swing low with ATR buffer, "
-                "price retested the old low, and a bearish candle rejected the level "
-                "as resistance."
-            )
+            "Price body-close accepted back inside the old swing structure.",
+            "LOW",
+            passed,
+            waiting,
+            failed,
+            "Break failed; price returned inside",
         )
 
-    if failed_break_index is not None:
-        return result(
-            signal="SELL WATCH",
-            direction="BEARISH",
-            status="BREAK FAILED / BACK INSIDE",
-            prior_high=active_high,
-            prior_low=active_low,
-            protected_level=active_low,
-            break_level=bearish_break_level,
-            break_level_text=f"Body close below ${bearish_break_level:,.2f}",
-            retest_level=active_low,
-            invalidation_level=active_high,
-            conclusion=(
-                "SELL WATCH — bearish break moved back inside the prior range. "
-                "Do not sell; wait for a fresh valid break and retest."
+    mandatory_filters_ok = (
+        volume_ok
+        and second_close_ok
+        and trend_1h_ok
+        and trend_4h_ok
+        and momentum_ok
+        and retest_seen
+        and final_confirmation
+    )
+
+    if mandatory_filters_ok:
+        return build_filter_result(
+            direction,
+            final_signal,
+            f"{final_signal} CONFIRMED — HIGH QUALITY",
+            active_high,
+            active_low,
+            protected_level,
+            break_level,
+            protected_level,
+            invalidation_level,
+            (
+                f"{final_signal} — high-quality 15m break, volume, second close, "
+                "trend alignment, retest, and confirmation candle are all present. "
+                "Run Gemini AI Analysis now; proceed only if Gemini agrees."
             ),
-            reason=(
-                "The bearish break did not hold because price accepted back above "
-                "the old swing-low resistance zone."
-            )
+            "All mandatory fakeout filters passed.",
+            "HIGH",
+            passed,
+            waiting,
+            failed,
+            (
+                "Bullish break + support retest hold"
+                if direction == "BULLISH"
+                else "Bearish break + resistance retest rejection"
+            ),
         )
 
-    return result(
-        signal="SELL WATCH",
-        direction="BEARISH",
-        status="BEARISH BREAK / RETEST PENDING",
-        prior_high=active_high,
-        prior_low=active_low,
-        protected_level=active_low,
-        break_level=bearish_break_level,
-        break_level_text=f"Body close below ${bearish_break_level:,.2f}",
-        retest_level=active_low,
-        invalidation_level=active_high,
-        conclusion=(
-            "SELL WATCH — bearish 15m break is confirmed. Wait for price to retest "
-            "the old swing low as resistance; final SELL needs a bearish rejection candle."
+    status = (
+        f"{direction} BREAK / FILTERS PENDING"
+        if not failed
+        else f"{direction} BREAK / FILTER FAILED"
+    )
+
+    conclusion = (
+        f"{watch_signal} — a structure break exists, but final {final_signal} is blocked "
+        "until every fakeout filter passes. Review failed/pending filters below."
+    )
+
+    return build_filter_result(
+        direction,
+        watch_signal,
+        status,
+        active_high,
+        active_low,
+        protected_level,
+        break_level,
+        protected_level,
+        invalidation_level,
+        conclusion,
+        "Break is not yet high quality enough for a final signal.",
+        "MEDIUM" if len(failed) <= 1 else "LOW",
+        passed,
+        waiting,
+        failed,
+        (
+            "Bullish break awaiting filters"
+            if direction == "BULLISH"
+            else "Bearish break awaiting filters"
         ),
-        reason=(
-            "A completed 15m candle body closed below the active swing low with "
-            "the ATR buffer. Retest confirmation is still required."
-        )
     )
 
 def calculate_market_indicators(candles, interval):
@@ -758,8 +859,16 @@ def calculate_market_indicators(candles, interval):
     ema_20_value, ema_50_value, ema_200_value = ema(closes, 20), ema(closes, 50), ema(closes, 200)
     sma_20_value, sma_50_value = sma(closes, 20), sma(closes, 50)
     atr_value = atr(highs, lows, closes)
-    swing_failure_structure = (
-    calculate_swing_failure_structure(candles, atr_value)
+   swing_failure_structure = (
+    calculate_swing_failure_structure(
+        candles,
+        atr_value,
+        volume_ratio=volume_ratio,
+        rsi_value=rsi(closes, 14),
+        macd_state=macd(closes)["state"],
+        trend_1h="",
+        trend_4h="",
+    )
     if interval == "15m"
     else None
 )
