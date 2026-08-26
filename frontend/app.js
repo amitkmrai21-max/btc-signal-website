@@ -455,6 +455,12 @@ function renderSwingFailureStructure(data) {
   );
 
   setText(
+    "swingFinalConclusion",
+    structure.final_conclusion ||
+      "WAIT — no final trade signal until break, retest, and confirmation."
+  );
+  
+  setText(
     "swingConfirmationRule",
     structure.confirmation_rule ||
       "Wicks do not confirm a break. Waiting for completed candle-body confirmation."
@@ -466,7 +472,13 @@ function renderSwingFailureStructure(data) {
     badge.textContent = signal;
     badge.className = "swing-signal-badge";
 
-    if (direction === "BEARISH") {
+   if (signal === "BUY") {
+      badge.classList.add("swing-bullish");
+      badge.textContent = "BUY — FINAL";
+    } else if (signal === "SELL") {
+      badge.classList.add("swing-bearish");
+      badge.textContent = "SELL — FINAL";
+    } else if (direction === "BEARISH") {
       badge.classList.add("swing-bearish");
     } else if (direction === "BULLISH") {
       badge.classList.add("swing-bullish");
