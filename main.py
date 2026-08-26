@@ -855,10 +855,16 @@ def calculate_market_indicators(candles, interval):
     quote_volumes = [float(candle[7]) for candle in candles]
     trade_counts = [int(candle[8]) for candle in candles]
     taker_buy_volumes = [float(candle[9]) for candle in candles]
-    last_close = closes[-1]
-    ema_20_value, ema_50_value, ema_200_value = ema(closes, 20), ema(closes, 50), ema(closes, 200)
-    sma_20_value, sma_50_value = sma(closes, 20), sma(closes, 50)
-      atr_value = atr(highs, lows, closes)
+       last_close = closes[-1]
+
+    ema_20_value = ema(closes, 20)
+    ema_50_value = ema(closes, 50)
+    ema_200_value = ema(closes, 200)
+
+    sma_20_value = sma(closes, 20)
+    sma_50_value = sma(closes, 50)
+
+    atr_value = atr(highs, lows, closes)
 
     swing_failure_structure = (
         calculate_swing_failure_structure(candles, atr_value)
