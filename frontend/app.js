@@ -408,6 +408,73 @@ function renderSetupQuality(data) {
     checklist.appendChild(row);
   });
 }
+function renderSwingFailureStructure(data) {
+  const structure =
+    data?.market_data?.timeframes?.["15m"]?.swing_failure_structure || {};
+
+  const signal = String(structure.signal || "NO TRADE").toUpperCase();
+  const direction = String(structure.direction || "NEUTRAL").toUpperCase();
+
+  setText("swingTimeframe", structure.timeframe || "15m");
+  setText("swingCurrentPrice", formatUsd(structure.current_price));
+  setText("swingPriorHigh", formatUsd(structure.prior_swing_high));
+  setText("swingPriorLow", formatUsd(structure.prior_swing_low));
+
+  const failedHigh = structure.failed_high;
+  const failedLow = structure.failed_low;
+
+  setText(
+    "swingFailedLevel",
+    failedHigh !== null && failedHigh !== undefined
+      ? `High ${formatUsd(failedHigh)}`
+      : failedLow !== null && failedLow !== undefined
+        ? `Low ${formatUsd(failedLow)}`
+        : "--"
+  );
+
+  setText(
+    "swingProtectedLevel",
+    formatUsd(structure.protected_break_level)
+  );
+
+  setText(
+    "swingBreakLevel",
+    structure.break_level_text || "Waiting for confirmed swing structure"
+  );
+
+  setText("swingBreakStatus", structure.break_status || "NO STRUCTURE");
+  setText("swingRetestLevel", formatUsd(structure.retest_level));
+  setText(
+    "swingInvalidationLevel",
+    formatUsd(structure.invalidation_level)
+  );
+
+  setText(
+    "swingStructureReason",
+    structure.reason || "Waiting for confirmed 15m swing structure."
+  );
+
+  setText(
+    "swingConfirmationRule",
+    structure.confirmation_rule ||
+      "Wicks do not confirm a break. Waiting for completed candle-body confirmation."
+  );
+
+  const badge = getElement("swingSignalBadge");
+
+  if (badge) {
+    badge.textContent = signal;
+    badge.className = "swing-signal-badge";
+
+    if (direction === "BEARISH") {
+      badge.classList.add("swing-bearish");
+    } else if (direction === "BULLISH") {
+      badge.classList.add("swing-bullish");
+    } else {
+      badge.classList.add("swing-neutral");
+    }
+  }
+}
 
 function renderTechnicalIntelligence(data) {
   const health = data?.data_health || {}, score = data?.score_breakdown || {}, regime = data?.market_regime || {}, agreement = data?.timeframe_agreement || {}, levels = data?.key_level_distance || {};
@@ -437,8 +504,16 @@ async function loadTechnicalFallback(prefix = "Live technical analysis refreshed
     ["15m", "1h", "4h"].forEach((frame) => { const item = data?.timeframes?.[frame] || {}; const key = frame === "15m" ? "15m" : frame; setMiniSignal(`signal${key}`, item.signal); setText(`summary${key}`, item.summary); setText(`keyLevel${key}`, item.key_level); });
     setText("marketBias", data.market_bias); setText("setupStatus", data.setup_status); setText("confirmationNeeded", data.confirmation_needed); setText("target1", data.target_1); setText("target2", data.target_2);
     setSignal(data.signal, `${prefix} ${data.reason}`); const technical = calculateTechnicalSignal(latestTechnicalMarket["15m"] || {}, latestTechnicalMarket["1h"] || {}); setText("aiConfidence", `Technical confidence: ${getTechnicalConfidence(technical)}%`); setText("entryIdea", data.entry_idea); setText("stopLossIdea", data.stop_loss_idea); setRiskBadge(data.risk); updateSignalConfirmation(data); setSignalSource("Live technical fallback — AI unavailable or expired", "technical"); setText("analysisUpdatedAt", "Gemini AI unavailable; live Binance technical analysis is active.");
-    renderTechnicalIntelligence(data); renderSetupQuality(data); setTechnicalRefreshState("idle", `Technical data updated: ${formatUpdatedAt(data.updated_at)}.`); return data;
-  } catch (error) {
+   renderTechnicalIntelligence(data);
+renderSwingFailureStructure(data);
+renderSetupQuality(data);
+
+setTechnicalRefreshState(
+  "idle",
+  `Technical data updated: ${formatUpdatedAt(data.updated_at)}.`
+);
+
+return data;
     console.error(error); renderTechnicalFallback(prefix); setDataHealthBadge({ status: "ERROR" }); setText("technicalHealthMessage", error.message || "Technical data could not be refreshed."); renderSetupQuality(null); setTechnicalRefreshState("error", `Technical refresh failed: ${error.message || "Please retry."}`); return null;
   } finally { technicalRefreshInProgress = false; const refresh = getElement("refreshBtn"); if (refresh) { refresh.disabled = false; refresh.textContent = "Refresh Technical"; } }
 }
