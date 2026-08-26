@@ -846,7 +846,7 @@ def calculate_swing_failure_structure(
     )
 
 def calculate_market_indicators(candles, interval):
-        if len(candles) < 200:
+    if len(candles) < 200:
         raise ValueError("Need 200 candles for full market analysis.")
 
     highs = [float(candle[2]) for candle in candles]
@@ -872,6 +872,14 @@ def calculate_market_indicators(candles, interval):
         calculate_swing_failure_structure(candles, atr_value)
         if interval == "15m"
         else None
+    )
+
+    average_volume_20 = average(volumes[-20:-1])
+    current_volume = volumes[-1]
+    volume_ratio = (
+        current_volume / average_volume_20
+        if average_volume_20
+        else 0
     )
 
     average_volume_20 = average(volumes[-20:-1])
