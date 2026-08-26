@@ -1713,6 +1713,156 @@ canvas {
     flex-direction: column;
   }
 }
+/* Swing Failure & Structure Break — 15m */
+.swing-structure-card {
+  background:
+    radial-gradient(circle at 92% 5%, rgba(239, 68, 68, 0.14), transparent 22rem),
+    radial-gradient(circle at 7% 100%, rgba(56, 189, 248, 0.1), transparent 20rem),
+    linear-gradient(145deg, rgba(39, 21, 35, 0.96), rgba(7, 20, 35, 0.99));
+}
+
+.swing-signal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  max-width: 100%;
+  padding: 7px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.48);
+  border-radius: 999px;
+  color: #e2e8f0;
+  background: rgba(30, 41, 59, 0.85);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+.swing-bearish {
+  border-color: rgba(248, 113, 113, 0.85);
+  color: #fecaca;
+  background: rgba(153, 27, 27, 0.42);
+}
+
+.swing-bullish {
+  border-color: rgba(74, 222, 128, 0.82);
+  color: #bbf7d0;
+  background: rgba(20, 83, 45, 0.44);
+}
+
+.swing-neutral {
+  border-color: rgba(250, 204, 21, 0.78);
+  color: #fef3c7;
+  background: rgba(146, 64, 14, 0.38);
+}
+
+.swing-structure-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.swing-structure-item {
+  min-width: 0;
+  min-height: 104px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(4, 15, 27, 0.54);
+}
+
+.swing-structure-item > span {
+  color: var(--muted);
+  font-size: 0.73rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.swing-structure-item > strong {
+  margin-top: 10px;
+  color: #f8fafc;
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+  line-height: 1.32;
+}
+
+.swing-price-item {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: linear-gradient(145deg, rgba(3, 105, 161, 0.22), rgba(4, 15, 27, 0.76));
+}
+
+.failed-level {
+  border-color: rgba(248, 113, 113, 0.38);
+  background: linear-gradient(145deg, rgba(127, 29, 29, 0.2), rgba(4, 15, 27, 0.72));
+}
+
+.protected-level {
+  border-color: rgba(167, 139, 250, 0.42);
+  background: linear-gradient(145deg, rgba(88, 28, 135, 0.2), rgba(4, 15, 27, 0.72));
+}
+
+.break-level {
+  border-color: rgba(250, 204, 21, 0.46);
+  background: linear-gradient(145deg, rgba(146, 64, 14, 0.22), rgba(4, 15, 27, 0.72));
+}
+
+.status-level {
+  border-color: rgba(56, 189, 248, 0.44);
+  background: linear-gradient(145deg, rgba(3, 105, 161, 0.2), rgba(4, 15, 27, 0.72));
+}
+
+.invalidation-level {
+  border-color: rgba(248, 113, 113, 0.46);
+  background: linear-gradient(145deg, rgba(127, 29, 29, 0.24), rgba(4, 15, 27, 0.72));
+}
+
+.swing-structure-footer {
+  display: grid;
+  gap: 9px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 13px;
+  background: rgba(4, 15, 27, 0.45);
+}
+
+.swing-structure-footer p {
+  max-width: 100%;
+  margin: 0;
+  color: #d6e0ed;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+#swingConfirmationRule {
+  color: #fde68a;
+}
+
+@media (max-width: 1100px) {
+  .swing-structure-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .swing-structure-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .swing-structure-item {
+    min-height: 82px;
+  }
+
+  .swing-signal-badge {
+    width: 100%;
+  }
+}
 /* Phase 2A: Setup Quality & Trade Checklist */
 .setup-quality-card {
   background:
