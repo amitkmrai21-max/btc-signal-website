@@ -846,8 +846,9 @@ def calculate_swing_failure_structure(
     )
 
 def calculate_market_indicators(candles, interval):
-    if len(candles) < 200:
+        if len(candles) < 200:
         raise ValueError("Need 200 candles for full market analysis.")
+
     highs = [float(candle[2]) for candle in candles]
     lows = [float(candle[3]) for candle in candles]
     closes = [float(candle[4]) for candle in candles]
@@ -855,7 +856,8 @@ def calculate_market_indicators(candles, interval):
     quote_volumes = [float(candle[7]) for candle in candles]
     trade_counts = [int(candle[8]) for candle in candles]
     taker_buy_volumes = [float(candle[9]) for candle in candles]
-       last_close = closes[-1]
+
+    last_close = closes[-1]
 
     ema_20_value = ema(closes, 20)
     ema_50_value = ema(closes, 50)
@@ -874,7 +876,11 @@ def calculate_market_indicators(candles, interval):
 
     average_volume_20 = average(volumes[-20:-1])
     current_volume = volumes[-1]
-    volume_ratio = current_volume / average_volume_20 if average_volume_20 else 0
+    volume_ratio = (
+        current_volume / average_volume_20
+        if average_volume_20
+        else 0
+    )
     total_volume_20 = sum(volumes[-20:])
     taker_buy_total_20 = sum(taker_buy_volumes[-20:])
     taker_buy_ratio = (taker_buy_total_20 / total_volume_20) * 100 if total_volume_20 else 50
