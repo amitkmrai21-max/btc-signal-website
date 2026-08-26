@@ -638,6 +638,11 @@ def calculate_market_indicators(candles, interval):
     ema_20_value, ema_50_value, ema_200_value = ema(closes, 20), ema(closes, 50), ema(closes, 200)
     sma_20_value, sma_50_value = sma(closes, 20), sma(closes, 50)
     atr_value = atr(highs, lows, closes)
+    swing_failure_structure = (
+    calculate_swing_failure_structure(candles, atr_value)
+    if interval == "15m"
+    else None
+)
     average_volume_20 = average(volumes[-20:-1])
     current_volume = volumes[-1]
     volume_ratio = current_volume / average_volume_20 if average_volume_20 else 0
@@ -660,7 +665,7 @@ def calculate_market_indicators(candles, interval):
         "obv": obv(closes, volumes), "mfi_14": round_value(mfi(highs, lows, closes, volumes)), "momentum_percent": round_value(momentum_percent),
         "support_resistance": {"support_20": round_value(support), "resistance_20": round_value(resistance)},
         "pivots": pivot_levels(highs, lows, closes), "fibonacci": fibonacci_levels(highs, lows),
-        "candle_pattern": candle_pattern(candles), "market_structure": market_structure(closes, highs, lows, ema_20_value, ema_50_value), "breakout_status": breakout,
+        "candle_pattern": candle_pattern(candles), "market_structure": market_structure(closes, highs, lows, ema_20_value, ema_50_value), "breakout_status": breakout, "swing_failure_structure": swing_failure_structure,
     }
 
 
