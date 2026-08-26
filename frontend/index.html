@@ -433,7 +433,80 @@
             </article>
           </div>
         </section>
+        
+<section class="card swing-structure-card layout-editable" data-layout-id="swing-structure">
+  <div class="section-heading">
+    <div>
+      <h2>Swing Failure &amp; Structure Break</h2>
+      <p>
+        15-minute BTC structure. A wick alone does not confirm a break:
+        confirmation requires a completed candle body close beyond the protected
+        level with the ATR buffer.
+      </p>
+    </div>
+    <span id="swingSignalBadge" class="swing-signal-badge swing-neutral">Loading...</span>
+  </div>
 
+  <div class="swing-structure-grid">
+    <article class="swing-structure-item swing-price-item">
+      <span>Timeframe</span>
+      <strong id="swingTimeframe">15m</strong>
+    </article>
+
+    <article class="swing-structure-item swing-price-item">
+      <span>Current Price</span>
+      <strong id="swingCurrentPrice">$—</strong>
+    </article>
+
+    <article class="swing-structure-item">
+      <span>Prior Swing High</span>
+      <strong id="swingPriorHigh">$—</strong>
+    </article>
+
+    <article class="swing-structure-item">
+      <span>Prior Swing Low</span>
+      <strong id="swingPriorLow">$—</strong>
+    </article>
+
+    <article class="swing-structure-item failed-level">
+      <span>Failed High / Low</span>
+      <strong id="swingFailedLevel">$—</strong>
+    </article>
+
+    <article class="swing-structure-item protected-level">
+      <span>Protected Break Level</span>
+      <strong id="swingProtectedLevel">$—</strong>
+    </article>
+
+    <article class="swing-structure-item break-level">
+      <span>Break Level</span>
+      <strong id="swingBreakLevel">Close below $—</strong>
+    </article>
+
+    <article class="swing-structure-item status-level">
+      <span>Break Status</span>
+      <strong id="swingBreakStatus">Loading...</strong>
+    </article>
+
+    <article class="swing-structure-item">
+      <span>Retest Level</span>
+      <strong id="swingRetestLevel">$—</strong>
+    </article>
+
+    <article class="swing-structure-item invalidation-level">
+      <span>Invalidation Level</span>
+      <strong id="swingInvalidationLevel">$—</strong>
+    </article>
+  </div>
+
+  <div class="swing-structure-footer">
+    <p id="swingStructureReason">Loading 15m swing structure…</p>
+    <p id="swingConfirmationRule">
+      Wicks do not confirm a break. Waiting for completed candle-body confirmation.
+    </p>
+  </div>
+</section>
+        
         <section class="card setup-quality-card layout-editable" data-layout-id="setup-quality">
           <div class="section-heading">
             <div>
