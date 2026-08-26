@@ -199,29 +199,92 @@
     </section>
 
     <section class="tab-panel" data-panel="live-chart">
-      <section class="card live-chart-placeholder-card">
-        <div class="section-heading">
-          <div>
-            <h2>Live Trading Chart</h2>
-            <p>Your full interactive market-chart workspace is reserved here.</p>
-          </div>
-          <span class="plan-badge">COMING NEXT</span>
-        </div>
+  <section class="card live-chart-card">
+    <div class="section-heading">
+      <div>
+        <h2>Live BTCUSDT Candlestick Chart</h2>
+        <p>
+          Binance spot-market candles update live. Select a timeframe to inspect
+          price structure before using the Swing Structure and Gemini AI tools.
+        </p>
+      </div>
+      <span id="liveChartConnection" class="live-chart-connection live-connecting">
+        Connecting...
+      </span>
+    </div>
 
-        <div class="live-chart-placeholder">
-          <span aria-hidden="true">⌁</span>
-          <h3>Live chart workspace reserved</h3>
-          <p>
-            BTCUSDT / BTCUSD selector, live candlesticks, indicators, drawing tools,
-            and AI-on-chart overlays will be added here in the next phase.
-          </p>
-          <p>
-            For now, use the Dashboard tab to view the quick BTC chart and upload a
-            screenshot to the existing Gemini AI Chart Analyser.
-          </p>
-        </div>
-      </section>
-    </section>
+    <div class="live-chart-toolbar">
+      <div class="live-chart-timeframes" aria-label="Live chart timeframe">
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1m">1m</button>
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="5m">5m</button>
+        <button class="live-chart-timeframe-btn active" type="button" data-live-timeframe="15m">15m</button>
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1h">1h</button>
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="4h">4h</button>
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1d">1d</button>
+      </div>
+
+      <div class="live-chart-actions">
+        <button id="liveChartResetBtn" class="chart-control-btn" type="button">
+          Reset View
+        </button>
+        <button id="liveChartRefreshBtn" class="chart-control-btn" type="button">
+          Refresh Candles
+        </button>
+      </div>
+    </div>
+
+    <div class="live-chart-stats">
+      <article class="live-chart-stat">
+        <span>Symbol</span>
+        <strong>BTCUSDT</strong>
+      </article>
+
+      <article class="live-chart-stat">
+        <span>Timeframe</span>
+        <strong id="liveChartTimeframe">15m</strong>
+      </article>
+
+      <article class="live-chart-stat">
+        <span>Live Price</span>
+        <strong id="liveChartPrice">$—</strong>
+      </article>
+
+      <article class="live-chart-stat">
+        <span>Current Candle</span>
+        <strong id="liveChartCandleStatus">Loading...</strong>
+      </article>
+    </div>
+
+    <div
+      id="liveCandlestickChart"
+      class="live-candlestick-chart"
+      aria-label="Live BTCUSDT candlestick chart"
+    ></div>
+
+    <div class="live-chart-bottom-grid">
+      <article class="live-chart-note">
+        <h3>Live structure workflow</h3>
+        <p>
+          Use the 15m view with the Swing Failure &amp; Structure Break card.
+          A wick is not confirmation: wait for body close, ATR buffer, retest,
+          and final BUY/SELL quality confirmation.
+        </p>
+      </article>
+
+      <article class="live-chart-note">
+        <h3>Manual AI confirmation</h3>
+        <p>
+          When the technical card says BUY — FINAL or SELL — FINAL, run Gemini AI
+          Analysis manually. Review both directions before using paper trading.
+        </p>
+      </article>
+    </div>
+
+    <p id="liveChartStatus" class="live-chart-status">
+      Loading historical candles...
+    </p>
+  </section>
+</section>
 
     <section class="tab-panel" data-panel="technical">
       <section class="card rrg-card">
