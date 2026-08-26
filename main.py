@@ -1874,4 +1874,3 @@ app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 def home():
     return FileResponse("frontend/index.html")
 
- 
