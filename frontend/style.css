@@ -3124,3 +3124,27 @@ body[data-accent="green"] .settings-choice.active {
 }
 
 /* ===== Dashboard tabs and settings addon: end ===== */
+.swing-filter-panel {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 13px;
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  border-radius: 11px;
+  background: rgba(3, 105, 161, 0.12);
+}
+
+.swing-filter-panel > span {
+  color: #bae6fd;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.swing-filter-panel > p {
+  max-width: 100%;
+  margin: 0;
+  color: #d6e0ed;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
