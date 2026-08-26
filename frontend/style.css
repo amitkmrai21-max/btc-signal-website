@@ -1839,7 +1839,35 @@ canvas {
   font-size: 0.84rem;
   line-height: 1.5;
 }
+.swing-final-conclusion {
+  display: grid;
+  gap: 7px;
+  margin: 0 !important;
+  padding: 13px;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  border-radius: 11px;
+  color: #fef3c7 !important;
+  background: linear-gradient(
+    135deg,
+    rgba(146, 64, 14, 0.32),
+    rgba(4, 15, 27, 0.58)
+  );
+}
 
+.swing-final-conclusion > span {
+  color: #fde68a;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.swing-final-conclusion > strong {
+  color: #fff7d1;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
 #swingConfirmationRule {
   color: #fde68a;
 }
