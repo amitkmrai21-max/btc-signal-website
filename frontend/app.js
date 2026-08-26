@@ -423,13 +423,9 @@ function renderSwingFailureStructure(data) {
   const failedHigh = structure.failed_high;
   const failedLow = structure.failed_low;
 
-  setText(
+   setText(
     "swingFailedLevel",
-    failedHigh !== null && failedHigh !== undefined
-      ? `High ${formatUsd(failedHigh)}`
-      : failedLow !== null && failedLow !== undefined
-        ? `Low ${formatUsd(failedLow)}`
-        : "--"
+    structure.break_event || "No confirmed break event yet"
   );
 
   setText(
@@ -458,6 +454,25 @@ function renderSwingFailureStructure(data) {
     "swingFinalConclusion",
     structure.final_conclusion ||
       "WAIT — no final trade signal until break, retest, and confirmation."
+  );
+
+  const filterData = structure.filter_checklist || {};
+  const passed = Array.isArray(filterData.passed) ? filterData.passed : [];
+  const waiting = Array.isArray(filterData.waiting) ? filterData.waiting : [];
+  const failed = Array.isArray(filterData.failed) ? filterData.failed : [];
+
+  setText(
+    "swingFilterSummary",
+    `Quality: ${structure.quality || "LOW"} • Passed ${passed.length} • Pending ${waiting.length} • Failed ${failed.length}`
+  );
+
+  setText(
+    "swingFilterDetails",
+    [
+      passed.length ? `Pass: ${passed.join(" | ")}` : "",
+      waiting.length ? `Pending: ${waiting.join(" | ")}` : "",
+      failed.length ? `Blocked: ${failed.join(" | ")}` : "",
+    ].filter(Boolean).join(" • ") || "Waiting for structure filters."
   );
   
   setText(
