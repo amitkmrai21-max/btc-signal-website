@@ -348,6 +348,281 @@ def fibonacci_levels(highs, lows):
         "level_78_6": round_value(swing_high - price_range * 0.786),
     }
 
+def find_pivot_highs(highs, left_right=3):
+    pivots = []
+
+    for index in range(left_right, len(highs) - left_right):
+        current = highs[index]
+
+        if (
+            current > max(highs[index - left_right:index])
+            and current >= max(highs[index + 1:index + left_right + 1])
+        ):
+            pivots.append(index)
+
+    return pivots
+
+
+def find_pivot_lows(lows, left_right=3):
+    pivots = []
+
+    for index in range(left_right, len(lows) - left_right):
+        current = lows[index]
+
+        if (
+            current < min(lows[index - left_right:index])
+            and current <= min(lows[index + 1:index + left_right + 1])
+        ):
+            pivots.append(index)
+
+    return pivots
+
+
+def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3):
+    """
+    15m Swing Failure + Structure Break.
+
+    Rules:
+    - Swing points come from confirmed 3-left / 3-right pivots.
+    - A wick above/below a prior swing only creates a failed-rally / failed-drop context.
+    - Structure break requires a CLOSED candle body beyond the protected level
+      plus a 0.15 ATR buffer. Wick-only moves never confirm a break.
+    """
+    if len(candles) < 60:
+        raise ValueError("Need at least 60 candles for swing-failure structure analysis.")
+
+    opens = [float(candle[1]) for candle in candles]
+    highs = [float(candle[2]) for candle in candles]
+    lows = [float(candle[3]) for candle in candles]
+    closes = [float(candle[4]) for candle in candles]
+
+    pivot_highs = find_pivot_highs(highs, swing_left_right)
+    pivot_lows = find_pivot_lows(lows, swing_left_right)
+
+    current_price = closes[-1]
+    atr_buffer = max(float(atr_value) * 0.15, 0.01)
+
+    def price_or_none(value):
+        return round_value(value) if value is not None else None
+
+    base_response = {
+        "timeframe": "15m",
+        "current_price": price_or_none(current_price),
+        "atr_14": price_or_none(atr_value),
+        "atr_buffer": price_or_none(atr_buffer),
+        "prior_swing_high": None,
+        "prior_swing_low": None,
+        "failed_high": None,
+        "failed_low": None,
+        "protected_break_level": None,
+        "break_level_text": "Waiting for confirmed swing structure",
+        "break_status": "NO STRUCTURE",
+        "retest_level": None,
+        "invalidation_level": None,
+        "signal": "NO TRADE",
+        "direction": "NEUTRAL",
+        "confirmation_rule": (
+            "Wicks do not confirm a break. A completed 15m candle body must close "
+            "beyond the protected level by at least 0.15 ATR."
+        ),
+        "reason": "Waiting for enough confirmed 15m pivot structure."
+    }
+
+    if not pivot_highs or not pivot_lows:
+        return base_response
+
+    # Bearish setup: a prior swing high is swept, then price must close below
+    # the last protected pivot low minus ATR buffer.
+    bearish_candidates = []
+
+    for high_index in pivot_highs:
+        low_before_high = [index for index in pivot_lows if index < high_index]
+
+        if not low_before_high:
+            continue
+
+        protected_low_index = low_before_high[-1]
+        prior_swing_high = highs[high_index]
+        protected_low = lows[protected_low_index]
+
+        failed_high_value = None
+        failed_high_index = None
+
+        for index in range(high_index + 1, len(candles)):
+            if highs[index] > prior_swing_high:
+                failed_high_value = highs[index]
+                failed_high_index = index
+
+        if failed_high_index is None:
+            continue
+
+        break_level = protected_low - atr_buffer
+        confirmed_break_index = None
+
+        for index in range(failed_high_index + 1, len(candles)):
+            # Body-close confirmation only; a wick below break_level is ignored.
+            if closes[index] < break_level:
+                confirmed_break_index = index
+
+        bearish_candidates.append(
+            {
+                "prior_swing_high": prior_swing_high,
+                "protected_low": protected_low,
+                "failed_high": failed_high_value,
+                "break_level": break_level,
+                "failed_high_index": failed_high_index,
+                "confirmed_break_index": confirmed_break_index,
+            }
+        )
+
+    # Bullish mirror setup: a prior swing low is swept, then price must close
+    # above the last protected pivot high plus ATR buffer.
+    bullish_candidates = []
+
+    for low_index in pivot_lows:
+        high_before_low = [index for index in pivot_highs if index < low_index]
+
+        if not high_before_low:
+            continue
+
+        protected_high_index = high_before_low[-1]
+        prior_swing_low = lows[low_index]
+        protected_high = highs[protected_high_index]
+
+        failed_low_value = None
+        failed_low_index = None
+
+        for index in range(low_index + 1, len(candles)):
+            if lows[index] < prior_swing_low:
+                failed_low_value = lows[index]
+                failed_low_index = index
+
+        if failed_low_index is None:
+            continue
+
+        break_level = protected_high + atr_buffer
+        confirmed_break_index = None
+
+        for index in range(failed_low_index + 1, len(candles)):
+            # Body-close confirmation only; a wick above break_level is ignored.
+            if closes[index] > break_level:
+                confirmed_break_index = index
+
+        bullish_candidates.append(
+            {
+                "prior_swing_low": prior_swing_low,
+                "protected_high": protected_high,
+                "failed_low": failed_low_value,
+                "break_level": break_level,
+                "failed_low_index": failed_low_index,
+                "confirmed_break_index": confirmed_break_index,
+            }
+        )
+
+    latest_bearish = max(
+        bearish_candidates,
+        key=lambda item: item["failed_high_index"],
+        default=None,
+    )
+
+    latest_bullish = max(
+        bullish_candidates,
+        key=lambda item: item["failed_low_index"],
+        default=None,
+    )
+
+    if latest_bearish and (
+        not latest_bullish
+        or latest_bearish["failed_high_index"] >= latest_bullish["failed_low_index"]
+    ):
+        protected_low = latest_bearish["protected_low"]
+        break_level = latest_bearish["break_level"]
+        invalidation = latest_bearish["failed_high"] + atr_buffer
+        confirmed_break_index = latest_bearish["confirmed_break_index"]
+
+        if confirmed_break_index is not None:
+            retest_tolerance = atr_buffer
+            retest_seen = any(
+                highs[index] >= protected_low - retest_tolerance
+                for index in range(confirmed_break_index + 1, len(candles))
+            )
+
+            break_status = "RETEST SEEN" if retest_seen else "RETEST PENDING"
+            signal = "SELL WATCH"
+            reason = (
+                "Bearish swing failure detected. A 15m candle body closed below "
+                "the protected low with the ATR buffer; wait for a controlled retest."
+            )
+        else:
+            break_status = "SELL WATCH"
+            signal = "SELL WATCH"
+            reason = (
+                "Failed rally high detected above the prior swing high. "
+                "Wait for a completed 15m candle body close below the protected "
+                "low minus the ATR buffer. Wick-only moves are ignored."
+            )
+
+        return {
+            **base_response,
+            "prior_swing_high": price_or_none(latest_bearish["prior_swing_high"]),
+            "prior_swing_low": price_or_none(protected_low),
+            "failed_high": price_or_none(latest_bearish["failed_high"]),
+            "protected_break_level": price_or_none(protected_low),
+            "break_level": price_or_none(break_level),
+            "break_level_text": f"Close below ${break_level:,.2f}",
+            "break_status": break_status,
+            "retest_level": price_or_none(protected_low),
+            "invalidation_level": price_or_none(invalidation),
+            "signal": signal,
+            "direction": "BEARISH",
+            "reason": reason,
+        }
+
+    if latest_bullish:
+        protected_high = latest_bullish["protected_high"]
+        break_level = latest_bullish["break_level"]
+        invalidation = latest_bullish["failed_low"] - atr_buffer
+        confirmed_break_index = latest_bullish["confirmed_break_index"]
+
+        if confirmed_break_index is not None:
+            retest_tolerance = atr_buffer
+            retest_seen = any(
+                lows[index] <= protected_high + retest_tolerance
+                for index in range(confirmed_break_index + 1, len(candles))
+            )
+
+            break_status = "RETEST SEEN" if retest_seen else "RETEST PENDING"
+            signal = "BUY WATCH"
+            reason = (
+                "Bullish swing failure detected. A 15m candle body closed above "
+                "the protected high with the ATR buffer; wait for a controlled retest."
+            )
+        else:
+            break_status = "BUY WATCH"
+            signal = "BUY WATCH"
+            reason = (
+                "Failed drop detected below the prior swing low. "
+                "Wait for a completed 15m candle body close above the protected "
+                "high plus the ATR buffer. Wick-only moves are ignored."
+            )
+
+        return {
+            **base_response,
+            "prior_swing_high": price_or_none(protected_high),
+            "prior_swing_low": price_or_none(latest_bullish["prior_swing_low"]),
+            "failed_low": price_or_none(latest_bullish["failed_low"]),
+            "protected_break_level": price_or_none(protected_high),
+            "break_level": price_or_none(break_level),
+            "break_level_text": f"Close above ${break_level:,.2f}",
+            "break_status": break_status,
+            "retest_level": price_or_none(protected_high),
+            "invalidation_level": price_or_none(invalidation),
+            "signal": signal,
+            "direction": "BULLISH",
+            "reason": reason,
+        }
+
+    return base_response
 
 def calculate_market_indicators(candles, interval):
     if len(candles) < 200:
