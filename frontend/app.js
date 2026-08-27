@@ -1844,8 +1844,52 @@ setupAlerts();
 setupLiveChart();
 setText("signal-date",formatDateForSignal());
 setupPaperTrading();
-setupTimeframeButtons();setupZoomButtons();setupRrgButtons();setupChartAnalyser();setupLayoutEditor();if(!renderSavedAiPlanIfActive()){setSignalSource("Gemini AI ready — run manual analysis when needed","neutral");setSignal("NO TRADE","Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan.");}refreshAllData();setInterval(loadPrice,30000);setInterval(loadChart,60000);setInterval(()=>{if(isAiPlanActive()){setText("technicalRefreshStatus",`Auto technical refresh paused — Gemini AI plan active (${getAiPlanRemainingLabel()} remaining).`);return;}refreshTechnicalAnalysis("Automatic technical refresh.");},60000);setInterval(loadRrg,300000);setInterval(()=>{if(isAiPlanActive())setSignalSource(`AI plan active • expires in ${getAiPlanRemainingLabel()}`,"ai");},1000);
+setupTimeframeButtons();
+setupZoomButtons();
+setupRrgButtons();
+setupChartAnalyser();
+setupLayoutEditor();
+setupLiveCandlestickChart();
 
+if (!renderSavedAiPlanIfActive()) {
+  setSignalSource(
+    "Gemini AI ready — run manual analysis when needed",
+    "neutral"
+  );
+
+  setSignal(
+    "NO TRADE",
+    "Live technical data is updating. Run Gemini AI Analysis only when you want an AI plan."
+  );
+}
+
+refreshAllData();
+
+setInterval(loadPrice, 30000);
+setInterval(loadChart, 60000);
+
+setInterval(() => {
+  if (isAiPlanActive()) {
+    setText(
+      "technicalRefreshStatus",
+      `Auto technical refresh paused — Gemini AI plan active (${getAiPlanRemainingLabel()} remaining).`
+    );
+    return;
+  }
+
+  refreshTechnicalAnalysis("Automatic technical refresh.");
+}, 60000);
+
+setInterval(loadRrg, 300000);
+
+setInterval(() => {
+  if (isAiPlanActive()) {
+    setSignalSource(
+      `AI plan active • expires in ${getAiPlanRemainingLabel()}`,
+      "ai"
+    );
+  }
+}, 1000);
 /* ===== Dashboard tabs and settings ===== */
 (() => {
   const STORAGE_KEY = "btcAiSignalDashboardPreferences";
