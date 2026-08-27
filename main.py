@@ -1389,7 +1389,8 @@ def btc_chart(days: int = 7, interval: str = "1h"):
         
 @app.get("/api/btc/candles")
 def btc_candles(interval: str = "15m", limit: int = 200):
-   allowed_intervals = {"1m", "5m", "15m", "1h", "4h", "1d", "1w"}
+    allowed_intervals = {"1m", "5m", "15m", "1h", "4h", "1d", "1w"}
+
     if interval not in allowed_intervals:
         raise HTTPException(
             status_code=400,
