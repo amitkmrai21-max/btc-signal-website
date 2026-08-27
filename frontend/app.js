@@ -2150,14 +2150,14 @@ function createLiveCandlestickChart() {
     }
   });
 
-  liveCandleSeries = liveCandleChart.addCandlestickSeries({
-    upColor: "#22c55e",
-    downColor: "#ef4444",
-    borderUpColor: "#22c55e",
-    borderDownColor: "#ef4444",
-    wickUpColor: "#86efac",
-    wickDownColor: "#fca5a5"
-  });
+ liveCandleSeries = liveCandleChart.addCandlestickSeries({
+  upColor: "#22c55e",
+  downColor: "#ef4444",
+  borderUpColor: "#22c55e",
+  borderDownColor: "#ef4444",
+  wickUpColor: "#86efac",
+  wickDownColor: "#fca5a5"
+});
 
   new ResizeObserver(() => {
     if (!liveCandleChart || !container.clientWidth) return;
