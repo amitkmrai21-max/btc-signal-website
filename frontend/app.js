@@ -2351,7 +2351,6 @@ function clearLiveChartAiOverlay() {
 
   liveAiLevelSeries = [];
 }
-}
 
 function addLiveChartPriceLine(price, title, color, lineStyle) {
   const numericPrice = Number(price);
