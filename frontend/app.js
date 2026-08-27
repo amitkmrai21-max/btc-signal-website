@@ -2,6 +2,8 @@ let liveCandleChart = null;
 let liveCandleSeries = null;
 let liveChartTimeframe = "15m";
 let liveChartRefreshTimer = null;
+let liveAiPriceLines = [];
+let liveAiSignalSeries = null;
 
 const liveChartSettings = {
   "1m": { limit: 180 },
@@ -1785,6 +1787,7 @@ async function loadAiAnalysis() {
     saveAiNews(data);
 
     updateAiAnalysis(data);
+    renderLiveChartAiOverlay(data);
     renderGeminiNews(data);
   } catch (error) {
     console.error(error);
@@ -1852,6 +1855,9 @@ setupChartAnalyser();
 setupLayoutEditor();
 setupLiveCandlestickChart();
 
+if (latestAiPlan?.data) {
+  renderLiveChartAiOverlay(latestAiPlan.data);
+}
 if (!renderSavedAiPlanIfActive()) {
   setSignalSource(
     "Gemini AI ready — run manual analysis when needed",
@@ -2282,4 +2288,143 @@ function setupLiveCandlestickChart() {
       loadLiveCandlestickChart();
     }
   }, 15000);
+}
+function getLiveChartAiState(signal) {
+  const normalized = String(signal || "NO TRADE").toUpperCase();
+
+  if (normalized.includes("BUY")) {
+    return {
+      label: "BUY",
+      color: "#22c55e",
+      seriesPosition: "belowBar"
+    };
+  }
+
+  if (normalized.includes("SELL")) {
+    return {
+      label: "SELL",
+      color: "#ef4444",
+      seriesPosition: "aboveBar"
+    };
+  }
+
+  return {
+    label: "HOLD",
+    color: "#facc15",
+    seriesPosition: "inBar"
+  };
+}
+
+function clearLiveChartAiOverlay() {
+  if (liveCandleSeries && Array.isArray(liveAiPriceLines)) {
+    liveAiPriceLines.forEach((line) => {
+      try {
+        liveCandleSeries.removePriceLine(line);
+      } catch (error) {
+        console.warn("Could not remove old AI price line.", error);
+      }
+    });
+  }
+
+  liveAiPriceLines = [];
+
+  if (liveAiSignalSeries && liveCandleChart) {
+    try {
+      liveCandleChart.removeSeries(liveAiSignalSeries);
+    } catch (error) {
+      console.warn("Could not remove old AI signal marker.", error);
+    }
+  }
+
+  liveAiSignalSeries = null;
+}
+
+function addLiveChartPriceLine(price, title, color, lineStyle) {
+  const numericPrice = Number(price);
+
+  if (
+    !liveCandleSeries ||
+    !Number.isFinite(numericPrice) ||
+    numericPrice <= 0
+  ) {
+    return;
+  }
+
+  const line = liveCandleSeries.createPriceLine({
+    price: numericPrice,
+    color,
+    lineWidth: 2,
+    lineStyle,
+    axisLabelVisible: true,
+    title
+  });
+
+  liveAiPriceLines.push(line);
+}
+
+function renderLiveChartAiOverlay(aiData) {
+  if (!liveCandleChart || !liveCandleSeries) return;
+
+  clearLiveChartAiOverlay();
+
+  const state = getLiveChartAiState(aiData?.signal);
+  const confidence = Number(aiData?.confidence || 0);
+  const risk = String(aiData?.risk || "HIGH").toUpperCase();
+
+  const entry = Number(aiData?.entry_price || 0);
+  const stopLoss = Number(aiData?.stop_loss_price || 0);
+  const target1 = Number(aiData?.target_1_price || 0);
+  const target2 = Number(aiData?.target_2_price || 0);
+
+  const lastCandleTime = Math.floor(Date.now() / 1000);
+
+  liveAiSignalSeries = liveCandleChart.addLineSeries({
+    color: "rgba(0, 0, 0, 0)",
+    lineWidth: 1,
+    lastValueVisible: false,
+    priceLineVisible: false,
+    crosshairMarkerVisible: false
+  });
+
+  liveAiSignalSeries.setMarkers([
+    {
+      time: lastCandleTime,
+      position: state.seriesPosition,
+      color: state.color,
+      shape: state.label === "BUY" ? "arrowUp" : state.label === "SELL" ? "arrowDown" : "circle",
+      text: `AI ${state.label} • ${confidence}% • ${risk}`
+    }
+  ]);
+
+  if (state.label === "HOLD") {
+    return;
+  }
+
+  addLiveChartPriceLine(
+    entry,
+    `${state.label} ENTRY ${formatLiveCandlePrice(entry)}`,
+    "#22c55e",
+    LightweightCharts.LineStyle.Solid
+  );
+
+  addLiveChartPriceLine(
+    stopLoss,
+    `STOP LOSS ${formatLiveCandlePrice(stopLoss)}`,
+    "#ef4444",
+    LightweightCharts.LineStyle.Dashed
+  );
+
+  addLiveChartPriceLine(
+    target1,
+    `TARGET 1 ${formatLiveCandlePrice(target1)}`,
+    "#facc15",
+    LightweightCharts.LineStyle.Dashed
+  );
+
+  addLiveChartPriceLine(
+    target2,
+    `TARGET 2 ${formatLiveCandlePrice(target2)}`,
+    "#a78bfa",
+    LightweightCharts.LineStyle.Dashed
+  );
 }
