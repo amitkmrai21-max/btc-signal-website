@@ -1248,6 +1248,10 @@ ANALYSIS RULES:
 - Return only the JSON required by the response schema, in simple Hinglish.
 - Never promise profit, certainty, or guaranteed targets.
 - Entry, stop and targets are educational ideas only, never automated orders.
+- Always return entry_price, stop_loss_price, target_1_price and target_2_price as numbers, not text.
+- For BUY WATCH or STRONG BUY: entry_price must be near the current BTCUSDT price; stop_loss_price must be below entry_price; target_1_price and target_2_price must be above entry_price, with target_2_price above target_1_price.
+- For SELL WATCH or STRONG SELL: entry_price must be near the current BTCUSDT price; stop_loss_price must be above entry_price; target_1_price and target_2_price must be below entry_price, with target_2_price below target_1_price.
+- For NO TRADE: set entry_price, stop_loss_price, target_1_price and target_2_price to 0.
 """
 
 
@@ -1295,6 +1299,10 @@ def get_ai_response_schema():
             "stop_loss_idea": {"type": "string"},
             "target_1": {"type": "string"},
             "target_2": {"type": "string"},
+            "entry_price": {"type": "number"},
+            "stop_loss_price": {"type": "number"},
+            "target_1_price": {"type": "number"},
+            "target_2_price": {"type": "number"},
             "timeframes": {
                 "type": "object",
                 "properties": {
@@ -1315,8 +1323,12 @@ def get_ai_response_schema():
             "confirmation_needed",
             "entry_idea",
             "stop_loss_idea",
-            "target_1",
-            "target_2",
+            "target1",
+            "target2",
+            "entry_price",
+            "stop_loss_price",
+            "target_1_price",
+            "target_2_price",
             "timeframes",
         ],
     }
