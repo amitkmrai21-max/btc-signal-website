@@ -204,18 +204,13 @@
     <div class="section-heading">
       <div>
         <h2>Live BTCUSDT Candlestick Chart</h2>
-        <p>
-          Binance spot-market candles update live. Select a timeframe to inspect
-          price structure before using the Swing Structure and Gemini AI tools.
-        </p>
+        <p>Binance spot-market candles update live. Select a timeframe to inspect price structure before using the Swing Structure and Gemini AI tools.</p>
       </div>
-      <span id="liveChartConnection" class="live-chart-connection live-connecting">
-        Connecting...
-      </span>
+      <span id="liveChartConnection" class="live-chart-connection live-connecting">Connecting…</span>
     </div>
 
     <div class="live-chart-toolbar">
-      <div class="live-chart-timeframes" aria-label="Live chart timeframe">
+      <div class="live-chart-timeframes">
         <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1m">1m</button>
         <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="5m">5m</button>
         <button class="live-chart-timeframe-btn active" type="button" data-live-timeframe="15m">15m</button>
@@ -225,12 +220,8 @@
       </div>
 
       <div class="live-chart-actions">
-        <button id="liveChartResetBtn" class="chart-control-btn" type="button">
-          Reset View
-        </button>
-        <button id="liveChartRefreshBtn" class="chart-control-btn" type="button">
-          Refresh Candles
-        </button>
+        <button id="liveChartResetBtn" class="chart-control-btn" type="button">Reset View</button>
+        <button id="liveChartRefreshBtn" class="chart-control-btn" type="button">Refresh Candles</button>
       </div>
     </div>
 
@@ -239,51 +230,35 @@
         <span>Symbol</span>
         <strong>BTCUSDT</strong>
       </article>
-
       <article class="live-chart-stat">
         <span>Timeframe</span>
         <strong id="liveChartTimeframe">15m</strong>
       </article>
-
       <article class="live-chart-stat">
         <span>Live Price</span>
-        <strong id="liveChartPrice">$—</strong>
+        <strong id="liveChartPrice">Loading…</strong>
       </article>
-
       <article class="live-chart-stat">
         <span>Current Candle</span>
-        <strong id="liveChartCandleStatus">Loading...</strong>
+        <strong id="liveChartCandle">Loading…</strong>
       </article>
     </div>
 
-    <div
-      id="liveCandlestickChart"
-      class="live-candlestick-chart"
-      aria-label="Live BTCUSDT candlestick chart"
-    ></div>
+    <div id="liveCandlestickChart" class="live-candlestick-chart"></div>
 
     <div class="live-chart-bottom-grid">
       <article class="live-chart-note">
         <h3>Live structure workflow</h3>
-        <p>
-          Use the 15m view with the Swing Failure &amp; Structure Break card.
-          A wick is not confirmation: wait for body close, ATR buffer, retest,
-          and final BUY/SELL quality confirmation.
-        </p>
+        <p>Use the 15m view with the Swing Failure &amp; Structure Break card. A wick is not confirmation: wait for body close, ATR buffer, retest, and final BUY/SELL quality confirmation.</p>
       </article>
 
       <article class="live-chart-note">
         <h3>Manual AI confirmation</h3>
-        <p>
-          When the technical card says BUY — FINAL or SELL — FINAL, run Gemini AI
-          Analysis manually. Review both directions before using paper trading.
-        </p>
+        <p>When the technical card says BUY — FINAL or SELL — FINAL, run Gemini AI Analysis manually. Review both directions before using paper trading.</p>
       </article>
     </div>
 
-    <p id="liveChartStatus" class="live-chart-status">
-      Loading historical candles...
-    </p>
+    <p id="liveChartStatus" class="live-chart-status">Loading Binance candles…</p>
   </section>
 </section>
 
