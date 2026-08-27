@@ -1325,10 +1325,6 @@ def get_ai_response_schema():
             "stop_loss_idea",
             "target1",
             "target2",
-            "entry_price",
-            "stop_loss_price",
-            "target_1_price",
-            "target_2_price",
             "timeframes",
         ],
     }
