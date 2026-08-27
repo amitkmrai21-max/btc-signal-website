@@ -1,3 +1,16 @@
+let liveCandleChart = null;
+let liveCandleSeries = null;
+let liveChartTimeframe = "15m";
+let liveChartRefreshTimer = null;
+
+const liveChartSettings = {
+  "1m": { limit: 180 },
+  "5m": { limit: 180 },
+  "15m": { limit: 200 },
+  "1h": { limit: 200 },
+  "4h": { limit: 200 },
+  "1d": { limit: 200 }
+};
 let btcChart;
 let rrgChart;
 let liveCandlestickChart = null;
@@ -2025,3 +2038,203 @@ setupTimeframeButtons();setupZoomButtons();setupRrgButtons();setupChartAnalyser(
     initDashboard();
   }
 })();
+function formatLiveCandlePrice(value) {
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? `$${number.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`
+    : "--";
+}
+
+function setLiveChartStatus(message, type = "connecting") {
+  const badge = document.getElementById("liveChartConnection");
+  const status = document.getElementById("liveChartStatus");
+
+  if (badge) {
+    badge.className = `live-chart-connection live-${type}`;
+    badge.textContent =
+      type === "live"
+        ? `Live • BTCUSDT ${liveChartTimeframe}`
+        : type === "error"
+          ? "Connection error"
+          : "Connecting…";
+  }
+
+  if (status) {
+    status.textContent = message;
+  }
+}
+
+function createLiveCandlestickChart() {
+  const container = document.getElementById("liveCandlestickChart");
+
+  if (!container) return false;
+
+  if (!window.LightweightCharts) {
+    setLiveChartStatus(
+      "Candlestick chart library could not be loaded. Please refresh the page.",
+      "error"
+    );
+    return false;
+  }
+
+  if (liveCandleChart) return true;
+
+  liveCandleChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 520,
+    layout: {
+      background: { color: "#07111f" },
+      textColor: "#cbd5e1"
+    },
+    grid: {
+      vertLines: { color: "rgba(30, 41, 59, 0.72)" },
+      horzLines: { color: "rgba(30, 41, 59, 0.72)" }
+    },
+    rightPriceScale: {
+      borderColor: "rgba(56, 189, 248, 0.34)"
+    },
+    timeScale: {
+      borderColor: "rgba(56, 189, 248, 0.34)",
+      timeVisible: true,
+      secondsVisible: false
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal
+    }
+  });
+
+  liveCandleSeries = liveCandleChart.addCandlestickSeries({
+    upColor: "#22c55e",
+    downColor: "#ef4444",
+    borderUpColor: "#22c55e",
+    borderDownColor: "#ef4444",
+    wickUpColor: "#86efac",
+    wickDownColor: "#fca5a5"
+  });
+
+  new ResizeObserver(() => {
+    if (!liveCandleChart || !container.clientWidth) return;
+
+    liveCandleChart.applyOptions({
+      width: container.clientWidth,
+      height: window.innerWidth <= 720 ? 360 : 520
+    });
+  }).observe(container);
+
+  return true;
+}
+
+async function loadLiveCandlestickChart() {
+  if (!createLiveCandlestickChart()) return;
+
+  const setting = liveChartSettings[liveChartTimeframe] || { limit: 200 };
+
+  setLiveChartStatus("Loading latest Binance candles…", "connecting");
+
+  try {
+    const response = await fetch(
+      `/api/btc/candles?interval=${liveChartTimeframe}&limit=${setting.limit}`,
+      { cache: "no-store" }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Could not load candlestick data.");
+    }
+
+    const candles = Array.isArray(data.candles) ? data.candles : [];
+
+    if (!candles.length) {
+      throw new Error("No candlestick data was returned.");
+    }
+
+    liveCandleSeries.setData(
+      candles.map((candle) => ({
+        time: Number(candle.time),
+        open: Number(candle.open),
+        high: Number(candle.high),
+        low: Number(candle.low),
+        close: Number(candle.close)
+      }))
+    );
+
+    const latest = candles[candles.length - 1];
+
+    const timeframeBox = document.getElementById("liveChartTimeframe");
+    const priceBox = document.getElementById("liveChartPrice");
+    const candleBox = document.getElementById("liveChartCandle");
+
+    if (timeframeBox) timeframeBox.textContent = liveChartTimeframe;
+    if (priceBox) priceBox.textContent = formatLiveCandlePrice(latest.close);
+
+    if (candleBox) {
+      candleBox.textContent =
+        `Live • O ${formatLiveCandlePrice(latest.open)} • ` +
+        `H ${formatLiveCandlePrice(latest.high)} • ` +
+        `L ${formatLiveCandlePrice(latest.low)}`;
+    }
+
+    liveCandleChart.timeScale().fitContent();
+
+    setLiveChartStatus(
+      `Updated from Binance at ${new Date().toLocaleTimeString("en-IN")}.`,
+      "live"
+    );
+  } catch (error) {
+    console.error("Live candlestick chart error:", error);
+    setLiveChartStatus(
+      `Candlestick chart could not refresh: ${error.message}`,
+      "error"
+    );
+  }
+}
+
+function setupLiveCandlestickChart() {
+  const container = document.getElementById("liveCandlestickChart");
+
+  if (!container) return;
+
+  document.querySelectorAll(".live-chart-timeframe-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const nextTimeframe = button.dataset.liveTimeframe;
+
+      if (!liveChartSettings[nextTimeframe]) return;
+
+      liveChartTimeframe = nextTimeframe;
+
+      document
+        .querySelectorAll(".live-chart-timeframe-btn")
+        .forEach((item) => item.classList.remove("active"));
+
+      button.classList.add("active");
+
+      await loadLiveCandlestickChart();
+    });
+  });
+
+  document
+    .getElementById("liveChartRefreshBtn")
+    ?.addEventListener("click", loadLiveCandlestickChart);
+
+  document
+    .getElementById("liveChartResetBtn")
+    ?.addEventListener("click", () => {
+      liveCandleChart?.timeScale().fitContent();
+    });
+
+  loadLiveCandlestickChart();
+
+  if (liveChartRefreshTimer) {
+    window.clearInterval(liveChartRefreshTimer);
+  }
+
+  liveChartRefreshTimer = window.setInterval(() => {
+    if (!document.hidden) {
+      loadLiveCandlestickChart();
+    }
+  }, 15000);
+}
