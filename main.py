@@ -1386,7 +1386,50 @@ def btc_chart(days: int = 7, interval: str = "1h"):
     except requests.exceptions.RequestException as error:
         if cached_chart: return {**cached_chart, "cached": True, "warning": "Live chart feed is temporarily unavailable. Showing last saved chart."}
         raise HTTPException(status_code=502, detail=f"Failed to fetch BTC chart from Binance: {str(error)}")
+        
+@app.get("/api/btc/candles")
+def btc_candles(interval: str = "15m", limit: int = 200):
+    allowed_intervals = {"1m", "5m", "15m", "1h", "4h", "1d"}
 
+    if interval not in allowed_intervals:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported candle interval."
+        )
+
+    safe_limit = max(20, min(limit, 500))
+
+    try:
+        raw_candles = get_btc_klines(
+            interval=interval,
+            limit=safe_limit
+        )
+
+        candles = [
+            {
+                "time": int(int(candle[0]) / 1000),
+                "open": float(candle[1]),
+                "high": float(candle[2]),
+                "low": float(candle[3]),
+                "close": float(candle[4]),
+                "volume": float(candle[5])
+            }
+            for candle in raw_candles
+        ]
+
+        return {
+            "symbol": "BTCUSDT",
+            "interval": interval,
+            "candles": candles,
+            "source": "Binance",
+            "updated_at": int(time.time())
+        }
+
+    except requests.exceptions.RequestException as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not load Binance candles: {str(error)}"
+        ) from error
 
 @app.get("/api/technical-signal")
 def technical_signal(force_refresh: bool = False):
