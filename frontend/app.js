@@ -15,10 +15,9 @@ const liveChartSettings = {
   "1d": { limit: 200 },
   "1w": { limit: 200 }
 };
+
 let btcChart;
 let rrgChart;
-let liveCandlestickChart = null;
-let liveCandleSeries = null;
 let liveChartSocket = null;
 let liveChartResizeObserver = null;
 let liveChartReconnectTimer = null;
