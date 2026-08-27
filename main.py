@@ -1737,61 +1737,49 @@ def run_ai_signal():
 
         rss_news = fetch_rss_news()
         now = time.time()
+
         client = genai.Client(api_key=api_key)
         technical_result = technical_main_signal(market_data)
-        response = None
-        last_error = None
 
-                response = None
-        last_error = None
-
-        for attempt, delay_seconds in enumerate((0, 2, 5), start=1):
-            if delay_seconds:
-                time.sleep(delay_seconds)
-
-            try:
-                response = client.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=build_ai_prompt(market_data, technical_result),
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_json_schema=get_ai_response_schema(),
-                    ),
-                )
-
-                if not response or not getattr(response, "text", None):
-                    raise ValueError("Gemini returned an empty response.")
-
-                break
-
-            except Exception as error:
-                error_text = str(error)
-
-                print(f"Gemini attempt {attempt}/3 failed: {error_text}")
-
-                if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
-                    raise HTTPException(
-                        status_code=429,
-                        detail=(
-                            "Gemini free-tier quota is temporarily exhausted. "
-                            "Please wait before trying again."
-                        ),
-                    ) from error
-
-                if "400" in error_text or "INVALID_ARGUMENT" in error_text:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            "Gemini request format is invalid. Check the response schema."
-                        ),
-                    ) from error
-
-                last_error = error
-
-        if response is None or not getattr(response, "text", None):
-            raise RuntimeError(
-                f"Gemini failed after 3 attempts: {last_error}"
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=build_ai_prompt(market_data, technical_result),
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_json_schema=get_ai_response_schema(),
+                ),
             )
+
+            if not response or not getattr(response, "text", None):
+                raise ValueError("Gemini returned an empty response.")
+
+        except Exception as error:
+            error_text = str(error)
+
+            print(f"Gemini request failed: {error_text}")
+
+            if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
+                raise HTTPException(
+                    status_code=429,
+                    detail=(
+                        "Gemini free-tier quota is temporarily exhausted. "
+                        "Please wait before trying again."
+                    ),
+                ) from error
+
+            if "400" in error_text or "INVALID_ARGUMENT" in error_text:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Gemini request format is invalid. Check the response schema."
+                    ),
+                ) from error
+
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI could not respond. Please try again later.",
+            ) from error
 
         result = json.loads(response.text)
 
@@ -1827,13 +1815,12 @@ def run_ai_signal():
         raise
 
     except Exception as error:
-        print(f"Gemini AI analysis error after retries: {error}")
+        print(f"Gemini AI analysis error: {error}")
 
         raise HTTPException(
             status_code=503,
             detail=(
-                "Gemini AI could not respond after 3 attempts. "
-                "Please wait a moment and try again. "
+                "Gemini AI could not respond. Please try again later. "
                 "Your latest saved analysis remains available if one exists."
             ),
         ) from error
