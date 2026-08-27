@@ -1742,6 +1742,9 @@ def run_ai_signal():
         response = None
         last_error = None
 
+                response = None
+        last_error = None
+
         for attempt, delay_seconds in enumerate((0, 2, 5), start=1):
             if delay_seconds:
                 time.sleep(delay_seconds)
@@ -1761,29 +1764,29 @@ def run_ai_signal():
 
                 break
 
-           except Exception as error:
-    error_text = str(error)
+            except Exception as error:
+                error_text = str(error)
 
-    print(f"Gemini attempt {attempt}/3 failed: {error_text}")
+                print(f"Gemini attempt {attempt}/3 failed: {error_text}")
 
-    if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                "Gemini free-tier quota is temporarily exhausted. "
-                "Please wait before trying again."
-            ),
-        ) from error
+                if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
+                    raise HTTPException(
+                        status_code=429,
+                        detail=(
+                            "Gemini free-tier quota is temporarily exhausted. "
+                            "Please wait before trying again."
+                        ),
+                    ) from error
 
-    if "400" in error_text or "INVALID_ARGUMENT" in error_text:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Gemini request format is invalid. Check the response schema."
-            ),
-        ) from error
+                if "400" in error_text or "INVALID_ARGUMENT" in error_text:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Gemini request format is invalid. Check the response schema."
+                        ),
+                    ) from error
 
-    last_error = error
+                last_error = error
 
         if response is None or not getattr(response, "text", None):
             raise RuntimeError(
