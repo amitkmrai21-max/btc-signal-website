@@ -4,6 +4,7 @@ let liveChartTimeframe = "15m";
 let liveChartRefreshTimer = null;
 let liveAiPriceLines = [];
 let liveAiSignalSeries = null;
+let liveAiLevelSeries = [];
 
 const liveChartSettings = {
   "1m": { limit: 180 },
@@ -2317,9 +2318,9 @@ function getLiveChartAiState(signal) {
 
 function clearLiveChartAiOverlay() {
   if (liveCandleSeries && Array.isArray(liveAiPriceLines)) {
-    liveAiPriceLines.forEach((line) => {
+    liveAiPriceLines.forEach((priceLine) => {
       try {
-        liveCandleSeries.removePriceLine(line);
+        liveCandleSeries.removePriceLine(priceLine);
       } catch (error) {
         console.warn("Could not remove old AI price line.", error);
       }
@@ -2337,6 +2338,19 @@ function clearLiveChartAiOverlay() {
   }
 
   liveAiSignalSeries = null;
+
+  if (liveCandleChart && Array.isArray(liveAiLevelSeries)) {
+    liveAiLevelSeries.forEach((series) => {
+      try {
+        liveCandleChart.removeSeries(series);
+      } catch (error) {
+        console.warn("Could not remove old AI level segment.", error);
+      }
+    });
+  }
+
+  liveAiLevelSeries = [];
+}
 }
 
 function addLiveChartPriceLine(price, title, color, lineStyle) {
@@ -2400,31 +2414,63 @@ function renderLiveChartAiOverlay(aiData) {
     return;
   }
 
-  addLiveChartPriceLine(
-    entry,
-    `${state.label} ENTRY ${formatLiveCandlePrice(entry)}`,
-    "#22c55e",
-    LightweightCharts.LineStyle.Solid
-  );
+addLiveChartLevelSegment(
+  entry,
+  `${state.label} ENTRY ${formatLiveCandlePrice(entry)}`,
+  "#22c55e",
+  lastCandleTime
+);
 
-  addLiveChartPriceLine(
-    stopLoss,
-    `STOP LOSS ${formatLiveCandlePrice(stopLoss)}`,
-    "#ef4444",
-    LightweightCharts.LineStyle.Dashed
-  );
+addLiveChartLevelSegment(
+  stopLoss,
+  `STOP LOSS ${formatLiveCandlePrice(stopLoss)}`,
+  "#ef4444",
+  lastCandleTime
+);
 
-  addLiveChartPriceLine(
-    target1,
-    `TARGET 1 ${formatLiveCandlePrice(target1)}`,
-    "#facc15",
-    LightweightCharts.LineStyle.Dashed
-  );
+addLiveChartLevelSegment(
+  target1,
+  `TARGET 1 ${formatLiveCandlePrice(target1)}`,
+  "#facc15",
+  lastCandleTime
+);
 
-  addLiveChartPriceLine(
-    target2,
-    `TARGET 2 ${formatLiveCandlePrice(target2)}`,
-    "#a78bfa",
-    LightweightCharts.LineStyle.Dashed
-  );
+addLiveChartLevelSegment(
+  target2,
+  `TARGET 2 ${formatLiveCandlePrice(target2)}`,
+  "#a78bfa",
+  lastCandleTime
+);
+}
+
+function addLiveChartLevelSegment(price, label, color, lastTime) {
+  const numericPrice = Number(price);
+
+  if (
+    !liveCandleChart ||
+    !Number.isFinite(numericPrice) ||
+    numericPrice <= 0 ||
+    !Number.isFinite(lastTime)
+  ) {
+    return;
+  }
+
+  const startTime = Math.max(0, lastTime - 60 * 60 * 3);
+
+  const series = liveCandleChart.addLineSeries({
+    color,
+    lineWidth: 2,
+    lineStyle: LightweightCharts.LineStyle.Dashed,
+    lastValueVisible: true,
+    priceLineVisible: false,
+    crosshairMarkerVisible: false,
+    title: label
+  });
+
+  series.setData([
+    { time: startTime, value: numericPrice },
+    { time: lastTime, value: numericPrice }
+  ]);
+
+  liveAiLevelSeries.push(series);
 }
