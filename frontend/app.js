@@ -18,7 +18,7 @@ const liveChartSettings = {
 let btcChart;
 let rrgChart;
 let liveCandlestickChart = null;
-let liveCandlestickSeries = null;
+let liveCandleSeries = null;
 let liveChartSocket = null;
 let liveChartResizeObserver = null;
 let liveChartReconnectTimer = null;
@@ -159,7 +159,7 @@ function createLiveCandlestickChart() {
   if (liveCandlestickChart) {
     liveCandlestickChart.remove();
     liveCandlestickChart = null;
-    liveCandlestickSeries = null;
+    liveCandleSeries = null;
   }
 
   const chartOptions = {
@@ -194,7 +194,7 @@ function createLiveCandlestickChart() {
     chartOptions
   );
 
-  liveCandlestickSeries = liveCandlestickChart.addCandlestickSeries({
+ liveCandleSeries = liveCandlestickChart.addCandlestickSeries({
     upColor: "#22c55e",
     downColor: "#ef4444",
     borderVisible: false,
@@ -271,7 +271,7 @@ async function loadLiveChartHistory() {
       close: Number(candle[4])
     }));
 
-    liveCandlestickSeries.setData(chartData);
+   liveCandleSeries.setData(chartData);
     resetLiveChartView();
 
     const latest = chartData[chartData.length - 1];
@@ -356,7 +356,9 @@ function connectLiveChartSocket() {
       const payload = JSON.parse(event.data);
       const candle = payload?.k;
 
-      if (!candle || !liveCandlestickSeries) return;
+     if (!candle || !liveCandleSeries) {
+  return;
+  }
 
       const chartCandle = {
         time: Math.floor(Number(candle.t) / 1000),
@@ -366,7 +368,7 @@ function connectLiveChartSocket() {
         close: Number(candle.c)
       };
 
-      liveCandlestickSeries.update(chartCandle);
+      liveCandleSeries.update(chartCandle);
       updateLiveChartStats(chartCandle, Boolean(candle.x));
     } catch (error) {
       console.error(error);
