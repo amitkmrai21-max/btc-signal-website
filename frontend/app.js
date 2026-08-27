@@ -2377,77 +2377,59 @@ function addLiveChartPriceLine(price, title, color, lineStyle) {
 }
 
 function renderLiveChartAiOverlay(aiData) {
-  if (!liveCandleChart || !liveCandleSeries) return;
+  if (!liveCandleChart || !liveCandleSeries) {
+    return;
+  }
 
   clearLiveChartAiOverlay();
 
   const state = getLiveChartAiState(aiData?.signal);
-  const confidence = Number(aiData?.confidence || 0);
-  const risk = String(aiData?.risk || "HIGH").toUpperCase();
 
   const entry = Number(aiData?.entry_price || 0);
   const stopLoss = Number(aiData?.stop_loss_price || 0);
   const target1 = Number(aiData?.target_1_price || 0);
   const target2 = Number(aiData?.target_2_price || 0);
 
-  const lastCandleTime = Math.floor(Date.now() / 1000);
-
-  liveAiSignalSeries = liveCandleChart.addLineSeries({
-    color: "rgba(0, 0, 0, 0)",
-    lineWidth: 1,
-    lastValueVisible: false,
-    priceLineVisible: false,
-    crosshairMarkerVisible: false
-  });
-
-  liveAiSignalSeries.setMarkers([
-    {
-      time: lastCandleTime,
-      position: state.seriesPosition,
-      color: state.color,
-      shape: state.label === "BUY" ? "arrowUp" : state.label === "SELL" ? "arrowDown" : "circle",
-      text: `AI ${state.label} • ${confidence}% • ${risk}`
-    }
-  ]);
-
   if (state.label === "HOLD") {
     return;
   }
 
-addLiveChartLevelSegment(
-  entry,
-  `${state.label} ENTRY ${formatLiveCandlePrice(entry)}`,
-  "#22c55e",
-  lastCandleTime
-);
+  const lineEndTime = Math.floor(Date.now() / 1000);
 
-addLiveChartLevelSegment(
-  stopLoss,
-  `STOP LOSS ${formatLiveCandlePrice(stopLoss)}`,
-  "#ef4444",
-  lastCandleTime
-);
+  addLiveChartLevelSegment(
+    entry,
+    `${state.label} ENTRY ${formatLiveCandlePrice(entry)}`,
+    state.color,
+    lineEndTime
+  );
 
-addLiveChartLevelSegment(
-  target1,
-  `TARGET 1 ${formatLiveCandlePrice(target1)}`,
-  "#facc15",
-  lastCandleTime
-);
+  addLiveChartLevelSegment(
+    stopLoss,
+    `STOP LOSS ${formatLiveCandlePrice(stopLoss)}`,
+    "#ef4444",
+    lineEndTime
+  );
 
-addLiveChartLevelSegment(
-  target2,
-  `TARGET 2 ${formatLiveCandlePrice(target2)}`,
-  "#a78bfa",
-  lastCandleTime
-);
+  addLiveChartLevelSegment(
+    target1,
+    `TARGET 1 ${formatLiveCandlePrice(target1)}`,
+    "#facc15",
+    lineEndTime
+  );
+
+  addLiveChartLevelSegment(
+    target2,
+    `TARGET 2 ${formatLiveCandlePrice(target2)}`,
+    "#a78bfa",
+    lineEndTime
+  );
 }
 
 function addLiveChartLevelSegment(price, label, color, lastTime) {
   const numericPrice = Number(price);
 
   if (
-    !liveCandleChart ||
+    !liveCandleSeries ||
     !Number.isFinite(numericPrice) ||
     numericPrice <= 0 ||
     !Number.isFinite(lastTime)
@@ -2455,22 +2437,14 @@ function addLiveChartLevelSegment(price, label, color, lastTime) {
     return;
   }
 
-  const startTime = Math.max(0, lastTime - 60 * 60 * 3);
-
-  const series = liveCandleChart.addLineSeries({
+  const priceLine = liveCandleSeries.createPriceLine({
+    price: numericPrice,
     color,
     lineWidth: 2,
     lineStyle: LightweightCharts.LineStyle.Dashed,
-    lastValueVisible: true,
-    priceLineVisible: false,
-    crosshairMarkerVisible: false,
-    title: label
+    axisLabelVisible: true,
+    title: label,
   });
 
-  series.setData([
-    { time: startTime, value: numericPrice },
-    { time: lastTime, value: numericPrice }
-  ]);
-
-  liveAiLevelSeries.push(series);
+  liveAiPriceLines.push(priceLine);
 }
