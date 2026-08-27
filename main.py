@@ -1299,10 +1299,12 @@ def get_ai_response_schema():
             "stop_loss_idea": {"type": "string"},
             "target_1": {"type": "string"},
             "target_2": {"type": "string"},
+
             "entry_price": {"type": "number"},
             "stop_loss_price": {"type": "number"},
             "target_1_price": {"type": "number"},
             "target_2_price": {"type": "number"},
+
             "timeframes": {
                 "type": "object",
                 "properties": {
@@ -1323,12 +1325,11 @@ def get_ai_response_schema():
             "confirmation_needed",
             "entry_idea",
             "stop_loss_idea",
-            "target1",
-            "target2",
+            "target_1",
+            "target_2",
             "timeframes",
         ],
     }
-
 def build_rrg_data(interval):
     settings = {"1h": {"limit": 220, "lookback": 60, "tail": 4}, "1d": {"limit": 220, "lookback": 30, "tail": 4}}
     if interval not in settings: raise ValueError("Unsupported RRG interval.")
