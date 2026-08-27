@@ -9,7 +9,8 @@ const liveChartSettings = {
   "15m": { limit: 200 },
   "1h": { limit: 200 },
   "4h": { limit: 200 },
-  "1d": { limit: 200 }
+  "1d": { limit: 200 },
+  "1w": { limit: 200 }
 };
 let btcChart;
 let rrgChart;
