@@ -2679,3 +2679,489 @@ function addLiveChartLevelSegment(price, label, color, lastTime) {
     connectGroqButtons();
   }
 })();
+/* ===== AI chart status label + 5-minute refresh protection ===== */
+(() => {
+  const AI_LOCK_MS = 5 * 60 * 1000;
+  const AI_LOCK_KEY = "btcAiSignalPlanLockV1";
+
+  let statusSeries = [];
+  let activePlanLock = null;
+
+  function getChart() {
+    return typeof liveCandleChart !== "undefined" && liveCandleChart
+      ? liveCandleChart
+      : typeof liveCandlestickChart !== "undefined" && liveCandlestickChart
+        ? liveCandlestickChart
+        : null;
+  }
+
+  function getCandleSeries() {
+    return typeof liveCandleSeries !== "undefined" && liveCandleSeries
+      ? liveCandleSeries
+      : null;
+  }
+
+  function getTimeframe() {
+    return (
+      (typeof liveChartTimeframe !== "undefined" && liveChartTimeframe) ||
+      (typeof liveChartActiveTimeframe !== "undefined" &&
+        liveChartActiveTimeframe) ||
+      "15m"
+    );
+  }
+
+  function getIntervalSeconds() {
+    const intervals = {
+      "1m": 60,
+      "5m": 300,
+      "15m": 900,
+      "1h": 3600,
+      "4h": 14400,
+      "1d": 86400,
+      "1w": 604800
+    };
+
+    return intervals[getTimeframe()] || 900;
+  }
+
+  function getCurrentChartTime() {
+    const interval = getIntervalSeconds();
+    return Math.floor(Math.floor(Date.now() / 1000) / interval) * interval;
+  }
+
+  function clearStatusSeries() {
+    const chart = getChart();
+
+    if (!chart) {
+      statusSeries = [];
+      return;
+    }
+
+    statusSeries.forEach((series) => {
+      try {
+        chart.removeSeries(series);
+      } catch (error) {
+        console.warn("Could not remove chart status overlay.", error);
+      }
+    });
+
+    statusSeries = [];
+  }
+
+  function clearAllAiChartMarks() {
+    if (typeof clearLiveChartAiOverlay === "function") {
+      clearLiveChartAiOverlay();
+    }
+
+    clearStatusSeries();
+  }
+
+  function addForwardStatusLine(price, label, color) {
+    const chart = getChart();
+    const candleSeries = getCandleSeries();
+    const numericPrice = Number(price);
+
+    if (
+      !chart ||
+      !candleSeries ||
+      !Number.isFinite(numericPrice) ||
+      numericPrice <= 0 ||
+      !window.LightweightCharts
+    ) {
+      return;
+    }
+
+    const startTime = getCurrentChartTime();
+    const futureTime = startTime + getIntervalSeconds() * 12;
+
+    const series = chart.addLineSeries({
+      color,
+      lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false
+    });
+
+    series.setData([
+      { time: startTime, value: numericPrice },
+      { time: futureTime, value: numericPrice }
+    ]);
+
+    statusSeries.push(series);
+
+    const priceLine = candleSeries.createPriceLine({
+      price: numericPrice,
+      color,
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+      axisLabelVisible: true,
+      title: label
+    });
+
+    if (
+      typeof liveAiPriceLines !== "undefined" &&
+      Array.isArray(liveAiPriceLines)
+    ) {
+      liveAiPriceLines.push(priceLine);
+    }
+
+    chart.timeScale().applyOptions({
+      rightOffset: 12
+    });
+  }
+
+  function validPosition(data) {
+    const signal = String(data?.signal || "").toUpperCase();
+    const entry = Number(data?.entry_price);
+    const stop = Number(data?.stop_loss_price);
+    const target1 = Number(data?.target_1_price);
+    const target2 = Number(data?.target_2_price);
+
+    if (
+      ![entry, stop, target1, target2].every(
+        (value) => Number.isFinite(value) && value > 0
+      )
+    ) {
+      return false;
+    }
+
+    if (signal.includes("BUY")) {
+      return stop < entry && entry < target1 && target1 < target2;
+    }
+
+    if (signal.includes("SELL")) {
+      return target2 < target1 && target1 < entry && entry < stop;
+    }
+
+    return false;
+  }
+
+  function getCurrentPrice(data) {
+    return (
+      Number(data?.current_price) ||
+      Number(data?.market_data?.current_price_usdt) ||
+      Number(currentBtcPriceUsd) ||
+      0
+    );
+  }
+
+  function renderAiChartStatus(data, provider) {
+    clearAllAiChartMarks();
+
+    const signal = String(data?.signal || "HOLD").toUpperCase();
+    const name = String(provider || "AI").toUpperCase();
+    const isValid = validPosition(data);
+    const currentPrice = getCurrentPrice(data);
+
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+      return;
+    }
+
+    if (!isValid) {
+      let label = `${name} • HOLD — NO CONFIRMED SETUP`;
+      let color = "#facc15";
+
+      if (signal.includes("BUY")) {
+        label = `${name} • BUY WATCH — WAIT FOR CONFIRMATION`;
+      } else if (signal.includes("SELL")) {
+        label = `${name} • SELL WATCH — WAIT FOR CONFIRMATION`;
+      } else if (signal.includes("INVALID")) {
+        label = `${name} • INVALIDATED — WAIT`;
+        color = "#ef4444";
+      } else if (signal.includes("NO TRADE")) {
+        label = `${name} • NO TRADE — WAIT`;
+      }
+
+      addForwardStatusLine(currentPrice, label, color);
+      return;
+    }
+
+    const direction = signal.includes("SELL") ? "SELL" : "BUY";
+    const entryColor = direction === "BUY" ? "#22c55e" : "#ef4444";
+
+    addForwardStatusLine(
+      Number(data.entry_price),
+      `${name} • ${direction} — SETUP ACTIVE | ENTRY`,
+      entryColor
+    );
+
+    addForwardStatusLine(
+      Number(data.stop_loss_price),
+      `${name} • STOP LOSS`,
+      "#ef4444"
+    );
+
+    addForwardStatusLine(
+      Number(data.target_1_price),
+      `${name} • TARGET 1`,
+      "#facc15"
+    );
+
+    addForwardStatusLine(
+      Number(data.target_2_price),
+      `${name} • TARGET 2`,
+      "#a78bfa"
+    );
+  }
+
+  function savePlanLock(data, provider) {
+    activePlanLock = {
+      data,
+      provider: String(provider || "AI").toUpperCase(),
+      startedAt: Date.now()
+    };
+
+    try {
+      localStorage.setItem(AI_LOCK_KEY, JSON.stringify(activePlanLock));
+    } catch (error) {
+      console.error("Could not save AI plan lock.", error);
+    }
+
+    refreshLockUi();
+  }
+
+  function getPlanLock() {
+    if (activePlanLock) {
+      return activePlanLock;
+    }
+
+    try {
+      const raw = localStorage.getItem(AI_LOCK_KEY);
+      activePlanLock = raw ? JSON.parse(raw) : null;
+      return activePlanLock;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function lockRemainingSeconds() {
+    const lock = getPlanLock();
+
+    if (!lock?.startedAt) return 0;
+
+    const remaining = AI_LOCK_MS - (Date.now() - Number(lock.startedAt));
+
+    if (remaining <= 0) {
+      activePlanLock = null;
+
+      try {
+        localStorage.removeItem(AI_LOCK_KEY);
+      } catch (error) {
+        console.error(error);
+      }
+
+      return 0;
+    }
+
+    return Math.ceil(remaining / 1000);
+  }
+
+  function lockLabel() {
+    const seconds = lockRemainingSeconds();
+
+    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(
+      seconds % 60
+    ).padStart(2, "0")}`;
+  }
+
+  function planLocked() {
+    return lockRemainingSeconds() > 0;
+  }
+
+  function refreshLockUi() {
+    const refreshButton = document.getElementById("refreshBtn");
+    const lock = getPlanLock();
+
+    if (!planLocked()) {
+      if (refreshButton?.dataset.aiPlanLocked === "true") {
+        refreshButton.disabled = false;
+        refreshButton.textContent = "Refresh Technical";
+        delete refreshButton.dataset.aiPlanLocked;
+      }
+      return;
+    }
+
+    if (refreshButton) {
+      refreshButton.disabled = true;
+      refreshButton.dataset.aiPlanLocked = "true";
+      refreshButton.textContent = `AI Active ${lockLabel()}`;
+    }
+
+    if (typeof setText === "function") {
+      setText(
+        "technicalRefreshStatus",
+        `${lock?.provider || "AI"} analysis active • technical refresh paused for ${lockLabel()}.`
+      );
+    }
+  }
+
+  const originalRefreshAllData =
+    typeof refreshAllData === "function" ? refreshAllData : null;
+
+  if (originalRefreshAllData) {
+    window.refreshAllData = async function () {
+      if (planLocked()) {
+        refreshLockUi();
+
+        try {
+          await refreshFastData();
+        } catch (error) {
+          console.error(error);
+        }
+
+        return;
+      }
+
+      return originalRefreshAllData();
+    };
+  }
+
+  const originalRefreshTechnicalAnalysis =
+    typeof refreshTechnicalAnalysis === "function"
+      ? refreshTechnicalAnalysis
+      : null;
+
+  if (originalRefreshTechnicalAnalysis) {
+    window.refreshTechnicalAnalysis = async function (prefix) {
+      if (planLocked()) {
+        refreshLockUi();
+        return null;
+      }
+
+      return originalRefreshTechnicalAnalysis(prefix);
+    };
+  }
+
+  const originalLoadAiAnalysis =
+    typeof loadAiAnalysis === "function" ? loadAiAnalysis : null;
+
+  if (originalLoadAiAnalysis) {
+    window.loadAiAnalysis = async function () {
+      const result = await originalLoadAiAnalysis();
+
+      if (latestAiPlan?.data) {
+        savePlanLock(latestAiPlan.data, "GEMINI");
+        renderAiChartStatus(latestAiPlan.data, "GEMINI");
+      }
+
+      return result;
+    };
+  }
+
+  function connectGroqOverride() {
+    const button = document.getElementById("groqLiveBtn");
+
+    if (!button || button.dataset.chartStatusBound === "true") {
+      return;
+    }
+
+    button.dataset.chartStatusBound = "true";
+
+    button.addEventListener(
+      "click",
+      async (event) => {
+        event.stopImmediatePropagation();
+
+        if (planLocked()) {
+          refreshLockUi();
+          return;
+        }
+
+        button.disabled = true;
+        button.textContent = "Running Groq Live Analysis...";
+
+        try {
+          const response = await fetch("/api/groq-live-analysis", {
+            method: "POST",
+            cache: "no-store"
+          });
+
+          const data = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(
+              data.detail ||
+                `Groq live-chart request failed (${response.status}).`
+            );
+          }
+
+          if (typeof updateAiAnalysis === "function") {
+            updateAiAnalysis(data);
+          }
+
+          if (typeof saveLastAiSignal === "function") {
+            saveLastAiSignal(data);
+          }
+
+          if (typeof setSignalSource === "function") {
+            setSignalSource(
+              "Groq live-chart backup analysis",
+              "ai"
+            );
+          }
+
+          savePlanLock(data, "GROQ");
+          renderAiChartStatus(data, "GROQ");
+        } catch (error) {
+          console.error("Groq live chart error:", error);
+
+          if (typeof setText === "function") {
+            setText(
+              "analysisUpdatedAt",
+              `Groq analysis unavailable: ${
+                error.message || "Please try again later."
+              }`
+            );
+          }
+        } finally {
+          if (!planLocked()) {
+            button.disabled = false;
+            button.textContent = "Run Groq Live Chart Analysis";
+          }
+        }
+      },
+      true
+    );
+  }
+
+  window.setInterval(() => {
+    if (planLocked()) {
+      refreshLockUi();
+      return;
+    }
+
+    const refreshButton = document.getElementById("refreshBtn");
+
+    if (refreshButton?.dataset.aiPlanLocked === "true") {
+      refreshLockUi();
+
+      if (typeof loadTechnicalFallback === "function") {
+        loadTechnicalFallback(
+          "AI plan expired. Live technical analysis resumed."
+        );
+      }
+    }
+  }, 1000);
+
+  function restoreChartState() {
+    const lock = getPlanLock();
+
+    if (!planLocked() || !lock?.data) {
+      return;
+    }
+
+    refreshLockUi();
+    renderAiChartStatus(lock.data, lock.provider);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      connectGroqOverride();
+      window.setTimeout(restoreChartState, 1500);
+    });
+  } else {
+    connectGroqOverride();
+    window.setTimeout(restoreChartState, 1500);
+  }
+})();
