@@ -1754,7 +1754,7 @@ def run_ai_signal():
             if not response or not getattr(response, "text", None):
                 raise ValueError("Gemini returned an empty response.")
 
-        except Exception as error:
+                except Exception as error:
             error_text = str(error)
 
             print(f"Gemini request failed: {error_text}")
@@ -1776,12 +1776,10 @@ def run_ai_signal():
                     ),
                 ) from error
 
-          raise HTTPException(
-    status_code=503,
-    detail=f"Gemini error: {error_text}",
-) from error
-
-        result = json.loads(response.text)
+            raise HTTPException(
+                status_code=503,
+                detail=f"Gemini error: {error_text}",
+            ) from error
 
         result.update(
             {
