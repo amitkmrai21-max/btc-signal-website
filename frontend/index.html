@@ -7,7 +7,6 @@
 
   <link rel="stylesheet" href="/frontend/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.1.5/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
@@ -27,6 +26,7 @@
     <div class="topbar-actions">
       <button id="refreshBtn" type="button">Refresh Technical</button>
       <button id="geminiAiBtn" class="gemini-ai-btn" type="button">Run Gemini AI Analysis</button>
+      <button id="groqLiveBtn" class="groq-live-btn" type="button">Run Groq Live Chart Analysis</button>
       <button id="editLayoutBtn" class="layout-control-btn" type="button">Edit Layout</button>
       <button id="saveLayoutBtn" class="layout-control-btn" type="button" hidden>Save Layout</button>
       <button id="resetLayoutBtn" class="layout-control-btn layout-reset-btn" type="button" hidden>Reset Layout</button>
@@ -868,39 +868,46 @@
     </section>
 
     <section class="tab-panel" data-panel="news">
-      <section class="card gemini-news-card">
-        <div class="section-heading">
-          <div>
-            <h2>Gemini AI News Context</h2>
-            <p id="geminiNewsUpdated">
-              News updates only when you run Gemini AI Analysis.
-            </p>
-          </div>
-
-          <span id="geminiNewsBias" class="news-bias-badge news-impact-neutral">
-            News bias: NEUTRAL
-          </span>
-        </div>
-
-        <div class="gemini-news-intro">
-          <h3>Latest market context</h3>
-          <p id="geminiNewsOverview">
-            Run Gemini AI Analysis to check current BTC and crypto-market news.
-          </p>
-        </div>
-
-        <div id="geminiNewsList" class="gemini-news-list" aria-live="polite">
-          <p class="gemini-news-empty">
-            No saved Gemini news context yet. Run Gemini AI Analysis to fetch current BTC/crypto news.
-          </p>
-        </div>
-
-        <p class="gemini-news-note">
-          News is refreshed only as part of a manual Gemini AI Analysis run.
-          Headlines and market-context labels are educational interpretation, not financial advice.
+  <section class="card gemini-news-card groq-news-card">
+    <div class="section-heading">
+      <div>
+        <h2>Groq AI News Context</h2>
+        <p id="geminiNewsUpdated">
+          News refreshes only when you manually run Groq News.
         </p>
-      </section>
-    </section>
+      </div>
+
+      <div class="news-heading-actions">
+        <button id="groqNewsBtn" class="groq-news-btn" type="button">
+          Refresh News with Groq
+        </button>
+
+        <span id="geminiNewsBias" class="news-bias-badge news-impact-neutral">
+          News bias: UNCLEAR
+        </span>
+      </div>
+    </div>
+
+    <div class="gemini-news-intro">
+      <h3>Latest market context</h3>
+      <p id="geminiNewsOverview">
+        Click “Refresh News with Groq” to load RSS headlines, sentiment, and Hindi explanation.
+      </p>
+    </div>
+
+    <div id="geminiNewsList" class="gemini-news-list" aria-live="polite">
+      <p class="gemini-news-empty">
+        No Groq news snapshot yet. News is separate from Gemini technical analysis.
+      </p>
+    </div>
+
+    <p class="gemini-news-note">
+      Groq processes RSS news for summary, sentiment, and Hindi explanation only.
+      This section never produces BUY/SELL signals, Entry, Stop Loss, Target 1, or Target 2.
+      News context is educational and not financial advice.
+    </p>
+  </section>
+</section>
 
     <section class="disclaimer-card">
       <p id="disclaimerText">
