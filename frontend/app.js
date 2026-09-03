@@ -1691,7 +1691,7 @@ function renderGeminiNews(aiData = null) {
 
       translateButton.disabled = true;
       translateButton.textContent = "अनुवाद हो रहा है...";
-      translationStatus.textContent = "Gemini translation चल रहा है...";
+      translationStatus.textContent = "Groq translation चल रहा है...";
 
       try {
         const response = await fetch("/api/news/translate", {
@@ -2448,3 +2448,234 @@ function addLiveChartLevelSegment(price, label, color, lastTime) {
 
   liveAiPriceLines.push(priceLine);
 }
+/* ===== Groq live-chart and news integration ===== */
+(() => {
+  let groqLiveRequestInProgress = false;
+  let groqNewsRequestInProgress = false;
+
+  function isGroqValidOverlay(data) {
+    const signal = String(data?.signal || "").toUpperCase();
+
+    return (
+      data?.overlay_allowed === true &&
+      data?.valid_position === true &&
+      (signal === "BUY" || signal === "SELL") &&
+      Number(data?.entry_price) > 0 &&
+      Number(data?.stop_loss_price) > 0 &&
+      Number(data?.target_1_price) > 0 &&
+      Number(data?.target_2_price) > 0
+    );
+  }
+
+  function renderGroqLiveOverlay(data) {
+    if (typeof clearLiveChartAiOverlay !== "function") return;
+
+    clearLiveChartAiOverlay();
+
+    if (!isGroqValidOverlay(data)) {
+      return;
+    }
+
+    if (typeof addLiveChartLevelSegment !== "function") {
+      return;
+    }
+
+    const signal = String(data.signal).toUpperCase();
+    const entry = Number(data.entry_price);
+    const stopLoss = Number(data.stop_loss_price);
+    const target1 = Number(data.target_1_price);
+    const target2 = Number(data.target_2_price);
+    const lineEndTime = Math.floor(Date.now() / 1000);
+
+    addLiveChartLevelSegment(
+      entry,
+      `GROQ • ${signal} — SETUP ACTIVE | ENTRY ${formatLiveCandlePrice(entry)}`,
+      signal === "BUY" ? "#22c55e" : "#ef4444",
+      lineEndTime
+    );
+
+    addLiveChartLevelSegment(
+      stopLoss,
+      `GROQ • STOP LOSS ${formatLiveCandlePrice(stopLoss)}`,
+      "#ef4444",
+      lineEndTime
+    );
+
+    addLiveChartLevelSegment(
+      target1,
+      `GROQ • TARGET 1 ${formatLiveCandlePrice(target1)}`,
+      "#facc15",
+      lineEndTime
+    );
+
+    addLiveChartLevelSegment(
+      target2,
+      `GROQ • TARGET 2 ${formatLiveCandlePrice(target2)}`,
+      "#a78bfa",
+      lineEndTime
+    );
+  }
+
+  function updateGroqLiveAnalysis(data) {
+    if (typeof updateAiAnalysis === "function") {
+      updateAiAnalysis(data);
+    }
+
+    if (typeof saveLastAiSignal === "function") {
+      saveLastAiSignal(data);
+    }
+
+    if (typeof setSignalSource === "function") {
+      setSignalSource(
+        data?.valid_position
+          ? "Groq live-chart backup • confirmed educational setup"
+          : "Groq live-chart backup • no confirmed position",
+        "ai"
+      );
+    }
+
+    if (typeof setText === "function") {
+      setText(
+        "analysisUpdatedAt",
+        `Groq live-chart analysis: ${formatUpdatedAt(data?.updated_at)}`
+      );
+    }
+
+    renderGroqLiveOverlay(data);
+  }
+
+  async function runGroqLiveAnalysis() {
+    if (groqLiveRequestInProgress) return;
+
+    const button = document.getElementById("groqLiveBtn");
+    groqLiveRequestInProgress = true;
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Running Groq Live Analysis...";
+    }
+
+    if (typeof setText === "function") {
+      setText(
+        "analysisUpdatedAt",
+        "Groq is analysing current BTC live-chart technical data..."
+      );
+    }
+
+    try {
+      const response = await fetch("/api/groq-live-analysis", {
+        method: "POST",
+        cache: "no-store"
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ||
+          `Groq live-chart request failed (${response.status}).`
+        );
+      }
+
+      updateGroqLiveAnalysis(data);
+    } catch (error) {
+      console.error("Groq live-chart error:", error);
+
+      if (typeof clearLiveChartAiOverlay === "function") {
+        clearLiveChartAiOverlay();
+      }
+
+      if (typeof setText === "function") {
+        setText(
+          "analysisUpdatedAt",
+          `Groq live-chart analysis unavailable: ${
+            error?.message || "Please try again later."
+          }`
+        );
+      }
+    } finally {
+      groqLiveRequestInProgress = false;
+
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Run Groq Live Chart Analysis";
+      }
+    }
+  }
+
+  async function runGroqNews() {
+    if (groqNewsRequestInProgress) return;
+
+    const button = document.getElementById("groqNewsBtn");
+    groqNewsRequestInProgress = true;
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Refreshing Groq News...";
+    }
+
+    if (typeof setText === "function") {
+      setText(
+        "geminiNewsUpdated",
+        "Groq is loading RSS news, sentiment, and Hindi explanation..."
+      );
+    }
+
+    try {
+      const response = await fetch("/api/groq-news", {
+        method: "POST",
+        cache: "no-store"
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || `Groq news request failed (${response.status}).`
+        );
+      }
+
+      if (typeof saveAiNews === "function") {
+        saveAiNews(data);
+      }
+
+      if (typeof renderGeminiNews === "function") {
+        renderGeminiNews(data);
+      }
+    } catch (error) {
+      console.error("Groq news error:", error);
+
+      if (typeof setText === "function") {
+        setText(
+          "geminiNewsUpdated",
+          `Groq news unavailable: ${
+            error?.message || "Please try again later."
+          }`
+        );
+      }
+    } finally {
+      groqNewsRequestInProgress = false;
+
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Refresh News with Groq";
+      }
+    }
+  }
+
+  function connectGroqButtons() {
+    document
+      .getElementById("groqLiveBtn")
+      ?.addEventListener("click", runGroqLiveAnalysis);
+
+    document
+      .getElementById("groqNewsBtn")
+      ?.addEventListener("click", runGroqNews);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", connectGroqButtons);
+  } else {
+    connectGroqButtons();
+  }
+})();
