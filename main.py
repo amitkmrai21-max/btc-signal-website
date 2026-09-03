@@ -1276,39 +1276,207 @@ def run_groq_live_analysis():
 
 @app.post("/api/groq-news")
 def run_groq_news():
-    remaining = cooldown_remaining(groq_news_cache, GROQ_NEWS_COOLDOWN_SECONDS)
+    remaining = cooldown_remaining(
+        groq_news_cache,
+        GROQ_NEWS_COOLDOWN_SECONDS,
+    )
+
     if remaining > 0:
-        raise HTTPException(status_code=429, detail=f"Groq news cooldown active. Please wait {remaining} seconds.")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Groq news cooldown active. Please wait {remaining} seconds.",
+        )
+
     try:
         client = ensure_groq_configured()
         news_items = fetch_rss_news()
+
         if not news_items:
-            raise HTTPException(status_code=503, detail="No recent RSS news could be loaded. Please try again later.")
+            raise HTTPException(
+                status_code=503,
+                detail="No recent RSS news could be loaded. Please try again later.",
+            )
+
+        compact_news = [
+            {
+                "headline": item.get("headline", ""),
+                "source": item.get("source", ""),
+                "summary": item.get("summary", "")[:350],
+            }
+            for item in news_items[:10]
+        ]
+
+        prompt = f"""
+You summarize crypto RSS headlines for an educational dashboard.
+
+Use ONLY the news data below.
+Do NOT give BUY, SELL, HOLD, trade calls, entry prices, stop losses,
+targets, forecasts, or investment advice.
+
+NEWS:
+{json.dumps(compact_news, ensure_ascii=False)}
+
+Reply with ONLY this small JSON object:
+
+{{
+  "overall_sentiment": "NEUTRAL",
+  "overview": "2-3 short Hinglish sentences describing the news context."
+}}
+
+Rules:
+- overall_sentiment must be exactly one of:
+  BULLISH, BEARISH, NEUTRAL, UNCLEAR.
+- Do not use Markdown.
+- Do not use code fences.
+- Keep overview short and factual.
+"""
+
+        # Deliberately NO response_format here.
+        # This avoids Groq json_validate_failed on long news-item schemas.
         completion = client.chat.completions.create(
             model=GROQ_MODEL,
             temperature=0.1,
-            max_tokens=2200,
+            max_tokens=350,
             messages=[
-                {"role": "system", "content": "Return JSON only. No Markdown or code fences."},
-                {"role": "user", "content": groq_news_prompt(news_items)},
+                {
+                    "role": "system",
+                    "content": (
+                        "Return only a JSON object. "
+                        "No Markdown and no code fences."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
             ],
         )
+
         text = completion.choices[0].message.content if completion.choices else ""
-        ai_news = parse_json_from_model(text)
-        analysed_items = ai_news.get("items", []) if isinstance(ai_news, dict) else []
+
+        try:
+            ai_news = parse_json_from_model(text)
+        except ValueError:
+            ai_news = {
+                "overall_sentiment": "UNCLEAR",
+                "overview": (
+                    "Groq summary parse nahi hua, lekin neeche RSS headlines "
+                    "aur original article links available hain."
+                ),
+            }
+
+        sentiment = str(
+            ai_news.get("overall_sentiment", "UNCLEAR")
+        ).upper().strip()
+
+        if sentiment not in {"BULLISH", "BEARISH", "NEUTRAL", "UNCLEAR"}:
+            sentiment = "UNCLEAR"
+
+        overview = str(
+            ai_news.get(
+                "overview",
+                "Latest RSS news snapshot. Original links check karein.",
+            )
+        ).strip()
+
+        # Original RSS items always remain available.
+        # We do not depend on Groq to reproduce every headline in JSON.
         merged_items = []
-        for index, original in enumerate(news_items):
-            ai_item = analysed_items[index] if index < len(analysed_items) and isinstance(analysed_items[index], dict) else {}
-            merged_items.append({**original, "market_impact": str(ai_item.get("market_impact", "UNCLEAR")).upper(), "market_relevance": str(ai_item.get("market_relevance", "Publisher headline and summary only. Review the original article for full context.")), "headline_hi": str(ai_item.get("headline_hi", "")), "summary_hi": str(ai_item.get("summary_hi", ""))})
+        for item in news_items:
+            merged_items.append(
+                {
+                    **item,
+                    "market_impact": "UNCLEAR",
+                    "market_relevance": (
+                        "Publisher RSS headline and summary. "
+                        "Open the original article for full context."
+                    ),
+                    "headline_hi": "",
+                    "summary_hi": "",
+                }
+            )
+
         now = time.time()
-        result = {"news": merged_items, "news_overview": str(ai_news.get("overview", "Latest RSS news snapshot. Review original links for complete context.")), "news_market_bias": str(ai_news.get("overall_sentiment", "UNCLEAR")).upper(), "source": "CoinDesk/Cointelegraph/Decrypt/Bitcoin Magazine RSS + Groq news analysis", "analysis_mode": "groq_manual_news_only", "provider": "GROQ", "updated_at": int(now), "news_updated_at": int(now), "manual_run_only": True, "disclaimer": "News context only. Groq news output never creates BUY/SELL signals, entry prices, stop losses, or targets. Not financial advice."}
-        groq_news_cache["data"], groq_news_cache["updated_at"] = result, now
+
+        result = {
+            "news": merged_items,
+            "news_overview": overview,
+            "news_market_bias": sentiment,
+            "source": (
+                "CoinDesk/Cointelegraph/Decrypt/Bitcoin Magazine RSS "
+                "+ Groq news overview"
+            ),
+            "analysis_mode": "groq_manual_news_only",
+            "provider": "GROQ",
+            "updated_at": int(now),
+            "news_updated_at": int(now),
+            "manual_run_only": True,
+            "disclaimer": (
+                "News context only. Groq news output never creates BUY/SELL "
+                "signals, entry prices, stop losses, or targets. "
+                "Not financial advice."
+            ),
+        }
+
+        groq_news_cache["data"] = result
+        groq_news_cache["updated_at"] = now
+
         return result
+
     except HTTPException:
         raise
+
     except Exception as error:
         print(f"Groq news analysis error: {error}")
-        raise HTTPException(status_code=503, detail="Groq news analysis is temporarily unavailable. Please try again later.") from error
+
+        # RSS fallback: Groq fail ho tab bhi headlines display hongi.
+        try:
+            fallback_news = fetch_rss_news()
+        except Exception:
+            fallback_news = []
+
+        if fallback_news:
+            now = time.time()
+
+            fallback_result = {
+                "news": [
+                    {
+                        **item,
+                        "market_impact": "UNCLEAR",
+                        "market_relevance": (
+                            "Groq summary unavailable. "
+                            "Review the original publisher article."
+                        ),
+                        "headline_hi": "",
+                        "summary_hi": "",
+                    }
+                    for item in fallback_news
+                ],
+                "news_overview": (
+                    "Groq news summary temporarily unavailable hai. "
+                    "Neeche live RSS headlines aur original links available hain."
+                ),
+                "news_market_bias": "UNCLEAR",
+                "source": "CoinDesk/Cointelegraph/Decrypt/Bitcoin Magazine RSS",
+                "analysis_mode": "rss_fallback_news_only",
+                "provider": "RSS",
+                "updated_at": int(now),
+                "news_updated_at": int(now),
+                "manual_run_only": True,
+                "disclaimer": (
+                    "RSS news context only. No trading signal or investment advice."
+                ),
+            }
+
+            return fallback_result
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Groq news summary and RSS feeds are temporarily unavailable. "
+                "Please try again later."
+            ),
+        ) from error
 
 
 @app.post("/api/news/translate")
