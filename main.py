@@ -1776,10 +1776,10 @@ def run_ai_signal():
                     ),
                 ) from error
 
-            raise HTTPException(
-                status_code=503,
-                detail="Gemini AI could not respond. Please try again later.",
-            ) from error
+          raise HTTPException(
+    status_code=503,
+    detail=f"Gemini error: {error_text}",
+) from error
 
         result = json.loads(response.text)
 
