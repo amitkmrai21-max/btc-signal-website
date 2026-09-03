@@ -134,8 +134,8 @@ function closeLiveChartSocket() {
 }
 
 function resetLiveChartView() {
-  if (liveCandlestickChart) {
-    liveCandlestickChart.timeScale().fitContent();
+  if (liveCandlestickChart?.resetZoom) {
+    liveCandlestickChart.resetZoom();
   }
 }
 
