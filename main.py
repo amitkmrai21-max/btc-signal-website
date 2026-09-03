@@ -1038,45 +1038,94 @@ def parse_json_from_model(text):
         raise ValueError("AI returned invalid JSON.") from error
 
 def enforce_trade_levels(result, current_price):
-    signal = str(result.get("signal", "HOLD")).upper()
-    valid_signals = {"BUY", "SELL", "HOLD", "WATCH", "NO TRADE", "INVALIDATED"}
-    if signal not in valid_signals:
+    result = result if isinstance(result, dict) else {}
+
+    signal = str(result.get("signal", "HOLD")).upper().strip()
+    if signal not in {"BUY", "SELL", "HOLD"}:
         signal = "HOLD"
-    result["signal"] = signal
-    result["confidence"] = max(0, min(100, int(float(result.get("confidence", 0) or 0))))
-    for key in ("entry_price", "stop_loss_price", "target_1_price", "target_2_price"):
+
+    try:
+        confidence = max(0, min(100, int(float(result.get("confidence", 0) or 0))))
+    except (TypeError, ValueError):
+        confidence = 0
+
+    def safe_number(key):
         try:
-            result[key] = round(float(result.get(key, 0) or 0), 2)
+            value = float(result.get(key, 0) or 0)
+            return round(value, 2) if value > 0 else 0
         except (TypeError, ValueError):
-            result[key] = 0
-    is_valid_buy = signal == "BUY" and result["entry_price"] > 0 and result["stop_loss_price"] < result["entry_price"] < result["target_1_price"] < result["target_2_price"]
-    is_valid_sell = signal == "SELL" and result["entry_price"] > 0 and result["target_2_price"] < result["target_1_price"] < result["entry_price"] < result["stop_loss_price"]
-    result["valid_position"] = is_valid_buy or is_valid_sell
-    if not result["valid_position"]:
-        if signal in {"BUY", "SELL"}:
-            result["signal"] = "WATCH"
-        for key in ("entry_price", "stop_loss_price", "target_1_price", "target_2_price"):
-            result[key] = 0
-    result["current_price"] = round_value(current_price)
-    return result
+            return 0
+
+    entry_price = safe_number("entry_price")
+    stop_loss_price = safe_number("stop_loss_price")
+    target_1_price = safe_number("target_1_price")
+    target_2_price = safe_number("target_2_price")
+    reason = str(result.get("reason", "")).strip() or "No confirmed setup from supplied live technical data."
+
+    if signal == "HOLD":
+        return {
+            **result,
+            "signal": "HOLD",
+            "confidence": confidence,
+            "reason": reason,
+            "entry_price": 0,
+            "stop_loss_price": 0,
+            "target_1_price": 0,
+            "target_2_price": 0,
+            "valid_position": False,
+            "current_price": round_value(current_price),
+        }
+
+    all_levels_present = all(value > 0 for value in (entry_price, stop_loss_price, target_1_price, target_2_price))
+    buy_levels_valid = signal == "BUY" and all_levels_present and stop_loss_price < entry_price < target_1_price < target_2_price
+    sell_levels_valid = signal == "SELL" and all_levels_present and target_2_price < target_1_price < entry_price < stop_loss_price
+
+    if not (buy_levels_valid or sell_levels_valid):
+        return {
+            **result,
+            "signal": "HOLD",
+            "confidence": confidence,
+            "reason": "Groq returned incomplete or invalid levels, so no confirmed setup was accepted.",
+            "entry_price": 0,
+            "stop_loss_price": 0,
+            "target_1_price": 0,
+            "target_2_price": 0,
+            "valid_position": False,
+            "current_price": round_value(current_price),
+        }
+
+    return {
+        **result,
+        "signal": signal,
+        "confidence": confidence,
+        "reason": reason,
+        "entry_price": entry_price,
+        "stop_loss_price": stop_loss_price,
+        "target_1_price": target_1_price,
+        "target_2_price": target_2_price,
+        "valid_position": True,
+        "current_price": round_value(current_price),
+    }
 
 
 def groq_live_schema_prompt(market_data, technical_result):
     return f"""
-You are Groq acting only as a cautious live BTCUSDT technical-chart backup analyst for an educational dashboard.
-Do not use or discuss news. Analyze only this supplied Binance technical data.
+You are Groq acting only as a cautious BTCUSDT live-chart analysis assistant for an educational dashboard.
+Analyze ONLY the supplied Binance technical data and deterministic technical classification. Do not use news, web search, external data, or assumptions.
 
 MARKET DATA:
 {json.dumps(market_data, indent=2)}
 
-TECHNICAL CLASSIFICATION:
+DETERMINISTIC TECHNICAL CLASSIFICATION:
 {json.dumps(technical_result, indent=2)}
 
-Return ONLY valid JSON with this exact shape:
+Return ONLY one valid JSON object. No Markdown, no code fences, and no text outside JSON.
+
+Required JSON shape:
 {{
-  "signal": "BUY|SELL|HOLD|WATCH|INVALIDATED",
+  "signal": "BUY or SELL or HOLD",
   "confidence": 0,
-  "risk": "LOW|MEDIUM|HIGH",
+  "risk": "LOW or MEDIUM or HIGH",
   "market_bias": "short text",
   "setup_status": "short text",
   "reason": "simple Hinglish explanation",
@@ -1090,14 +1139,24 @@ Return ONLY valid JSON with this exact shape:
   "target_1_price": 0,
   "target_2_price": 0,
   "timeframes": {{
-    "15m": {{"signal": "BULLISH|BEARISH|NEUTRAL", "summary": "text", "key_level": "text"}},
-    "1h": {{"signal": "BULLISH|BEARISH|NEUTRAL", "summary": "text", "key_level": "text"}},
-    "4h": {{"signal": "BULLISH|BEARISH|NEUTRAL", "summary": "text", "key_level": "text"}}
+    "15m": {{"signal": "BULLISH or BEARISH or NEUTRAL", "summary": "text", "key_level": "text"}},
+    "1h": {{"signal": "BULLISH or BEARISH or NEUTRAL", "summary": "text", "key_level": "text"}},
+    "4h": {{"signal": "BULLISH or BEARISH or NEUTRAL", "summary": "text", "key_level": "text"}}
   }}
 }}
-Rules: Treat the deterministic classification as a hard constraint. If it is NO TRADE, return HOLD or WATCH, never BUY/SELL. Use BUY/SELL only for fully confirmed high-quality conditions. If BUY, stop < entry < target_1 < target_2. If SELL, target_2 < target_1 < entry < stop. For HOLD/WATCH/INVALIDATED all prices must be 0. Never promise profits or imply an order will be placed.
-"""
 
+Mandatory rules:
+- Signal must be exactly BUY, SELL, or HOLD.
+- Never use BUY WATCH, SELL WATCH, WATCH, NO TRADE, INVALIDATED, WAIT, NEUTRAL, STRONG BUY, or STRONG SELL as the main signal.
+- The deterministic technical classification is the hard constraint.
+- If deterministic classification is not a confirmed BUY or confirmed SELL, return HOLD.
+- Return BUY or SELL only when supplied deterministic data already shows fully confirmed high-quality conditions.
+- If signal is HOLD, all four numeric price fields must be 0.
+- BUY requires stop_loss_price < entry_price < target_1_price < target_2_price.
+- SELL requires target_2_price < target_1_price < entry_price < stop_loss_price.
+- Do not invent market prices, news, candles, volume, or confirmations.
+- Never promise profit and never imply an order will be placed.
+"""
 
 def groq_news_prompt(news_items):
     compact_items = [{"headline": item.get("headline", ""), "source": item.get("source", ""), "published_time": item.get("published_time", ""), "summary": item.get("summary", "")} for item in news_items[:AI_NEWS_LIMIT]]
@@ -1280,7 +1339,16 @@ def run_groq_live_analysis():
             temperature=0.15,
             max_tokens=1300,
             response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": groq_live_schema_prompt(market_data, technical_result)}],
+            messages=[
+            {
+                "role": "system",
+                "content": "Return valid JSON only. Do not include Markdown, code fences, or text outside the JSON object.",
+            },
+            {
+                "role": "user",
+                "content": groq_live_schema_prompt(market_data, technical_result),
+            },
+        ],
         )
         text = completion.choices[0].message.content if completion.choices else ""
         result = enforce_trade_levels(parse_json_from_model(text), market_data["current_price_usdt"])
@@ -1300,38 +1368,58 @@ def run_groq_news():
     remaining = cooldown_remaining(groq_news_cache, GROQ_NEWS_COOLDOWN_SECONDS)
     if remaining > 0:
         raise HTTPException(status_code=429, detail=f"Groq news cooldown active. Please wait {remaining} seconds.")
+
     try:
         client = ensure_groq_configured()
         news_items = fetch_rss_news()
         if not news_items:
             raise HTTPException(status_code=503, detail="No recent RSS news could be loaded. Please try again later.")
+
         completion = client.chat.completions.create(
-    model=GROQ_MODEL,
-    temperature=0.1,
-    max_tokens=2200,
-    messages=[
-        {
-            "role": "system",
-            "content": (
-                "Return valid JSON only. Do not include Markdown, explanation, "
-                "or code fences. Follow the exact JSON structure requested."
-            ),
-        },
-        {
-            "role": "user",
-            "content": groq_news_prompt(news_items),
-        },
-    ],
-)
+            model=GROQ_MODEL,
+            temperature=0.1,
+            max_tokens=2200,
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Return valid JSON only. Do not include Markdown, explanation, or code fences. Follow the exact JSON structure requested.",
+                },
+                {
+                    "role": "user",
+                    "content": groq_news_prompt(news_items),
+                },
+            ],
+        )
+
         text = completion.choices[0].message.content if completion.choices else ""
         ai_news = parse_json_from_model(text)
         analysed_items = ai_news.get("items", []) if isinstance(ai_news, dict) else []
         merged_items = []
+
         for index, original in enumerate(news_items):
             ai_item = analysed_items[index] if index < len(analysed_items) and isinstance(analysed_items[index], dict) else {}
-            merged_items.append({**original, "market_impact": str(ai_item.get("market_impact", "UNCLEAR")).upper(), "market_relevance": str(ai_item.get("market_relevance", "Publisher headline and summary only. Review the original article for full context.")), "headline_hi": str(ai_item.get("headline_hi", "")), "summary_hi": str(ai_item.get("summary_hi", ""))})
+            merged_items.append({
+                **original,
+                "market_impact": str(ai_item.get("market_impact", "UNCLEAR")).upper(),
+                "market_relevance": str(ai_item.get("market_relevance", "Publisher headline and summary only. Review the original article for full context.")),
+                "headline_hi": str(ai_item.get("headline_hi", "")),
+                "summary_hi": str(ai_item.get("summary_hi", "")),
+            })
+
         now = time.time()
-        result = {"news": merged_items, "news_overview": str(ai_news.get("overview", "Latest RSS news snapshot. Review original links for complete context.")), "news_market_bias": str(ai_news.get("overall_sentiment", "UNCLEAR")).upper(), "source": "CoinDesk/Cointelegraph/Decrypt/Bitcoin Magazine RSS + Groq news analysis", "analysis_mode": "groq_manual_news_only", "provider": "GROQ", "updated_at": int(now), "news_updated_at": int(now), "manual_run_only": True, "disclaimer": "News context only. Groq news output never creates BUY/SELL signals, entry prices, stop losses, or targets. Not financial advice."}
+        result = {
+            "news": merged_items,
+            "news_overview": str(ai_news.get("overview", "Latest RSS news snapshot. Review original links for complete context.")),
+            "news_market_bias": str(ai_news.get("overall_sentiment", "UNCLEAR")).upper(),
+            "source": "CoinDesk/Cointelegraph/Decrypt/Bitcoin Magazine RSS + Groq news analysis",
+            "analysis_mode": "groq_manual_news_only",
+            "provider": "GROQ",
+            "updated_at": int(now),
+            "news_updated_at": int(now),
+            "manual_run_only": True,
+            "disclaimer": "News context only. Groq news output never creates BUY/SELL signals, entry prices, stop losses, or targets. Not financial advice.",
+        }
         groq_news_cache["data"], groq_news_cache["updated_at"] = result, now
         return result
     except HTTPException:
@@ -1396,4 +1484,5 @@ app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 @app.get("/")
 def home():
     return FileResponse("frontend/index.html")
+
 
