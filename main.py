@@ -1307,28 +1307,28 @@ def run_groq_news():
         ]
 
         prompt = f"""
-You summarize crypto RSS headlines for an educational dashboard.
+You are a crypto-news context assistant.
 
-Use ONLY the news data below.
-Do NOT give BUY, SELL, HOLD, trade calls, entry prices, stop losses,
-targets, forecasts, or investment advice.
+Read only the following RSS headlines and summaries:
 
-NEWS:
 {json.dumps(compact_news, ensure_ascii=False)}
 
-Reply with ONLY this small JSON object:
+Return exactly one JSON object and nothing else:
 
 {{
   "overall_sentiment": "NEUTRAL",
-  "overview": "2-3 short Hinglish sentences describing the news context."
+  "overview": "Short Hinglish market-news summary."
 }}
 
 Rules:
-- overall_sentiment must be exactly one of:
-  BULLISH, BEARISH, NEUTRAL, UNCLEAR.
-- Do not use Markdown.
-- Do not use code fences.
-- Keep overview short and factual.
+1. "overall_sentiment" must be exactly one of:
+   BULLISH, BEARISH, NEUTRAL, UNCLEAR.
+2. "overview" must contain 2 or 3 short Hinglish sentences.
+3. No trade signal.
+4. No BUY, SELL, HOLD words.
+5. No entry, stop loss, target, prediction, or investment advice.
+6. No Markdown.
+7. No code fence.
 """
 
         # Deliberately NO response_format here.
@@ -1337,6 +1337,7 @@ Rules:
             model=GROQ_MODEL,
             temperature=0.1,
             max_tokens=350,
+            response_format={"type": "json_object"},
             messages=[
                 {
                     "role": "system",
