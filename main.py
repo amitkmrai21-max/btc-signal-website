@@ -1741,45 +1741,86 @@ def run_ai_signal():
         client = genai.Client(api_key=api_key)
         technical_result = technical_main_signal(market_data)
 
-        try:
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=build_ai_prompt(market_data, technical_result),
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_json_schema=get_ai_response_schema(),
+        response = None
+
+        for attempt, delay_seconds in enumerate((0, 3), start=1):
+            if delay_seconds:
+                time.sleep(delay_seconds)
+
+            try:
+                response = client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=build_ai_prompt(market_data, technical_result),
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_json_schema=get_ai_response_schema(),
+                    ),
+                )
+
+                if not response or not getattr(response, "text", None):
+                    raise ValueError("Gemini returned an empty response.")
+
+                break
+
+            except Exception as error:
+                error_text = str(error)
+
+                print(f"Gemini attempt {attempt}/2 failed: {error_text}")
+
+                is_temporarily_busy = (
+                    "503" in error_text
+                    or "UNAVAILABLE" in error_text
+                    or "high demand" in error_text.lower()
+                )
+
+                if is_temporarily_busy and attempt < 2:
+                    continue
+
+                if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
+                    raise HTTPException(
+                        status_code=429,
+                        detail=(
+                            "Gemini quota is temporarily exhausted. "
+                            "Please wait and try again later."
+                        ),
+                    ) from error
+
+                if "404" in error_text or "NOT_FOUND" in error_text:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            "Configured Gemini model is unavailable. "
+                            "Check GEMINI_MODEL on the server."
+                        ),
+                    ) from error
+
+                if "400" in error_text or "INVALID_ARGUMENT" in error_text:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Gemini request format is invalid. "
+                            "Check the response schema."
+                        ),
+                    ) from error
+
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "Gemini is temporarily busy due to high demand. "
+                        "Please try again in a few seconds."
+                    ),
+                ) from error
+
+        if response is None or not getattr(response, "text", None):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Gemini did not return an analysis. "
+                    "Please try again in a few seconds."
                 ),
             )
 
-            if not response or not getattr(response, "text", None):
-                raise ValueError("Gemini returned an empty response.")
-
-                except Exception as error:
-            error_text = str(error)
-
-            print(f"Gemini request failed: {error_text}")
-
-            if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
-                raise HTTPException(
-                    status_code=429,
-                    detail=(
-                        "Gemini free-tier quota is temporarily exhausted. "
-                        "Please wait before trying again."
-                    ),
-                ) from error
-
-            if "400" in error_text or "INVALID_ARGUMENT" in error_text:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "Gemini request format is invalid. Check the response schema."
-                    ),
-                ) from error
-
-            raise HTTPException(
-                status_code=503,
-                detail=f"Gemini error: {error_text}",
-            ) from error
+        result = json.loads(response.text)
 
         result.update(
             {
