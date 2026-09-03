@@ -1017,13 +1017,25 @@ def ensure_groq_configured():
 
 def parse_json_from_model(text):
     cleaned = str(text or "").strip()
+
     if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            r"^```(?:json)?\s*|\s*```$",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip()
+
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+
+    if start != -1 and end != -1 and end > start:
+        cleaned = cleaned[start : end + 1]
+
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as error:
         raise ValueError("AI returned invalid JSON.") from error
-
 
 def enforce_trade_levels(result, current_price):
     signal = str(result.get("signal", "HOLD")).upper()
@@ -1294,12 +1306,23 @@ def run_groq_news():
         if not news_items:
             raise HTTPException(status_code=503, detail="No recent RSS news could be loaded. Please try again later.")
         completion = client.chat.completions.create(
-            model=GROQ_MODEL,
-            temperature=0.1,
-            max_tokens=2200,
-            response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": groq_news_prompt(news_items)}],
-        )
+    model=GROQ_MODEL,
+    temperature=0.1,
+    max_tokens=2200,
+    messages=[
+        {
+            "role": "system",
+            "content": (
+                "Return valid JSON only. Do not include Markdown, explanation, "
+                "or code fences. Follow the exact JSON structure requested."
+            ),
+        },
+        {
+            "role": "user",
+            "content": groq_news_prompt(news_items),
+        },
+    ],
+)
         text = completion.choices[0].message.content if completion.choices else ""
         ai_news = parse_json_from_model(text)
         analysed_items = ai_news.get("items", []) if isinstance(ai_news, dict) else []
