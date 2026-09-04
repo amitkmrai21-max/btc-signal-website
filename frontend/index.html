@@ -6,10 +6,10 @@
   <title>BTC AI Signal Dashboard</title>
 
   <link rel="stylesheet" href="/frontend/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="[https://cdn.jsdelivr.net/npm/chart.js](https://cdn.jsdelivr.net/npm/chart.js)"></script>
+  <script src="[https://cdn.jsdelivr.net/npm/hammerjs@2.0.8](https://cdn.jsdelivr.net/npm/hammerjs@2.0.8)"></script>
+  <script src="[https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js](https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js)"></script>
+  <script src="[https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js](https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js)"></script>
 </head>
 
 <body>
@@ -165,7 +165,7 @@
               </div>
             </div>
             <p class="chart-help">
-              Mouse wheel or pinch to zoom. Drag to zoom-select. After zooming, drag left/right to explore.
+              Mouse wheel or pinch to zoom. Drag to zoom-select. After zooming, drag left/right to explore the chart.
             </p>
             <canvas id="btcChart"></canvas>
           </div>
@@ -219,7 +219,7 @@
         <div class="section-heading">
           <div>
             <h2>Live BTCUSDT Candlestick Chart</h2>
-            <p>Binance spot-market candles update live. Overlay lines display the active AI setup on future candles.</p>
+            <p>Binance spot-market candles update live. Select a timeframe to inspect price structure before using the Swing Structure and Gemini AI tools.</p>
           </div>
           <span id="liveChartConnection" class="live-chart-connection live-connecting">Connecting…</span>
         </div>
@@ -264,12 +264,13 @@
 
         <div class="live-chart-bottom-grid">
           <article class="live-chart-note">
-            <h3>Live Structure Workflow</h3>
-            <p>Wait for body close, ATR buffer, retest, and final volume confirmation before evaluating setups.</p>
+            <h3>Live structure workflow</h3>
+            <p>Use the 15m view with the Swing Failure &amp; Structure Break card. A wick is not confirmation: wait for body close, ATR buffer, retest, and final BUY/SELL quality confirmation.</p>
           </article>
+
           <article class="live-chart-note">
-            <h3>Overlay Policy</h3>
-            <p>The Engine never draws chart lines. Manual Gemini or Groq analysis plots Entry, SL, and Targets into future candles only.</p>
+            <h3>Manual AI confirmation</h3>
+            <p>The Engine never draws chart lines. When you manually run Gemini or Groq, valid educational setups are drawn into future candles only.</p>
           </article>
         </div>
 
@@ -283,8 +284,9 @@
         <div class="section-heading">
           <div>
             <h2>RRG-Style Relative Rotation</h2>
-            <p>BTC benchmark vs ETH and SOL relative strength and momentum view.</p>
+            <p>BTC benchmark vs ETH and SOL. Relative strength and momentum view, not an official JdK RRG.</p>
           </div>
+
           <div class="rrg-controls">
             <button id="rrg1hBtn" class="rrg-timeframe-btn" type="button" data-rrg-timeframe="1h">1 Hour</button>
             <button id="rrg1dBtn" class="rrg-timeframe-btn active" type="button" data-rrg-timeframe="1d">1 Day</button>
@@ -293,15 +295,18 @@
         </div>
 
         <p id="rrgStatus" class="status-line">Loading RRG-style rotation data...</p>
+
         <div class="rrg-chart-wrap">
           <canvas id="rrgChart"></canvas>
         </div>
+
         <div class="rrg-legend">
           <span class="rrg-legend-item btc-legend">BTC benchmark</span>
           <span class="rrg-legend-item eth-legend">ETH</span>
           <span class="rrg-legend-item sol-legend">SOL</span>
           <span class="rrg-legend-note">
-            Leading: +RS/+Momentum · Weakening: +RS/-Momentum · Lagging: -RS/-Momentum · Improving: -RS/+Momentum
+            Leading: +RS/+Momentum · Weakening: +RS/-Momentum ·
+            Lagging: -RS/-Momentum · Improving: -RS/+Momentum
           </span>
         </div>
       </section>
@@ -315,6 +320,7 @@
                 <p>Action signal and market direction by timeframe.</p>
               </div>
             </div>
+
             <div class="timeframe-analysis-grid">
               <article class="timeframe-analysis-card">
                 <div class="timeframe-title-row">
@@ -324,6 +330,7 @@
                 <p id="summary15m">Waiting for 15m analysis...</p>
                 <p class="key-level"><span>Key level</span><strong id="keyLevel15m">--</strong></p>
               </article>
+
               <article class="timeframe-analysis-card">
                 <div class="timeframe-title-row">
                   <h3>1 Hour</h3>
@@ -332,6 +339,7 @@
                 <p id="summary1h">Waiting for 1h analysis...</p>
                 <p class="key-level"><span>Key level</span><strong id="keyLevel1h">--</strong></p>
               </article>
+
               <article class="timeframe-analysis-card">
                 <div class="timeframe-title-row">
                   <h3>4 Hour</h3>
@@ -350,6 +358,7 @@
                 <p>Trend direction and immediate entry signal can differ.</p>
               </div>
             </div>
+
             <div class="indicator-grid">
               <article class="indicator-card">
                 <h3>15m Trend &amp; Momentum</h3>
@@ -359,6 +368,7 @@
                 <p><span>ADX</span><strong id="adx15m">--</strong></p>
                 <p><span>Momentum</span><strong id="momentum15m">--</strong></p>
               </article>
+
               <article class="indicator-card">
                 <h3>1h Trend &amp; Momentum</h3>
                 <p><span>Trend</span><strong id="trend1h">--</strong></p>
@@ -367,6 +377,7 @@
                 <p><span>ADX</span><strong id="adx1h">--</strong></p>
                 <p><span>Momentum</span><strong id="momentum1h">--</strong></p>
               </article>
+
               <article class="indicator-card">
                 <h3>Volume &amp; Structure</h3>
                 <p><span>15m Volume</span><strong id="volume15m">--</strong></p>
@@ -375,6 +386,7 @@
                 <p><span>1h Pattern</span><strong id="pattern1h">--</strong></p>
                 <p><span>15m Breakout</span><strong id="breakout15m">--</strong></p>
               </article>
+
               <article class="indicator-card">
                 <h3>Key Zones</h3>
                 <p><span>15m Support</span><strong id="support15m">--</strong></p>
@@ -394,6 +406,7 @@
               <h2>Technical Signal Intelligence</h2>
               <p>Live technical health, score breakdown, market regime, multi-timeframe alignment and distance from key levels.</p>
             </div>
+
             <div class="technical-heading-actions">
               <span id="technicalDataHealth" class="data-health-badge health-error">Data: Loading</span>
               <button id="retryTechnicalBtn" class="retry-technical-btn" type="button" hidden>Retry Technical</button>
@@ -439,7 +452,7 @@
 
           <div class="key-distance-heading">
             <h3>Key-Level Distance</h3>
-            <p>Distance calculated from current price to recent 20-candle support and resistance.</p>
+            <p>Distance is calculated from each timeframe’s current price to its recent 20-candle support and resistance.</p>
           </div>
 
           <div class="key-distance-grid">
@@ -483,7 +496,11 @@
           <div class="section-heading">
             <div>
               <h2>Swing Failure &amp; Structure Break</h2>
-              <p>15-minute BTC structure. Requires a completed candle body close beyond the protected level with ATR buffer.</p>
+              <p>
+                15-minute BTC structure. A wick alone does not confirm a break:
+                confirmation requires a completed candle body close beyond the protected
+                level with the ATR buffer.
+              </p>
             </div>
             <span id="swingSignalBadge" class="swing-signal-badge swing-neutral">Loading...</span>
           </div>
@@ -493,38 +510,47 @@
               <span>Timeframe</span>
               <strong id="swingTimeframe">15m</strong>
             </article>
+
             <article class="swing-structure-item swing-price-item">
               <span>Current Price</span>
               <strong id="swingCurrentPrice">$—</strong>
             </article>
+
             <article class="swing-structure-item">
               <span>Prior Swing High</span>
               <strong id="swingPriorHigh">$—</strong>
             </article>
+
             <article class="swing-structure-item">
               <span>Prior Swing Low</span>
               <strong id="swingPriorLow">$—</strong>
             </article>
+
             <article class="swing-structure-item failed-level">
               <span>Break Event</span>
               <strong id="swingFailedLevel">$—</strong>
             </article>
+
             <article class="swing-structure-item protected-level">
               <span>Protected Break Level</span>
               <strong id="swingProtectedLevel">$—</strong>
             </article>
+
             <article class="swing-structure-item break-level">
               <span>Break Level</span>
               <strong id="swingBreakLevel">Close below $—</strong>
             </article>
+
             <article class="swing-structure-item status-level">
               <span>Break Status</span>
               <strong id="swingBreakStatus">Loading...</strong>
             </article>
+
             <article class="swing-structure-item">
               <span>Retest Level</span>
               <strong id="swingRetestLevel">$—</strong>
             </article>
+
             <article class="swing-structure-item invalidation-level">
               <span>Invalidation Level</span>
               <strong id="swingInvalidationLevel">$—</strong>
@@ -552,8 +578,9 @@
           <div class="section-heading">
             <div>
               <h2>Setup Quality &amp; Trade Checklist</h2>
-              <p>Educational checklist based on current live technical conditions.</p>
+              <p>Educational checklist based on current live technical conditions. It does not place trades or guarantee outcomes.</p>
             </div>
+
             <span id="setupExecutionState" class="setup-execution-badge setup-state-loading">Loading...</span>
           </div>
 
@@ -563,11 +590,13 @@
               <strong id="setupGrade">--</strong>
               <p id="setupScore">-- / 8 checks passed</p>
             </article>
+
             <article class="setup-decision-panel">
               <span class="technical-label">Checklist Decision</span>
               <strong id="setupDirection">--</strong>
               <p id="setupDecisionReason">Waiting for live technical checklist data...</p>
             </article>
+
             <article class="setup-flags-panel">
               <span class="technical-label">Risk Flags</span>
               <strong id="setupRiskFlagCount">--</strong>
@@ -580,7 +609,8 @@
           </div>
 
           <p class="setup-quality-note">
-            READY still means wait for the stated trigger. This dashboard is educational, not financial advice.
+            READY still means wait for the stated trigger and use only the virtual
+            paper-trading simulator. This dashboard is educational, not financial advice.
           </p>
         </section>
 
@@ -589,7 +619,7 @@
           <div class="section-heading">
             <div>
               <h2>Signal Confirmation</h2>
-              <p>Compares the most recent successful AI review with current live technical conditions.</p>
+              <p>Compares the most recent successful Gemini AI view with current live technical conditions.</p>
             </div>
           </div>
 
@@ -631,18 +661,22 @@
               <span>Market Bias</span>
               <strong id="marketBias">--</strong>
             </article>
+
             <article class="plan-item">
               <span>Setup Status</span>
               <strong id="setupStatus">--</strong>
             </article>
+
             <article class="plan-item">
               <span>Confirmation Needed</span>
               <strong id="confirmationNeeded">--</strong>
             </article>
+
             <article class="plan-item">
               <span>Target 1</span>
               <strong id="target1">--</strong>
             </article>
+
             <article class="plan-item">
               <span>Target 2</span>
               <strong id="target2">--</strong>
@@ -658,8 +692,12 @@
         <div class="section-heading">
           <div>
             <h2>Price &amp; Signal Alerts</h2>
-            <p>Alerts run while this dashboard is open. They use live ticker and technical refreshes.</p>
+            <p>
+              Alerts run only while this dashboard is open. They use live BTC price
+              and technical refreshes; no Gemini request is made.
+            </p>
           </div>
+
           <span id="notificationPermissionBadge" class="notification-permission-badge">
             Notifications: Checking...
           </span>
@@ -669,6 +707,7 @@
           <button id="enableNotificationsBtn" class="enable-notifications-btn" type="button">
             Enable Browser Alerts
           </button>
+
           <button id="testNotificationBtn" class="test-notification-btn" type="button">
             Test Alert
           </button>
@@ -682,29 +721,46 @@
           <article class="price-alert-panel">
             <h3>BTC Price Above</h3>
             <p>Alert when live BTC/USD reaches or moves above your target.</p>
+
             <label for="priceAboveInput">Target price (USD)</label>
+
             <div class="price-alert-action-row">
               <input id="priceAboveInput" type="number" min="1" step="1" placeholder="Example: 80000" />
-              <button id="savePriceAboveBtn" class="save-price-alert-btn" type="button">Save Above Alert</button>
+              <button id="savePriceAboveBtn" class="save-price-alert-btn" type="button">
+                Save Above Alert
+              </button>
             </div>
-            <p id="priceAboveStatus" class="price-alert-status">No above-price alert is active.</p>
+
+            <p id="priceAboveStatus" class="price-alert-status">
+              No above-price alert is active.
+            </p>
           </article>
 
           <article class="price-alert-panel">
             <h3>BTC Price Below</h3>
             <p>Alert when live BTC/USD reaches or falls below your target.</p>
+
             <label for="priceBelowInput">Target price (USD)</label>
+
             <div class="price-alert-action-row">
               <input id="priceBelowInput" type="number" min="1" step="1" placeholder="Example: 70000" />
-              <button id="savePriceBelowBtn" class="save-price-alert-btn" type="button">Save Below Alert</button>
+              <button id="savePriceBelowBtn" class="save-price-alert-btn" type="button">
+                Save Below Alert
+              </button>
             </div>
-            <p id="priceBelowStatus" class="price-alert-status">No below-price alert is active.</p>
+
+            <p id="priceBelowStatus" class="price-alert-status">
+              No below-price alert is active.
+            </p>
           </article>
         </div>
 
         <div class="signal-alert-settings">
           <h3>Technical Change Alerts</h3>
-          <p>Alerts compare the latest live technical response with the previous one while open.</p>
+          <p>
+            Select what to watch. These alerts compare the latest live technical
+            response with the previous one while this browser tab is open.
+          </p>
 
           <label class="alert-toggle-row" for="signalChangeAlertToggle">
             <input id="signalChangeAlertToggle" type="checkbox" checked />
@@ -736,49 +792,94 @@
             <span>Current BTC price</span>
             <strong id="alertCurrentBtcPrice">$--</strong>
           </article>
+
           <article class="alert-summary-item">
             <span>Technical watch status</span>
             <strong id="alertTechnicalWatchStatus">Waiting for technical data</strong>
           </article>
+
           <article class="alert-summary-item">
             <span>Last alert</span>
             <strong id="lastAlertStatus">No alert triggered yet</strong>
           </article>
         </div>
+
+        <p class="alerts-note">
+          Browser alerts are educational dashboard notifications only, not trade
+          instructions. They do not work after this website/tab is fully closed,
+          because this version does not use a background push-notification service.
+        </p>
       </section>
 
-      <!-- PAPER TRADING CARD -->
       <section class="card paper-trading-card">
         <div class="section-heading">
           <div>
             <h2>Virtual Paper Trading (INR)</h2>
-            <p>Practice simulation only. Supports virtual long &amp; short positions. No real money or exchange access.</p>
+            <p>Practice only. Supports 1x virtual long and short positions. No real money, payment, bank, wallet or exchange order.</p>
           </div>
+
           <button id="resetPaperBtn" class="reset-paper-btn" type="button">Reset Demo</button>
         </div>
 
         <div class="paper-metrics">
-          <div class="paper-metric"><span>Virtual Cash</span><strong id="paperCash">₹--</strong></div>
-          <div class="paper-metric"><span>Long BTC Holding</span><strong id="paperBtcHolding">0.000000 BTC</strong></div>
-          <div class="paper-metric"><span>Short BTC Holding</span><strong id="paperShortBtcHolding">0.000000 BTC</strong></div>
-          <div class="paper-metric"><span>Position</span><strong id="paperPositionType">No open position</strong></div>
-          <div class="paper-metric"><span>Average Long Price</span><strong id="paperAvgPrice">No long position</strong></div>
-          <div class="paper-metric"><span>Average Short Price</span><strong id="paperShortAvgPrice">No short position</strong></div>
-          <div class="paper-metric"><span>Portfolio Value</span><strong id="paperPortfolioValue">₹--</strong></div>
-          <div class="paper-metric"><span>Profit / Loss</span><strong id="paperPnl">₹--</strong></div>
+          <div class="paper-metric">
+            <span>Virtual Cash</span>
+            <strong id="paperCash">₹--</strong>
+          </div>
+
+          <div class="paper-metric">
+            <span>Long BTC Holding</span>
+            <strong id="paperBtcHolding">0.000000 BTC</strong>
+          </div>
+
+          <div class="paper-metric">
+            <span>Short BTC Holding</span>
+            <strong id="paperShortBtcHolding">0.000000 BTC</strong>
+          </div>
+
+          <div class="paper-metric">
+            <span>Position</span>
+            <strong id="paperPositionType">No open position</strong>
+          </div>
+
+          <div class="paper-metric">
+            <span>Average Long Price</span>
+            <strong id="paperAvgPrice">No long position</strong>
+          </div>
+
+          <div class="paper-metric">
+            <span>Average Short Price</span>
+            <strong id="paperShortAvgPrice">No short position</strong>
+          </div>
+
+          <div class="paper-metric">
+            <span>Portfolio Value</span>
+            <strong id="paperPortfolioValue">₹--</strong>
+          </div>
+
+          <div class="paper-metric">
+            <span>Profit / Loss</span>
+            <strong id="paperPnl">₹--</strong>
+          </div>
         </div>
 
         <div class="paper-trade-form">
           <label for="paperAmountInput">Virtual amount to trade (INR)</label>
+
           <div class="paper-action-row">
             <input id="paperAmountInput" type="number" min="100" step="100" placeholder="Example: 10000" />
             <button id="paperBuyBtn" class="paper-buy-btn" type="button">Buy BTC / Cover Short</button>
             <button id="paperSellBtn" class="paper-sell-btn" type="button">Sell BTC / Open Short</button>
           </div>
+
           <p class="paper-short-help">
-            Buy opens/adds a long or covers a short. Sell closes a long or opens a 1x short.
+            Buy opens/adds a long position or covers an existing short. Sell closes a long position
+            or opens a 1x virtual short. Educational simulation only.
           </p>
-          <p id="paperTradeStatus" class="paper-status">Load live price, then enter a virtual INR amount.</p>
+
+          <p id="paperTradeStatus" class="paper-status">
+            Load live price, then enter a virtual INR amount.
+          </p>
         </div>
 
         <div class="paper-history-wrap">
@@ -794,27 +895,39 @@
         <div class="section-heading">
           <div>
             <h2>Groq AI News Context</h2>
-            <p id="geminiNewsUpdated">News refreshes only when you manually run Groq News.</p>
+            <p id="geminiNewsUpdated">
+              News refreshes only when you manually run Groq News.
+            </p>
           </div>
+
           <div class="news-heading-actions">
-            <button id="groqNewsBtn" class="groq-news-btn" type="button">Refresh News with Groq</button>
-            <span id="geminiNewsBias" class="news-bias-badge news-impact-neutral">News bias: UNCLEAR</span>
+            <button id="groqNewsBtn" class="groq-news-btn" type="button">
+              Refresh News with Groq
+            </button>
+
+            <span id="geminiNewsBias" class="news-bias-badge news-impact-neutral">
+              News bias: UNCLEAR
+            </span>
           </div>
         </div>
 
         <div class="gemini-news-intro">
-          <h3>Latest Market Context</h3>
+          <h3>Latest market context</h3>
           <p id="geminiNewsOverview">
             Click “Refresh News with Groq” to load RSS headlines, sentiment, and Hindi explanation.
           </p>
         </div>
 
         <div id="geminiNewsList" class="gemini-news-list" aria-live="polite">
-          <p class="gemini-news-empty">No Groq news snapshot yet. News is separate from technical analysis.</p>
+          <p class="gemini-news-empty">
+            No Groq news snapshot yet. News is separate from Gemini technical analysis.
+          </p>
         </div>
 
         <p class="gemini-news-note">
-          Groq processes RSS news for summary and sentiment only. This section never produces signals or trade levels.
+          Groq processes RSS news for summary, sentiment, and Hindi explanation only.
+          This section never produces BUY/SELL signals, Entry, Stop Loss, Target 1, or Target 2.
+          News context is educational and not financial advice.
         </p>
       </section>
     </section>
@@ -834,20 +947,26 @@
         <p class="settings-eyebrow">Dashboard preferences</p>
         <h2>Settings</h2>
       </div>
-      <button id="settingsCloseButton" class="settings-close" type="button" aria-label="Close settings">×</button>
+
+      <button id="settingsCloseButton" class="settings-close" type="button" aria-label="Close settings">
+        ×
+      </button>
     </div>
 
     <div class="settings-group">
       <label for="userNameInput">Your name</label>
+
       <div class="settings-name-row">
         <input id="userNameInput" type="text" placeholder="Your name" autocomplete="name" />
         <button id="saveUserNameBtn" type="button">Save</button>
       </div>
+
       <p class="settings-help">Your name is saved only in this browser.</p>
     </div>
 
     <div class="settings-group">
       <label>Theme</label>
+
       <div class="settings-option-grid">
         <button class="settings-choice theme-choice" type="button" data-theme-choice="dark">Dark</button>
         <button class="settings-choice theme-choice" type="button" data-theme-choice="light">Light</button>
@@ -857,6 +976,7 @@
 
     <div class="settings-group">
       <label>Accent color</label>
+
       <div class="settings-option-grid">
         <button class="settings-choice accent-choice" type="button" data-accent-choice="blue">Blue</button>
         <button class="settings-choice accent-choice" type="button" data-accent-choice="purple">Purple</button>
@@ -867,6 +987,7 @@
 
     <div class="settings-group">
       <label>Text size</label>
+
       <div class="settings-option-grid">
         <button class="settings-choice text-size-choice" type="button" data-text-size-choice="compact">Compact</button>
         <button class="settings-choice text-size-choice" type="button" data-text-size-choice="normal">Normal</button>
