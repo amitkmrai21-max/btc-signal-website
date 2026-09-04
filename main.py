@@ -28,8 +28,8 @@ app.add_middleware(
 BINANCE_BASE_URL = "https://data-api.binance.vision"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-AI_NEWS_LIMIT = 10
-RSS_NEWS_TIMEOUT_SECONDS = 10
+AI_NEWS_LIMIT = 15
+RSS_NEWS_TIMEOUT_SECONDS = 12
 TECHNICAL_CACHE_SECONDS = 30
 TECHNICAL_DELAYED_SECONDS = 90
 GROQ_LIVE_COOLDOWN_SECONDS = 10
@@ -131,48 +131,54 @@ def ema(values, period):
 def rsi(values, period=14):
     if len(values) < period + 1:
         raise ValueError(f"Need {period + 1} values for RSI.")
-    changes = [values[i] - values[i - 1] for i in range(1, len(values))]
+    changes = [values[index] - values[index - 1] for index in range(1, len(values))]
     recent = changes[-period:]
-    avg_gain = average([max(c, 0) for c in recent])
-    avg_loss = average([max(-c, 0) for c in recent])
+    avg_gain = average([max(change, 0) for change in recent])
+    avg_loss = average([max(-change, 0) for change in recent])
     if avg_loss == 0:
         return 100.0
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+    relative_strength = avg_gain / avg_loss
+    return 100 - (100 / (1 + relative_strength))
 
 
 def standard_deviation(values):
     if not values:
         return 0.0
     mean = average(values)
-    return math.sqrt(average([(v - mean) ** 2 for v in values]))
+    return math.sqrt(average([(value - mean) ** 2 for value in values]))
 
 
-def percentage_change(start_val, end_val):
-    if start_val == 0:
+def percentage_change(start_value, end_value):
+    if start_value == 0:
         return 0.0
-    return ((end_val - start_val) / start_val) * 100
+    return ((end_value - start_value) / start_value) * 100
 
 
 def macd(values, fast=12, slow=26, signal=9):
     if len(values) < slow + signal:
         raise ValueError("Not enough candle data for MACD.")
-    fast_s = ema_series(values, fast)
-    slow_s = ema_series(values, slow)
-    macd_s = [
-        f - s for f, s in zip(fast_s, slow_s) if f is not None and s is not None
+    fast_series = ema_series(values, fast)
+    slow_series = ema_series(values, slow)
+    macd_line_series = [
+        fast_value - slow_value
+        for fast_value, slow_value in zip(fast_series, slow_series)
+        if fast_value is not None and slow_value is not None
     ]
-    sig_s = ema_series(macd_s, signal)
-    macd_l = macd_s[-1]
-    sig_l = sig_s[-1]
-    hist = macd_l - sig_l
-    prev_hist = macd_s[-2] - sig_s[-2] if len(macd_s) > 1 else hist
-    direction = "Bullish" if macd_l > sig_l else "Bearish"
-    strength = "Strengthening" if hist > prev_hist else "Weakening"
+    signal_line_series = ema_series(macd_line_series, signal)
+    macd_line = macd_line_series[-1]
+    signal_line = signal_line_series[-1]
+    histogram = macd_line - signal_line
+    previous_histogram = (
+        macd_line_series[-2] - signal_line_series[-2]
+        if len(macd_line_series) > 1
+        else histogram
+    )
+    direction = "Bullish" if macd_line > signal_line else "Bearish"
+    strength = "Strengthening" if histogram > previous_histogram else "Weakening"
     return {
-        "macd_line": round_value(macd_l, 4),
-        "signal_line": round_value(sig_l, 4),
-        "histogram": round_value(hist, 4),
+        "macd_line": round_value(macd_line, 4),
+        "signal_line": round_value(signal_line, 4),
+        "histogram": round_value(histogram, 4),
         "state": f"{direction}, {strength}",
     }
 
@@ -180,54 +186,55 @@ def macd(values, fast=12, slow=26, signal=9):
 def atr(highs, lows, closes, period=14):
     if len(closes) < period + 1:
         raise ValueError("Not enough candle data for ATR.")
-    trs = [
-        max(
-            highs[i] - lows[i],
-            abs(highs[i] - closes[i - 1]),
-            abs(lows[i] - closes[i - 1]),
+    true_ranges = []
+    for index in range(1, len(closes)):
+        true_ranges.append(
+            max(
+                highs[index] - lows[index],
+                abs(highs[index] - closes[index - 1]),
+                abs(lows[index] - closes[index - 1]),
+            )
         )
-        for i in range(1, len(closes))
-    ]
-    return average(trs[-period:])
+    return average(true_ranges[-period:])
 
 
 def adx(highs, lows, closes, period=14):
     if len(closes) < (period * 2) + 1:
         raise ValueError("Not enough candle data for ADX.")
-    plus_dm, minus_dm, trs = [], [], []
-    for i in range(1, len(closes)):
-        up = highs[i] - highs[i - 1]
-        down = lows[i - 1] - lows[i]
-        plus_dm.append(up if up > down and up > 0 else 0)
-        minus_dm.append(down if down > up and down > 0 else 0)
-        trs.append(
+    plus_dm, minus_dm, true_ranges = [], [], []
+    for index in range(1, len(closes)):
+        up_move = highs[index] - highs[index - 1]
+        down_move = lows[index - 1] - lows[index]
+        plus_dm.append(up_move if up_move > down_move and up_move > 0 else 0)
+        minus_dm.append(down_move if down_move > up_move and down_move > 0 else 0)
+        true_ranges.append(
             max(
-                highs[i] - lows[i],
-                abs(highs[i] - closes[i - 1]),
-                abs(lows[i] - closes[i - 1]),
+                highs[index] - lows[index],
+                abs(highs[index] - closes[index - 1]),
+                abs(lows[index] - closes[index - 1]),
             )
         )
-    dx_vals, plus_dis, minus_dis = [], [], []
-    for i in range(period - 1, len(trs)):
-        tr_avg = average(trs[i - period + 1 : i + 1])
-        p_avg = average(plus_dm[i - period + 1 : i + 1])
-        m_avg = average(minus_dm[i - period + 1 : i + 1])
-        p_di = 100 * p_avg / tr_avg if tr_avg else 0
-        m_di = 100 * m_avg / tr_avg if tr_avg else 0
-        tot = p_di + m_di
-        dx = 100 * abs(p_di - m_di) / tot if tot else 0
-        plus_dis.append(p_di)
-        minus_dis.append(m_di)
-        dx_vals.append(dx)
-    adx_v = average(dx_vals[-period:])
+    dx_values, plus_di_values, minus_di_values = [], [], []
+    for index in range(period - 1, len(true_ranges)):
+        tr_average = average(true_ranges[index - period + 1 : index + 1])
+        plus_average = average(plus_dm[index - period + 1 : index + 1])
+        minus_average = average(minus_dm[index - period + 1 : index + 1])
+        plus_di = 100 * plus_average / tr_average if tr_average else 0
+        minus_di = 100 * minus_average / tr_average if tr_average else 0
+        total_di = plus_di + minus_di
+        dx = 100 * abs(plus_di - minus_di) / total_di if total_di else 0
+        plus_di_values.append(plus_di)
+        minus_di_values.append(minus_di)
+        dx_values.append(dx)
+    adx_value = average(dx_values[-period:])
     return {
-        "adx_14": round_value(adx_v),
-        "plus_di_14": round_value(plus_dis[-1]),
-        "minus_di_14": round_value(minus_dis[-1]),
+        "adx_14": round_value(adx_value),
+        "plus_di_14": round_value(plus_di_values[-1]),
+        "minus_di_14": round_value(minus_di_values[-1]),
         "trend_strength": (
             "Strong"
-            if adx_v >= 25
-            else "Moderate" if adx_v >= 20 else "Weak / ranging"
+            if adx_value >= 25
+            else "Moderate" if adx_value >= 20 else "Weak / ranging"
         ),
     }
 
@@ -235,138 +242,173 @@ def adx(highs, lows, closes, period=14):
 def bollinger_bands(values, period=20, multiplier=2):
     if len(values) < period:
         raise ValueError("Not enough candle data for Bollinger Bands.")
-    w = values[-period:]
-    mid = average(w)
-    dev = standard_deviation(w)
-    up = mid + multiplier * dev
-    low = mid - multiplier * dev
-    width = ((up - low) / mid) * 100 if mid else 0
-    pos = ((values[-1] - low) / (up - low)) * 100 if up != low else 50
+    window = values[-period:]
+    middle = average(window)
+    deviation = standard_deviation(window)
+    upper = middle + multiplier * deviation
+    lower = middle - multiplier * deviation
+    width_percent = ((upper - lower) / middle) * 100 if middle else 0
+    position_percent = (
+        ((values[-1] - lower) / (upper - lower)) * 100 if upper != lower else 50
+    )
     return {
-        "upper": round_value(up),
-        "middle": round_value(mid),
-        "lower": round_value(low),
-        "width_percent": round_value(width),
-        "price_position_percent": round_value(pos),
+        "upper": round_value(upper),
+        "middle": round_value(middle),
+        "lower": round_value(lower),
+        "width_percent": round_value(width_percent),
+        "price_position_percent": round_value(position_percent),
     }
 
 
 def obv(closes, volumes):
-    val = 0.0
-    vals = [val]
-    for i in range(1, len(closes)):
-        if closes[i] > closes[i - 1]:
-            val += volumes[i]
-        elif closes[i] < closes[i - 1]:
-            val -= volumes[i]
-        vals.append(val)
+    value = 0.0
+    values = [value]
+    for index in range(1, len(closes)):
+        if closes[index] > closes[index - 1]:
+            value += volumes[index]
+        elif closes[index] < closes[index - 1]:
+            value -= volumes[index]
+        values.append(value)
     direction = (
         "Rising"
-        if vals[-1] > vals[-6]
-        else "Falling" if vals[-1] < vals[-6] else "Flat"
+        if values[-1] > values[-6]
+        else "Falling" if values[-1] < values[-6] else "Flat"
     )
-    return {"value": round_value(vals[-1], 2), "direction_5_candles": direction}
+    return {"value": round_value(values[-1], 2), "direction_5_candles": direction}
 
 
 def mfi(highs, lows, closes, volumes, period=14):
     if len(closes) < period + 1:
         raise ValueError("Not enough candle data for MFI.")
-    tps = [(h + l + c) / 3 for h, l, c in zip(highs, lows, closes)]
-    pos, neg = [], []
-    for i in range(1, len(tps)):
-        raw = tps[i] * volumes[i]
-        if tps[i] > tps[i - 1]:
-            pos.append(raw)
-            neg.append(0)
-        elif tps[i] < tps[i - 1]:
-            pos.append(0)
-            neg.append(raw)
+    typical_prices = [
+        (high + low + close) / 3 for high, low, close in zip(highs, lows, closes)
+    ]
+    positive_flow, negative_flow = [], []
+    for index in range(1, len(typical_prices)):
+        raw_flow = typical_prices[index] * volumes[index]
+        if typical_prices[index] > typical_prices[index - 1]:
+            positive_flow.append(raw_flow)
+            negative_flow.append(0)
+        elif typical_prices[index] < typical_prices[index - 1]:
+            positive_flow.append(0)
+            negative_flow.append(raw_flow)
         else:
-            pos.append(0)
-            neg.append(0)
-    p_sum = sum(pos[-period:])
-    n_sum = sum(neg[-period:])
-    if n_sum == 0:
+            positive_flow.append(0)
+            negative_flow.append(0)
+    positive_sum = sum(positive_flow[-period:])
+    negative_sum = sum(negative_flow[-period:])
+    if negative_sum == 0:
         return 100.0
-    return 100 - (100 / (1 + (p_sum / n_sum)))
+    money_ratio = positive_sum / negative_sum
+    return 100 - (100 / (1 + money_ratio))
 
 
 def candle_pattern(candles):
-    cur, prev = candles[-1], candles[-2]
-    o, h, l, c = map(float, [cur[1], cur[2], cur[3], cur[4]])
-    po, ph, pl, pc = map(float, [prev[1], prev[2], prev[3], prev[4]])
-    body = abs(c - o)
-    rng = max(h - l, 0.00000001)
-    u_wick = h - max(o, c)
-    l_wick = min(o, c) - l
-    if h < ph and l > pl:
+    current, previous = candles[-1], candles[-2]
+    open_price, high_price, low_price, close_price = map(
+        float, [current[1], current[2], current[3], current[4]]
+    )
+    previous_open, previous_high, previous_low, previous_close = map(
+        float, [previous[1], previous[2], previous[3], previous[4]]
+    )
+    body = abs(close_price - open_price)
+    full_range = max(high_price - low_price, 0.00000001)
+    upper_wick = high_price - max(open_price, close_price)
+    lower_wick = min(open_price, close_price) - low_price
+    if high_price < previous_high and low_price > previous_low:
         return "Inside bar / consolidation"
-    if c > o and pc < po and c >= po and o <= pc:
+    if (
+        close_price > open_price
+        and previous_close < previous_open
+        and close_price >= previous_open
+        and open_price <= previous_close
+    ):
         return "Bullish engulfing"
-    if c < o and pc > po and c <= po and o >= pc:
+    if (
+        close_price < open_price
+        and previous_close > previous_open
+        and close_price <= previous_open
+        and open_price >= previous_close
+    ):
         return "Bearish engulfing"
-    if body / rng < 0.12:
+    if body / full_range < 0.12:
         return "Doji / indecision"
-    if l_wick > body * 2 and u_wick < body:
+    if lower_wick > body * 2 and upper_wick < body:
         return "Hammer-like bullish rejection"
-    if u_wick > body * 2 and l_wick < body:
+    if upper_wick > body * 2 and lower_wick < body:
         return "Shooting-star-like bearish rejection"
-    return "Bullish candle" if c > o else "Bearish candle"
+    return "Bullish candle" if close_price > open_price else "Bearish candle"
 
 
-def market_structure(closes, highs, lows, e20, e50):
-    rh, rl = max(highs[-20:]), min(lows[-20:])
-    ph, pl = max(highs[-40:-20]), min(lows[-40:-20])
-    lc = closes[-1]
-    if rh > ph and rl > pl and lc > e20 > e50:
+def market_structure(closes, highs, lows, ema_20_value, ema_50_value):
+    recent_high, recent_low = max(highs[-20:]), min(lows[-20:])
+    prior_high, prior_low = max(highs[-40:-20]), min(lows[-40:-20])
+    last_close = closes[-1]
+    if (
+        recent_high > prior_high
+        and recent_low > prior_low
+        and last_close > ema_20_value > ema_50_value
+    ):
         return "Bullish: Higher highs and higher lows"
-    if rh < ph and rl < pl and lc < e20 < e50:
+    if (
+        recent_high < prior_high
+        and recent_low < prior_low
+        and last_close < ema_20_value < ema_50_value
+    ):
         return "Bearish: Lower highs and lower lows"
     return "Range / mixed structure"
 
 
 def pivot_levels(highs, lows, closes):
-    ph, pl, pc = max(highs[-25:-1]), min(lows[-25:-1]), closes[-2]
-    p = (ph + pl + pc) / 3
+    prior_high, prior_low, prior_close = (
+        max(highs[-25:-1]),
+        min(lows[-25:-1]),
+        closes[-2],
+    )
+    pivot = (prior_high + prior_low + prior_close) / 3
     return {
-        "pivot": round_value(p),
-        "support_1": round_value((2 * p) - ph),
-        "support_2": round_value(p - (ph - pl)),
-        "resistance_1": round_value((2 * p) - pl),
-        "resistance_2": round_value(p + (ph - pl)),
+        "pivot": round_value(pivot),
+        "support_1": round_value((2 * pivot) - prior_high),
+        "support_2": round_value(pivot - (prior_high - prior_low)),
+        "resistance_1": round_value((2 * pivot) - prior_low),
+        "resistance_2": round_value(pivot + (prior_high - prior_low)),
     }
 
 
 def fibonacci_levels(highs, lows):
-    sh, sl = max(highs[-50:]), min(lows[-50:])
-    rng = sh - sl
+    swing_high, swing_low = max(highs[-50:]), min(lows[-50:])
+    price_range = swing_high - swing_low
     return {
-        "swing_high": round_value(sh),
-        "swing_low": round_value(sl),
-        "level_23_6": round_value(sh - rng * 0.236),
-        "level_38_2": round_value(sh - rng * 0.382),
-        "level_50_0": round_value(sh - rng * 0.5),
-        "level_61_8": round_value(sh - rng * 0.618),
-        "level_78_6": round_value(sh - rng * 0.786),
+        "swing_high": round_value(swing_high),
+        "swing_low": round_value(swing_low),
+        "level_23_6": round_value(swing_high - price_range * 0.236),
+        "level_38_2": round_value(swing_high - price_range * 0.382),
+        "level_50_0": round_value(swing_high - price_range * 0.5),
+        "level_61_8": round_value(swing_high - price_range * 0.618),
+        "level_78_6": round_value(swing_high - price_range * 0.786),
     }
 
 
 def find_pivot_highs(highs, left_right=3):
-    return [
-        i
-        for i in range(left_right, len(highs) - left_right)
-        if highs[i] > max(highs[i - left_right : i])
-        and highs[i] >= max(highs[i + 1 : i + left_right + 1])
-    ]
+    pivots = []
+    for index in range(left_right, len(highs) - left_right):
+        current = highs[index]
+        if current > max(highs[index - left_right : index]) and current >= max(
+            highs[index + 1 : index + left_right + 1]
+        ):
+            pivots.append(index)
+    return pivots
 
 
 def find_pivot_lows(lows, left_right=3):
-    return [
-        i
-        for i in range(left_right, len(lows) - left_right)
-        if lows[i] < min(lows[i - left_right : i])
-        and lows[i] <= min(lows[i + 1 : i + left_right + 1])
-    ]
+    pivots = []
+    for index in range(left_right, len(lows) - left_right):
+        current = lows[index]
+        if current < min(lows[index - left_right : index]) and current <= min(
+            lows[index + 1 : index + left_right + 1]
+        ):
+            pivots.append(index)
+    return pivots
 
 
 def calculate_swing_failure_structure(
@@ -380,100 +422,107 @@ def calculate_swing_failure_structure(
     trend_4h="",
 ):
     if len(candles) < 60:
-        raise ValueError("Need 60 candles for swing structure.")
-    opens = [float(c[1]) for c in candles]
-    highs = [float(c[2]) for c in candles]
-    lows = [float(c[3]) for c in candles]
-    closes = [float(c[4]) for c in candles]
-    volumes = [float(c[5]) for c in candles]
-    p_highs = find_pivot_highs(highs, swing_left_right)
-    p_lows = find_pivot_lows(lows, swing_left_right)
-    cur_p = closes[-1]
-    atr_buf = max(float(atr_value) * 0.30, 0.01)
-    retest_tol = max(float(atr_value) * 0.25, 0.01)
+        raise ValueError("Need at least 60 candles for 15m swing structure analysis.")
+    opens = [float(candle[1]) for candle in candles]
+    highs = [float(candle[2]) for candle in candles]
+    lows = [float(candle[3]) for candle in candles]
+    closes = [float(candle[4]) for candle in candles]
+    volumes = [float(candle[5]) for candle in candles]
+    pivot_highs = find_pivot_highs(highs, swing_left_right)
+    pivot_lows = find_pivot_lows(lows, swing_left_right)
+    current_price = closes[-1]
+    atr_buffer = max(float(atr_value) * 0.30, 0.01)
+    retest_tolerance = max(float(atr_value) * 0.25, 0.01)
+    normalized_macd = str(macd_state or "").lower()
+    normalized_trend_1h = str(trend_1h or "").lower()
+    normalized_trend_4h = str(trend_4h or "").lower()
+    bullish_momentum_ok = float(rsi_value) >= 50 and "bullish" in normalized_macd
+    bearish_momentum_ok = float(rsi_value) <= 50 and "bearish" in normalized_macd
+    bullish_1h_ok = "bullish" in normalized_trend_1h
+    bearish_1h_ok = "bearish" in normalized_trend_1h
+    bullish_4h_blocked = "strong bearish" in normalized_trend_4h
+    bearish_4h_blocked = "strong bullish" in normalized_trend_4h
+    average_break_volume = average(volumes[-21:-1])
+    calculated_volume_ratio = (
+        volumes[-1] / average_break_volume if average_break_volume else 0
+    )
+    effective_volume_ratio = max(float(volume_ratio or 0), calculated_volume_ratio)
+    volume_ok = effective_volume_ratio >= 1.20
 
-    norm_macd = str(macd_state or "").lower()
-    norm_1h = str(trend_1h or "").lower()
-    norm_4h = str(trend_4h or "").lower()
-    bull_mom_ok = float(rsi_value) >= 50 and "bullish" in norm_macd
-    bear_mom_ok = float(rsi_value) <= 50 and "bearish" in norm_macd
-    bull_1h_ok = "bullish" in norm_1h
-    bear_1h_ok = "bearish" in norm_1h
-    bull_4h_blocked = "strong bearish" in norm_4h
-    bear_4h_blocked = "strong bullish" in norm_4h
+    def rounded(value):
+        return round_value(value) if value is not None else None
 
-    avg_vol = average(volumes[-21:-1])
-    calc_vol_r = volumes[-1] / avg_vol if avg_vol else 0
-    eff_vol_r = max(float(volume_ratio or 0), calc_vol_r)
-    vol_ok = eff_vol_r >= 1.20
-
-    def build_res(
+    def build_filter_result(
         direction,
-        raw_sig,
+        raw_signal,
         status,
-        prior_h,
-        prior_l,
-        prot_lvl,
-        brk_lvl,
-        ret_lvl,
-        inval_lvl,
-        concl,
+        prior_high,
+        prior_low,
+        protected_level,
+        break_level,
+        retest_level,
+        invalidation_level,
+        conclusion,
         reason,
         quality,
-        p_filt,
-        w_filt,
-        f_filt,
-        brk_event,
+        passed_filters,
+        waiting_filters,
+        failed_filters,
+        break_event,
     ):
-        sig = normalize_signal(raw_sig)
+        final_norm_signal = normalize_signal(raw_signal)
         return {
             "timeframe": "15m",
-            "current_price": round_value(cur_p),
-            "atr_14": round_value(atr_value),
-            "atr_buffer": round_value(atr_buf),
-            "prior_swing_high": round_value(prior_h),
-            "prior_swing_low": round_value(prior_l),
+            "current_price": rounded(current_price),
+            "atr_14": rounded(atr_value),
+            "atr_buffer": rounded(atr_buffer),
+            "prior_swing_high": rounded(prior_high),
+            "prior_swing_low": rounded(prior_low),
             "failed_high": None,
             "failed_low": None,
-            "break_event": brk_event,
-            "protected_break_level": round_value(prot_lvl),
-            "break_level": round_value(brk_lvl),
+            "break_event": break_event,
+            "protected_break_level": rounded(protected_level),
+            "break_level": rounded(break_level),
             "break_level_text": (
-                f"Body close above ${brk_lvl:,.2f}"
+                f"Body close above ${break_level:,.2f}"
                 if direction == "BULLISH"
-                else f"Body close below ${brk_lvl:,.2f}"
+                else f"Body close below ${break_level:,.2f}"
             ),
             "break_status": status,
-            "retest_level": round_value(ret_lvl),
-            "invalidation_level": round_value(inval_lvl),
-            "signal": sig,
+            "retest_level": rounded(retest_level),
+            "invalidation_level": rounded(invalidation_level),
+            "signal": final_norm_signal,
             "direction": direction,
             "quality": quality,
-            "final_conclusion": concl,
+            "final_conclusion": conclusion,
             "reason": reason,
-            "confirmation_rule": "Final signal requires: 0.30 ATR body-close break, volume >= 1.20x, second close, 1h alignment, no strong 4h conflict, retest, and confirmation candle.",
+            "confirmation_rule": (
+                "Final signal needs: 0.30 ATR body-close break, volume >= 1.20x, "
+                "a second direction close, 1h alignment, no strong 4h conflict, retest, "
+                "and a confirmation candle. Wick alone never counts."
+            ),
             "filter_checklist": {
-                "passed": p_filt,
-                "waiting": w_filt,
-                "failed": f_filt,
-                "volume_ratio": round_value(eff_vol_r),
+                "passed": passed_filters,
+                "waiting": waiting_filters,
+                "failed": failed_filters,
+                "volume_ratio": rounded(effective_volume_ratio),
                 "volume_required": 1.20,
-                "rsi_15m": round_value(rsi_value),
+                "rsi_15m": rounded(rsi_value),
                 "macd_15m": macd_state,
                 "trend_1h": trend_1h,
                 "trend_4h": trend_4h,
             },
         }
 
-    if not p_highs or not p_lows:
-        return build_res(
+    if not pivot_highs or not pivot_lows:
+        return build_filter_result(
             "NEUTRAL",
             "HOLD",
             "STRUCTURE TRACKING",
             None,
             None,
             None,
-            cur_p,
+            current_price,
             None,
             None,
             "HOLD — waiting for confirmed 15m swing pivots.",
@@ -485,122 +534,134 @@ def calculate_swing_failure_structure(
             "No confirmed swing structure yet",
         )
 
-    act_h, act_l = highs[p_highs[-1]], lows[p_lows[-1]]
-    b_brk_lvl, s_brk_lvl = act_h + atr_buf, act_l - atr_buf
-    b_idx = next(
-        (
-            i
-            for i in range(p_highs[-1] + 1, len(candles))
-            if closes[i] > b_brk_lvl
-        ),
-        None,
-    )
-    s_idx = next(
-        (
-            i
-            for i in range(p_lows[-1] + 1, len(candles))
-            if closes[i] < s_brk_lvl
-        ),
-        None,
-    )
+    active_high_index = pivot_highs[-1]
+    active_low_index = pivot_lows[-1]
+    active_high = highs[active_high_index]
+    active_low = lows[active_low_index]
+    bullish_break_level = active_high + atr_buffer
+    bearish_break_level = active_low - atr_buffer
+    bullish_break_index = None
+    bearish_break_index = None
+    for index in range(active_high_index + 1, len(candles)):
+        if closes[index] > bullish_break_level:
+            bullish_break_index = index
+    for index in range(active_low_index + 1, len(candles)):
+        if closes[index] < bearish_break_level:
+            bearish_break_index = index
 
-    if b_idx is None and s_idx is None:
-        mid = (act_h + act_l) / 2
-        direction = "BULLISH" if cur_p >= mid else "BEARISH"
-        return build_res(
+    if bullish_break_index is None and bearish_break_index is None:
+        midpoint = (active_high + active_low) / 2
+        direction = "BULLISH" if current_price >= midpoint else "BEARISH"
+        break_level = (
+            bullish_break_level if direction == "BULLISH" else bearish_break_level
+        )
+        protected_level = active_high if direction == "BULLISH" else active_low
+        return build_filter_result(
             direction,
             "HOLD",
             "INSIDE STRUCTURE",
-            act_h,
-            act_l,
-            act_h if direction == "BULLISH" else act_l,
-            b_brk_lvl if direction == "BULLISH" else s_brk_lvl,
-            act_h if direction == "BULLISH" else act_l,
-            act_l if direction == "BULLISH" else act_h,
-            "HOLD — price inside 15m swing range. Wait for confirmed break & retest.",
-            "No body-close break beyond 0.30 ATR buffer.",
+            active_high,
+            active_low,
+            protected_level,
+            break_level,
+            protected_level,
+            active_low if direction == "BULLISH" else active_high,
+            "HOLD — price is inside the active 15m swing range. Wait for confirmed break & retest.",
+            "No current swing level has a body-close break beyond the 0.30 ATR buffer.",
             "LOW",
             [],
             [
-                "0.30 ATR body close",
-                "Volume >= 1.20x",
-                "Second 15m close",
+                "0.30 ATR body-close break",
+                "Break volume >= 1.20x",
+                "Second 15m direction close",
                 "Retest confirmation",
             ],
             [],
             "No confirmed break yet",
         )
 
-    is_bull = b_idx is not None and (s_idx is None or b_idx > s_idx)
-    if is_bull:
-        brk_i = b_idx
-        direction, final_sig = "BULLISH", "BUY"
-        prot_lvl, brk_lvl, inval_lvl = act_h, b_brk_lvl, act_l
-        second_close_ok = any(
-            closes[i] > act_h for i in range(brk_i + 1, len(candles))
+    newest_is_bullish = bullish_break_index is not None and (
+        bearish_break_index is None or bullish_break_index > bearish_break_index
+    )
+    if newest_is_bullish:
+        break_index = bullish_break_index
+        direction, final_signal = "BULLISH", "BUY"
+        protected_level, break_level, invalidation_level = (
+            active_high,
+            bullish_break_level,
+            active_low,
         )
-        retest_seen = final_conf = failed_brk = False
-        for i in range(brk_i + 1, len(candles)):
-            if closes[i] < act_h - retest_tol:
-                failed_brk = True
-            if lows[i] <= act_h + retest_tol:
+        second_close_ok = any(
+            closes[index] > active_high
+            for index in range(break_index + 1, len(candles))
+        )
+        retest_seen = final_confirmation = failed_break = False
+        for index in range(break_index + 1, len(candles)):
+            if closes[index] < active_high - retest_tolerance:
+                failed_break = True
+            if lows[index] <= active_high + retest_tolerance:
                 retest_seen = True
             if (
                 retest_seen
-                and closes[i] > opens[i]
-                and closes[i] > act_h
-                and lows[i] <= act_h + retest_tol
+                and closes[index] > opens[index]
+                and closes[index] > active_high
+                and lows[index] <= active_high + retest_tolerance
             ):
-                final_conf = True
-        mom_ok, t_1h_ok, t_4h_ok = (
-            bull_mom_ok,
-            bull_1h_ok,
-            not bull_4h_blocked,
+                final_confirmation = True
+        momentum_ok, trend_1h_ok, trend_4h_ok = (
+            bullish_momentum_ok,
+            bullish_1h_ok,
+            not bullish_4h_blocked,
         )
     else:
-        brk_i = s_idx
-        direction, final_sig = "BEARISH", "SELL"
-        prot_lvl, brk_lvl, inval_lvl = act_l, s_brk_lvl, act_h
-        second_close_ok = any(
-            closes[i] < act_l for i in range(brk_i + 1, len(candles))
+        break_index = bearish_break_index
+        direction, final_signal = "BEARISH", "SELL"
+        protected_level, break_level, invalidation_level = (
+            active_low,
+            bearish_break_level,
+            active_high,
         )
-        retest_seen = final_conf = failed_brk = False
-        for i in range(brk_i + 1, len(candles)):
-            if closes[i] > act_l + retest_tol:
-                failed_brk = True
-            if highs[i] >= act_l - retest_tol:
+        second_close_ok = any(
+            closes[index] < active_low
+            for index in range(break_index + 1, len(candles))
+        )
+        retest_seen = final_confirmation = failed_break = False
+        for index in range(break_index + 1, len(candles)):
+            if closes[index] > active_low + retest_tolerance:
+                failed_break = True
+            if highs[index] >= active_low - retest_tolerance:
                 retest_seen = True
             if (
                 retest_seen
-                and closes[i] < opens[i]
-                and closes[i] < act_l
-                and highs[i] >= act_l - retest_tol
+                and closes[index] < opens[index]
+                and closes[index] < active_low
+                and highs[index] >= active_low - retest_tolerance
             ):
-                final_conf = True
-        mom_ok, t_1h_ok, t_4h_ok = (
-            bear_mom_ok,
-            bear_1h_ok,
-            not bear_4h_blocked,
+                final_confirmation = True
+        momentum_ok, trend_1h_ok, trend_4h_ok = (
+            bearish_momentum_ok,
+            bearish_1h_ok,
+            not bearish_4h_blocked,
         )
 
     passed, waiting, failed = ["0.30 ATR body-close break"], [], []
-    if vol_ok:
-        passed.append(f"Break volume x{eff_vol_r:.2f} >= 1.20x")
+    if volume_ok:
+        passed.append(f"Break volume x{effective_volume_ratio:.2f} >= 1.20x")
     else:
-        failed.append(f"Break volume x{eff_vol_r:.2f} < 1.20x")
+        failed.append(f"Break volume x{effective_volume_ratio:.2f} below 1.20x")
     if second_close_ok:
         passed.append("Second 15m candle close confirmed")
     else:
         waiting.append("Second 15m direction close")
-    if t_1h_ok:
+    if trend_1h_ok:
         passed.append("1h trend aligned")
     else:
-        failed.append(f"1h trend conflict: {trend_1h or 'unknown'}")
-    if t_4h_ok:
+        failed.append(f"1h trend not aligned: {trend_1h or 'unknown'}")
+    if trend_4h_ok:
         passed.append("No strong opposite 4h trend")
     else:
         failed.append(f"Strong opposite 4h trend: {trend_4h}")
-    if mom_ok:
+    if momentum_ok:
         passed.append("15m RSI + MACD aligned")
     else:
         failed.append("15m RSI + MACD not aligned")
@@ -608,52 +669,54 @@ def calculate_swing_failure_structure(
         passed.append("Retest detected")
     else:
         waiting.append("Retest pending")
-    if final_conf:
+    if final_confirmation:
         passed.append("Retest confirmation candle")
     else:
         waiting.append("Retest confirmation candle")
 
-    if failed_brk:
-        return build_res(
+    if failed_break:
+        return build_filter_result(
             direction,
             "HOLD",
             "BREAK FAILED / BACK INSIDE",
-            act_h,
-            act_l,
-            prot_lvl,
-            brk_lvl,
-            prot_lvl,
-            inval_lvl,
-            "HOLD — break failed; price returned inside swing range.",
-            "Price accepted back inside previous range.",
+            active_high,
+            active_low,
+            protected_level,
+            break_level,
+            protected_level,
+            invalidation_level,
+            "HOLD — break moved back inside the prior swing range. Wait for fresh break & retest.",
+            "Price body-close accepted back inside the old swing structure.",
             "LOW",
             passed,
             waiting,
             failed,
-            "Break failed; returned inside",
+            "Break failed; price returned inside",
         )
 
-    if (
-        vol_ok
+    mandatory_filters_ok = (
+        volume_ok
         and second_close_ok
-        and t_1h_ok
-        and t_4h_ok
-        and mom_ok
+        and trend_1h_ok
+        and trend_4h_ok
+        and momentum_ok
         and retest_seen
-        and final_conf
-    ):
-        return build_res(
+        and final_confirmation
+    )
+
+    if mandatory_filters_ok:
+        return build_filter_result(
             direction,
-            final_sig,
-            f"{final_sig} CONFIRMED STRUCTURE",
-            act_h,
-            act_l,
-            prot_lvl,
-            brk_lvl,
-            prot_lvl,
-            inval_lvl,
-            f"{final_sig} — 15m breakout, volume, alignment and retest passed.",
-            "All mandatory structure filters passed.",
+            final_signal,
+            f"{final_signal} CONFIRMED — HIGH QUALITY",
+            active_high,
+            active_low,
+            protected_level,
+            break_level,
+            protected_level,
+            invalidation_level,
+            f"{final_signal} — high-quality 15m break, volume, second close, trend alignment, retest, and confirmation candle are all present.",
+            "All mandatory fakeout filters passed.",
             "HIGH",
             passed,
             waiting,
@@ -661,82 +724,97 @@ def calculate_swing_failure_structure(
             (
                 "Bullish break + support retest hold"
                 if direction == "BULLISH"
-                else "Bearish break + resistance retest hold"
+                else "Bearish break + resistance retest rejection"
             ),
         )
 
-    return build_res(
+    status = (
+        f"{direction} BREAK / FILTERS PENDING"
+        if not failed
+        else f"{direction} BREAK / FILTER FAILED"
+    )
+    return build_filter_result(
         direction,
         "HOLD",
-        f"{direction} BREAK / FILTERS PENDING",
-        act_h,
-        act_l,
-        prot_lvl,
-        brk_lvl,
-        prot_lvl,
-        inval_lvl,
-        f"HOLD — {direction} break developing, filters pending.",
-        "Breakout requires complete filter validation.",
+        status,
+        active_high,
+        active_low,
+        protected_level,
+        break_level,
+        protected_level,
+        invalidation_level,
+        f"HOLD — a structure break exists, but final {final_signal} is blocked until every filter passes.",
+        "Break is not yet high quality enough for a final signal.",
         "MEDIUM" if len(failed) <= 1 else "LOW",
         passed,
         waiting,
         failed,
-        f"{direction} break awaiting filters",
+        (
+            "Bullish break awaiting filters"
+            if direction == "BULLISH"
+            else "Bearish break awaiting filters"
+        ),
     )
 
 
 def calculate_market_indicators(candles, interval):
     if len(candles) < 200:
         raise ValueError("Need 200 candles for full market analysis.")
-    highs = [float(c[2]) for c in candles]
-    lows = [float(c[3]) for c in candles]
-    closes = [float(c[4]) for c in candles]
-    volumes = [float(c[5]) for c in candles]
-    q_volumes = [float(c[7]) for c in candles]
-    t_counts = [int(c[8]) for c in candles]
-    taker_buys = [float(c[9]) for c in candles]
-    last_c = closes[-1]
-    e20, e50, e200 = ema(closes, 20), ema(closes, 50), ema(closes, 200)
-    atr_v = atr(highs, lows, closes)
-    avg_v20 = average(volumes[-20:-1])
-    cur_v = volumes[-1]
-    vol_r = cur_v / avg_v20 if avg_v20 else 0
-    tot_v20 = sum(volumes[-20:])
-    tb_tot = sum(taker_buys[-20:])
-    tb_r = (tb_tot / tot_v20) * 100 if tot_v20 else 50
-    sup, res = min(lows[-20:]), max(highs[-20:])
-    p_res, p_sup = max(highs[-21:-1]), min(lows[-21:-1])
+    highs = [float(candle[2]) for candle in candles]
+    lows = [float(candle[3]) for candle in candles]
+    closes = [float(candle[4]) for candle in candles]
+    volumes = [float(candle[5]) for candle in candles]
+    quote_volumes = [float(candle[7]) for candle in candles]
+    trade_counts = [int(candle[8]) for candle in candles]
+    taker_buy_volumes = [float(candle[9]) for candle in candles]
+    last_close = closes[-1]
+    ema_20_value, ema_50_value, ema_200_value = (
+        ema(closes, 20),
+        ema(closes, 50),
+        ema(closes, 200),
+    )
+    atr_value = atr(highs, lows, closes)
+    average_volume_20 = average(volumes[-20:-1])
+    current_volume = volumes[-1]
+    volume_ratio = current_volume / average_volume_20 if average_volume_20 else 0
+    total_volume_20 = sum(volumes[-20:])
+    taker_buy_total_20 = sum(taker_buy_volumes[-20:])
+    taker_buy_ratio = (
+        (taker_buy_total_20 / total_volume_20) * 100 if total_volume_20 else 50
+    )
+    support, resistance = min(lows[-20:]), max(highs[-20:])
+    prior_resistance, prior_support = max(highs[-21:-1]), min(lows[-21:-1])
     breakout = (
         "Bullish breakout"
-        if last_c > p_res and vol_r >= 1.2
+        if last_close > prior_resistance and volume_ratio >= 1.2
         else (
             "Bearish breakdown"
-            if last_c < p_sup and vol_r >= 1.2
+            if last_close < prior_support and volume_ratio >= 1.2
             else "No confirmed breakout"
         )
     )
     trend = (
         "Strong bullish"
-        if last_c > e20 > e50 > e200
+        if last_close > ema_20_value > ema_50_value > ema_200_value
         else (
             "Bullish"
-            if last_c > e20 > e50
+            if last_close > ema_20_value > ema_50_value
             else (
                 "Strong bearish"
-                if last_c < e20 < e50 < e200
-                else "Bearish" if last_c < e20 < e50 else "Mixed"
+                if last_close < ema_20_value < ema_50_value < ema_200_value
+                else "Bearish" if last_close < ema_20_value < ema_50_value else "Mixed"
             )
         )
     )
-    mom_p = percentage_change(closes[-13], last_c)
+    momentum_percent = percentage_change(closes[-13], last_close)
     return {
         "timeframe": interval,
-        "price": round_value(last_c),
+        "price": round_value(last_close),
         "trend": trend,
         "ema": {
-            "ema_20": round_value(e20),
-            "ema_50": round_value(e50),
-            "ema_200": round_value(e200),
+            "ema_20": round_value(ema_20_value),
+            "ema_50": round_value(ema_50_value),
+            "ema_200": round_value(ema_200_value),
         },
         "sma": {
             "sma_20": round_value(sma(closes, 20)),
@@ -745,28 +823,30 @@ def calculate_market_indicators(candles, interval):
         "rsi_14": round_value(rsi(closes, 14)),
         "macd": macd(closes),
         "adx": adx(highs, lows, closes),
-        "atr_14": round_value(atr_v),
-        "atr_percent": round_value((atr_v / last_c) * 100),
+        "atr_14": round_value(atr_value),
+        "atr_percent": round_value((atr_value / last_close) * 100),
         "bollinger_bands": bollinger_bands(closes),
         "volume": {
-            "current": round_value(cur_v, 4),
-            "average_20": round_value(avg_v20, 4),
-            "volume_ratio": round_value(vol_r),
-            "quote_volume_current": round_value(q_volumes[-1], 2),
-            "trade_count_current": t_counts[-1],
-            "taker_buy_ratio_20_percent": round_value(tb_r),
+            "current": round_value(current_volume, 4),
+            "average_20": round_value(average_volume_20, 4),
+            "volume_ratio": round_value(volume_ratio),
+            "quote_volume_current": round_value(quote_volumes[-1], 2),
+            "trade_count_current": trade_counts[-1],
+            "taker_buy_ratio_20_percent": round_value(taker_buy_ratio),
         },
         "obv": obv(closes, volumes),
         "mfi_14": round_value(mfi(highs, lows, closes, volumes)),
-        "momentum_percent": round_value(mom_p),
+        "momentum_percent": round_value(momentum_percent),
         "support_resistance": {
-            "support_20": round_value(sup),
-            "resistance_20": round_value(res),
+            "support_20": round_value(support),
+            "resistance_20": round_value(resistance),
         },
         "pivots": pivot_levels(highs, lows, closes),
         "fibonacci": fibonacci_levels(highs, lows),
         "candle_pattern": candle_pattern(candles),
-        "market_structure": market_structure(closes, highs, lows, e20, e50),
+        "market_structure": market_structure(
+            closes, highs, lows, ema_20_value, ema_50_value
+        ),
         "breakout_status": breakout,
         "swing_failure_structure": None,
     }
@@ -774,286 +854,333 @@ def calculate_market_indicators(candles, interval):
 
 def timeframe_signal_from_indicators(indicators):
     trend = str(indicators.get("trend", "")).lower()
-    m_state = str(indicators.get("macd", {}).get("state", "")).lower()
-    r_val = float(indicators.get("rsi_14", 50))
-    mom = float(indicators.get("momentum_percent", 0))
-    b_score = (
-        (2 if "bull" in trend else 0)
-        + (1 if "bull" in m_state else 0)
-        + (1 if r_val >= 52 else 0)
-        + (1 if mom > 0 else 0)
-    )
-    s_score = (
-        (2 if "bear" in trend else 0)
-        + (1 if "bear" in m_state else 0)
-        + (1 if r_val <= 48 else 0)
-        + (1 if mom < 0 else 0)
-    )
-    return (
-        "BUY"
-        if b_score >= 3 and b_score > s_score
-        else "SELL" if s_score >= 3 and s_score > b_score else "HOLD"
-    )
+    macd_state = str(indicators.get("macd", {}).get("state", "")).lower()
+    rsi_value = float(indicators.get("rsi_14", 50))
+    momentum = float(indicators.get("momentum_percent", 0))
+    bullish_score = 0
+    bearish_score = 0
+    if "bull" in trend:
+        bullish_score += 2
+    elif "bear" in trend:
+        bearish_score += 2
+    if "bull" in macd_state:
+        bullish_score += 1
+    elif "bear" in macd_state:
+        bearish_score += 1
+    if rsi_value >= 52:
+        bullish_score += 1
+    elif rsi_value <= 48:
+        bearish_score += 1
+    if momentum > 0:
+        bullish_score += 1
+    elif momentum < 0:
+        bearish_score += 1
+    if bullish_score >= 3 and bullish_score > bearish_score:
+        return "BUY"
+    if bearish_score >= 3 and bearish_score > bullish_score:
+        return "SELL"
+    return "HOLD"
 
 
-def trend_score(ind):
-    t = str(ind.get("trend", "")).lower()
-    return (
-        2
-        if "strong bullish" in t
-        else (
-            1
-            if t == "bullish"
-            else -2 if "strong bearish" in t else -1 if t == "bearish" else 0
-        )
-    )
-
-
-def macd_score(ind):
-    s = str(ind.get("macd", {}).get("state", "")).lower()
+def trend_score(indicators):
+    trend = str(indicators.get("trend", "")).lower()
     return (
         2
-        if "bullish" in s and "strengthening" in s
+        if "strong bullish" in trend
         else (
             1
-            if "bullish" in s
+            if trend == "bullish"
             else (
                 -2
-                if "bearish" in s and "strengthening" in s
-                else -1 if "bearish" in s else 0
+                if "strong bearish" in trend
+                else -1 if trend == "bearish" else 0
             )
         )
     )
 
 
-def momentum_score(ind):
-    r = float(ind.get("rsi_14", 50))
-    m = float(ind.get("momentum_percent", 0))
+def macd_score(indicators):
+    state = str(indicators.get("macd", {}).get("state", "")).lower()
     return (
         2
-        if r >= 58 and m > 0
+        if "bullish" in state and "strengthening" in state
         else (
             1
-            if r >= 50 and m >= 0
-            else -2 if r <= 42 and m < 0 else -1 if r <= 50 and m <= 0 else 0
+            if "bullish" in state
+            else (
+                -2
+                if "bearish" in state and "strengthening" in state
+                else -1 if "bearish" in state else 0
+            )
         )
     )
 
 
-def breakout_score(ind):
-    b = str(ind.get("breakout_status", "")).lower()
+def momentum_score(indicators):
+    rsi_value = float(indicators.get("rsi_14", 50))
+    momentum = float(indicators.get("momentum_percent", 0))
+    if rsi_value >= 58 and momentum > 0:
+        return 2
+    if rsi_value >= 50 and momentum >= 0:
+        return 1
+    if rsi_value <= 42 and momentum < 0:
+        return -2
+    if rsi_value <= 50 and momentum <= 0:
+        return -1
+    return 0
+
+
+def breakout_score(indicators):
+    breakout = str(indicators.get("breakout_status", "")).lower()
     return (
         2
-        if "bullish breakout" in b
-        else -2 if "bearish breakdown" in b else 0
+        if "bullish breakout" in breakout
+        else -2 if "bearish breakdown" in breakout else 0
     )
 
 
-def volume_score(ind):
-    vr = float(ind.get("volume", {}).get("volume_ratio", 0))
-    tb = float(ind.get("volume", {}).get("taker_buy_ratio_20_percent", 50))
-    return 1 if vr >= 1.2 and tb >= 52 else -1 if vr >= 1.2 and tb <= 48 else 0
+def volume_score(indicators):
+    volume_ratio = float(indicators.get("volume", {}).get("volume_ratio", 0))
+    taker_buy_ratio = float(
+        indicators.get("volume", {}).get("taker_buy_ratio_20_percent", 50)
+    )
+    return (
+        1
+        if volume_ratio >= 1.2 and taker_buy_ratio >= 52
+        else -1 if volume_ratio >= 1.2 and taker_buy_ratio <= 48 else 0
+    )
 
 
 def calculate_score_breakdown(market_data):
-    tf = market_data["timeframes"]
-    w = {"15m": 0.25, "1h": 0.35, "4h": 0.40}
-    comps = {
+    timeframes = market_data["timeframes"]
+    weighted = {"15m": 0.25, "1h": 0.35, "4h": 0.40}
+    components = {
         "trend": trend_score,
         "macd": macd_score,
         "momentum": momentum_score,
         "breakout": breakout_score,
         "volume": volume_score,
     }
-    res, tot, max_p = {}, 0.0, 0.0
-    for name, scorer in comps.items():
-        w_score = sum(scorer(tf[t]) * weight for t, weight in w.items())
-        c_max = 2 if name != "volume" else 1
-        res[name] = {
-            "score": round_value(w_score, 2),
-            "minimum": -c_max,
-            "maximum": c_max,
+    result, total_score, max_possible = {}, 0.0, 0.0
+    for name, scorer in components.items():
+        weighted_score = sum(
+            scorer(timeframes[timeframe]) * weight
+            for timeframe, weight in weighted.items()
+        )
+        component_max = 2 if name != "volume" else 1
+        result[name] = {
+            "score": round_value(weighted_score, 2),
+            "minimum": -component_max,
+            "maximum": component_max,
         }
-        tot += w_score
-        max_p += c_max
-    align_p = ((tot + max_p) / (2 * max_p)) * 100
+        total_score += weighted_score
+        max_possible += component_max
+    alignment_percent = ((total_score + max_possible) / (2 * max_possible)) * 100
     bias = (
         "Bullish"
-        if tot >= 2
-        else "Bearish" if tot <= -2 else "Neutral / mixed"
+        if total_score >= 2
+        else "Bearish" if total_score <= -2 else "Neutral / mixed"
     )
     return {
-        **res,
-        "total_score": round_value(tot, 2),
+        **result,
+        "total_score": round_value(total_score, 2),
         "score_range": {"minimum": -9, "maximum": 9},
-        "technical_alignment_percent": round_value(align_p),
+        "technical_alignment_percent": round_value(alignment_percent),
         "bias": bias,
     }
 
 
 def calculate_timeframe_agreement(market_data):
-    tf_signals = {
-        t: timeframe_signal_from_indicators(ind)
-        for t, ind in market_data["timeframes"].items()
+    timeframe_signals = {
+        timeframe: timeframe_signal_from_indicators(indicators)
+        for timeframe, indicators in market_data["timeframes"].items()
     }
-    vals = list(tf_signals.values())
-    bc, sc, hc = vals.count("BUY"), vals.count("SELL"), vals.count("HOLD")
-    pct = round_value((max(bc, sc, hc) / len(vals)) * 100)
-    d = (
+    values = list(timeframe_signals.values())
+    buy_count, sell_count, hold_count = (
+        values.count("BUY"),
+        values.count("SELL"),
+        values.count("HOLD"),
+    )
+    percent = round_value((max(buy_count, sell_count, hold_count) / len(values)) * 100)
+    direction = (
         "Fully bullish"
-        if bc == 3
+        if buy_count == 3
         else (
             "Fully bearish"
-            if sc == 3
+            if sell_count == 3
             else (
                 "Mostly bullish"
-                if bc >= 2
-                else "Mostly bearish" if sc >= 2 else "Mixed"
+                if buy_count >= 2
+                else "Mostly bearish" if sell_count >= 2 else "Mixed"
             )
         )
     )
     return {
-        "percent": pct,
-        "direction": d,
-        "bullish_votes": bc,
-        "bearish_votes": sc,
-        "hold_votes": hc,
-        "signals": tf_signals,
+        "percent": percent,
+        "direction": direction,
+        "bullish_votes": buy_count,
+        "bearish_votes": sell_count,
+        "hold_votes": hold_count,
+        "signals": timeframe_signals,
     }
 
 
 def calculate_market_regime(market_data):
     analyses = list(market_data["timeframes"].values())
-    avg_adx = average([float(i.get("adx", {}).get("adx_14", 0)) for i in analyses])
-    avg_atr = average([float(i.get("atr_percent", 0)) for i in analyses])
-    avg_bb = average(
+    average_adx = average(
+        [float(item.get("adx", {}).get("adx_14", 0)) for item in analyses]
+    )
+    average_atr_percent = average(
+        [float(item.get("atr_percent", 0)) for item in analyses]
+    )
+    average_bb_width = average(
         [
-            float(i.get("bollinger_bands", {}).get("width_percent", 0))
-            for i in analyses
+            float(item.get("bollinger_bands", {}).get("width_percent", 0))
+            for item in analyses
         ]
     )
-    trends = [str(i.get("trend", "")).lower() for i in analyses]
-    bc = sum("bull" in t for t in trends)
-    sc = sum("bear" in t for t in trends)
-    if avg_atr >= 2.2 or avg_bb >= 8:
+    trends = [str(item.get("trend", "")).lower() for item in analyses]
+    bullish_count = sum("bull" in trend for trend in trends)
+    bearish_count = sum("bear" in trend for trend in trends)
+    if average_atr_percent >= 2.2 or average_bb_width >= 8:
         label, detail = (
             "High Volatility",
-            "Price swings elevated; reduce trade frequency.",
+            "Price swings are elevated; use wider invalidation and reduce trade frequency.",
         )
-    elif avg_adx >= 25 and (bc >= 2 or sc >= 2):
+    elif average_adx >= 25 and (bullish_count >= 2 or bearish_count >= 2):
         label, detail = (
             "Trending",
-            "Directional trend present across multiple timeframes.",
+            "Directional trend conditions are present across multiple timeframes.",
         )
-    elif avg_adx < 18 and avg_atr < 0.8:
+    elif average_adx < 18 and average_atr_percent < 0.8:
         label, detail = (
             "Low Volatility",
-            "Compressed movement; wait for expansion.",
+            "Compressed movement; wait for expansion or a confirmed breakout.",
         )
     else:
-        label, detail = "Ranging", "Mixed conditions; key levels matter most."
+        label, detail = (
+            "Ranging",
+            "Mixed or moderate trend conditions; key support and resistance matter most.",
+        )
     return {
         "label": label,
         "detail": detail,
-        "average_adx": round_value(avg_adx),
-        "average_atr_percent": round_value(avg_atr),
-        "average_bollinger_width_percent": round_value(avg_bb),
+        "average_adx": round_value(average_adx),
+        "average_atr_percent": round_value(average_atr_percent),
+        "average_bollinger_width_percent": round_value(average_bb_width),
     }
 
 
 def calculate_key_level_distance(market_data):
-    res = {}
-    for t, a in market_data["timeframes"].items():
-        p = float(a.get("price", 0))
-        s = float(a.get("support_resistance", {}).get("support_20", 0))
-        r = float(a.get("support_resistance", {}).get("resistance_20", 0))
-        res[t] = {
-            "price": round_value(p),
-            "support": round_value(s),
-            "resistance": round_value(r),
+    result = {}
+    for timeframe, analysis in market_data["timeframes"].items():
+        price = float(analysis.get("price", 0))
+        support = float(analysis.get("support_resistance", {}).get("support_20", 0))
+        resistance = float(
+            analysis.get("support_resistance", {}).get("resistance_20", 0)
+        )
+        support_distance = (
+            ((price - support) / price) * 100 if price and support else None
+        )
+        resistance_distance = (
+            ((resistance - price) / price) * 100 if price and resistance else None
+        )
+        result[timeframe] = {
+            "price": round_value(price),
+            "support": round_value(support),
+            "resistance": round_value(resistance),
             "support_distance_percent": (
-                round_value(((p - s) / p) * 100) if p and s else None
+                round_value(support_distance) if support_distance is not None else None
             ),
             "resistance_distance_percent": (
-                round_value(((r - p) / p) * 100) if p and r else None
+                round_value(resistance_distance)
+                if resistance_distance is not None
+                else None
             ),
         }
-    return res
+    return result
 
 
 def technical_main_signal(market_data):
-    tf = market_data["timeframes"]
-    a15, a1h, a4h = tf["15m"], tf["1h"], tf["4h"]
-    s15 = timeframe_signal_from_indicators(a15)
-    s1h = timeframe_signal_from_indicators(a1h)
-    s4h = timeframe_signal_from_indicators(a4h)
-    swing = a15.get("swing_failure_structure") or {}
-    swing_sig = swing.get("signal", "HOLD")
+    timeframes = market_data["timeframes"]
+    analysis_15m, analysis_1h, analysis_4h = (
+        timeframes["15m"],
+        timeframes["1h"],
+        timeframes["4h"],
+    )
+    signal_15m = timeframe_signal_from_indicators(analysis_15m)
+    signal_1h = timeframe_signal_from_indicators(analysis_1h)
+    signal_4h = timeframe_signal_from_indicators(analysis_4h)
+    swing_structure = analysis_15m.get("swing_failure_structure") or {}
+    swing_signal = swing_structure.get("signal", "HOLD")
 
-    # Final deterministic resolution
-    if swing_sig == "BUY" and s1h == "BUY" and s4h != "SELL":
-        signal, risk, conf = "BUY", "MEDIUM", 78
+    # Final deterministic resolution (Strict mapping to BUY / SELL / HOLD)
+    if swing_signal == "BUY" and signal_1h == "BUY" and signal_4h != "SELL":
+        signal, risk, confidence = "BUY", "MEDIUM", 78
         reason = (
             "15m body-close breakout, volume, retest and 1h alignment passed."
         )
-        status = "BUY confirmed structure and retest passed"
-        bias = "Bullish technical bias"
-    elif swing_sig == "SELL" and s1h == "SELL" and s4h != "BUY":
-        signal, risk, conf = "SELL", "MEDIUM", 78
+        setup_status = "BUY confirmed structure and retest passed"
+        market_bias = "Bullish technical bias"
+    elif swing_signal == "SELL" and signal_1h == "SELL" and signal_4h != "BUY":
+        signal, risk, confidence = "SELL", "MEDIUM", 78
         reason = (
             "15m breakdown, volume, retest and 1h bearish alignment passed."
         )
-        status = "SELL confirmed structure and retest passed"
-        bias = "Bearish technical bias"
+        setup_status = "SELL confirmed structure and retest passed"
+        market_bias = "Bearish technical bias"
     else:
-        signal, risk, conf = "HOLD", "HIGH", 50
+        signal, risk, confidence = "HOLD", "HIGH", 50
         reason = (
-            swing.get("reason")
+            swing_structure.get("reason")
             or "15m, 1h and 4h signals lack full structural alignment."
         )
-        status = "Mixed / retest pending"
-        bias = "Neutral / mixed technical bias"
+        setup_status = "Mixed technical setup — wait for confirmation"
+        market_bias = "Neutral / mixed technical bias"
 
-    # Candidate Level Formulas (Handover Contract)
-    last_close = float(a15["price"])
-    atr_val = float(a15["atr_14"])
-    retest_lvl = float(swing.get("retest_level") or last_close)
+    # Candidate Level Calculation (Handover Rule 5)
+    last_close = float(analysis_15m["price"])
+    atr_val = float(analysis_15m["atr_14"])
+    retest_level = float(swing_structure.get("retest_level") or last_close)
 
-    entry_p, sl_p, t1_p, t2_p = 0.0, 0.0, 0.0, 0.0
-    if signal == "BUY" and retest_lvl > 0 and atr_val > 0:
-        entry_p = round_value(last_close)
-        sl_p = round_value(retest_lvl - (0.25 * atr_val))
-        r = entry_p - sl_p
-        if r > 0:
-            t1_p = round_value(entry_p + (1.0 * r))
-            t2_p = round_value(entry_p + (2.0 * r))
-    elif signal == "SELL" and retest_lvl > 0 and atr_val > 0:
-        entry_p = round_value(last_close)
-        sl_p = round_value(retest_lvl + (0.25 * atr_val))
-        r = sl_p - entry_p
-        if r > 0:
-            t1_p = round_value(entry_p - (1.0 * r))
-            t2_p = round_value(entry_p - (2.0 * r))
+    entry_price, stop_loss_price, target_1_price, target_2_price = 0.0, 0.0, 0.0, 0.0
+    if signal == "BUY" and retest_level > 0 and atr_val > 0:
+        entry_price = round_value(last_close)
+        stop_loss_price = round_value(retest_level - (0.25 * atr_val))
+        risk_r = entry_price - stop_loss_price
+        if risk_r > 0:
+            target_1_price = round_value(entry_price + (1.0 * risk_r))
+            target_2_price = round_value(entry_price + (2.0 * risk_r))
+    elif signal == "SELL" and retest_level > 0 and atr_val > 0:
+        entry_price = round_value(last_close)
+        stop_loss_price = round_value(retest_level + (0.25 * atr_val))
+        risk_r = stop_loss_price - entry_price
+        if risk_r > 0:
+            target_1_price = round_value(entry_price - (1.0 * risk_r))
+            target_2_price = round_value(entry_price - (2.0 * risk_r))
 
     if signal == "HOLD":
-        entry_p, sl_p, t1_p, t2_p = 0.0, 0.0, 0.0, 0.0
+        entry_price, stop_loss_price, target_1_price, target_2_price = 0.0, 0.0, 0.0, 0.0
 
-    def tf_obj(a, s):
+    def timeframe_data(analysis, signal_val):
         return {
-            "signal": s,
-            "summary": f"{a['trend']} trend; RSI {a['rsi_14']}; {a['macd']['state']}.",
+            "signal": signal_val,
+            "summary": (
+                f"{analysis['trend']} trend; RSI {analysis['rsi_14']}; "
+                f"{analysis['macd']['state']}."
+            ),
             "key_level": (
-                f"${a['support_resistance']['support_20']:,.2f} /"
-                f" ${a['support_resistance']['resistance_20']:,.2f}"
+                f"${analysis['support_resistance']['support_20']:,.2f} / "
+                f"${analysis['support_resistance']['resistance_20']:,.2f}"
             ),
         }
 
     return {
         "signal": signal,
-        "confidence": conf,
+        "confidence": confidence,
         "risk": risk,
-        "market_bias": bias,
-        "setup_status": status,
+        "market_bias": market_bias,
+        "setup_status": setup_status,
         "reason": reason,
         "confirmation_needed": (
             "No extra confirmation required by current engine rules."
@@ -1061,88 +1188,88 @@ def technical_main_signal(market_data):
             else "Wait for 15m breakout & retest confirmation."
         ),
         "entry_idea": (
-            f"Candidate entry: ${entry_p:,.2f}"
-            if entry_p > 0
+            f"Candidate entry: ${entry_price:,.2f}"
+            if entry_price > 0
             else "Candidate entry: $0.00"
         ),
         "stop_loss_idea": (
-            f"Candidate invalidation: ${sl_p:,.2f}"
-            if sl_p > 0
+            f"Candidate invalidation: ${stop_loss_price:,.2f}"
+            if stop_loss_price > 0
             else "Candidate invalidation: $0.00"
         ),
-        "target_1": f"${t1_p:,.2f}" if t1_p > 0 else "$0.00",
-        "target_2": f"${t2_p:,.2f}" if t2_p > 0 else "$0.00",
-        "entry_price": entry_p,
-        "stop_loss_price": sl_p,
-        "target_1_price": t1_p,
-        "target_2_price": t2_p,
-        "overlay_allowed": False,  # Engine NEVER draws on live chart
+        "target_1": f"${target_1_price:,.2f}" if target_1_price > 0 else "$0.00",
+        "target_2": f"${target_2_price:,.2f}" if target_2_price > 0 else "$0.00",
+        "entry_price": entry_price,
+        "stop_loss_price": stop_loss_price,
+        "target_1_price": target_1_price,
+        "target_2_price": target_2_price,
+        "overlay_allowed": False,  # Engine levels NEVER draw on live chart
         "provider": "ENGINE",
         "manual_run_only": False,
         "timeframes": {
-            "15m": tf_obj(a15, s15),
-            "1h": tf_obj(a1h, s1h),
-            "4h": tf_obj(a4h, s4h),
+            "15m": timeframe_data(analysis_15m, signal_15m),
+            "1h": timeframe_data(analysis_1h, signal_1h),
+            "4h": timeframe_data(analysis_4h, signal_4h),
         },
     }
 
 
 def build_setup_quality(market_data, technical_result):
-    tf = market_data.get("timeframes", {})
-    m15, m1h, m4h = tf.get("15m", {}), tf.get("1h", {}), tf.get("4h", {})
+    timeframes = market_data.get("timeframes", {})
+    m15, m1h, m4h = (
+        timeframes.get("15m", {}),
+        timeframes.get("1h", {}),
+        timeframes.get("4h", {}),
+    )
     agreement = calculate_timeframe_agreement(market_data)
     regime = calculate_market_regime(market_data)
     levels = calculate_key_level_distance(market_data)
     signal = str(technical_result.get("signal", "HOLD")).upper()
-    direction = (
-        "BUY" if "BUY" in signal else "SELL" if "SELL" in signal else "NEUTRAL"
-    )
+    direction = "BUY" if "BUY" in signal else "SELL" if "SELL" in signal else "NEUTRAL"
     items, flags = [], []
 
     def add(key, label, state, reason):
-        items.append(
-            {"key": key, "label": label, "state": state, "reason": reason}
-        )
+        items.append({"key": key, "label": label, "state": state, "reason": reason})
 
-    ag_pct = float(agreement.get("percent", 0))
-    if direction != "NEUTRAL" and ag_pct >= 67:
+    agreement_percent = float(agreement.get("percent", 0))
+    if direction != "NEUTRAL" and agreement_percent >= 67:
         add(
             "trend_alignment",
             "Multi-timeframe trend alignment",
             "PASS",
-            f"{agreement.get('direction', 'Aligned')} alignment ({ag_pct:.0f}%).",
+            f"{agreement.get('direction', 'Aligned')} alignment across 15m, 1h and 4h ({agreement_percent:.0f}%).",
         )
-    elif ag_pct >= 67:
+    elif agreement_percent >= 67:
         add(
             "trend_alignment",
             "Multi-timeframe trend alignment",
             "WAIT",
-            f"Timeframes agree on HOLD ({ag_pct:.0f}%).",
+            f"Timeframes agree on HOLD rather than a directional setup ({agreement_percent:.0f}%).",
         )
     else:
         add(
             "trend_alignment",
             "Multi-timeframe trend alignment",
             "FAIL",
-            f"Timeframes mixed ({ag_pct:.0f}%).",
+            f"Timeframes are mixed ({agreement_percent:.0f}% agreement).",
         )
         flags.append("Mixed timeframe direction")
 
-    reg_l = str(regime.get("label", "Ranging"))
-    adx_v = float(regime.get("average_adx", 0))
-    if reg_l == "Trending":
+    regime_label = str(regime.get("label", "Ranging"))
+    average_adx = float(regime.get("average_adx", 0))
+    if regime_label == "Trending":
         add(
             "market_regime",
             "Market regime suitability",
             "PASS",
-            f"Trending regime (ADX {adx_v:.1f}).",
+            f"Trending regime with average ADX {average_adx:.1f} supports directional setups.",
         )
-    elif reg_l == "High Volatility":
+    elif regime_label == "High Volatility":
         add(
             "market_regime",
             "Market regime suitability",
             "WAIT",
-            "High volatility; wider invalidation needed.",
+            "High volatility can create opportunity, but needs reduced size and wider invalidation.",
         )
         flags.append("High volatility")
     else:
@@ -1150,136 +1277,169 @@ def build_setup_quality(market_data, technical_result):
             "market_regime",
             "Market regime suitability",
             "WAIT",
-            f"{reg_l} conditions need extra confirmation.",
+            f"{regime_label} conditions need extra confirmation before a directional practice trade.",
         )
 
-    rsis = [
+    rsi_values = [
         float(m15.get("rsi_14", 50)),
         float(m1h.get("rsi_14", 50)),
         float(m4h.get("rsi_14", 50)),
     ]
-    moms = [
+    momentum_values = [
         float(m15.get("momentum_percent", 0)),
         float(m1h.get("momentum_percent", 0)),
         float(m4h.get("momentum_percent", 0)),
     ]
-    mom_ok = (
+    momentum_ok = (
         direction == "BUY"
-        and sum(50 <= v <= 72 for v in rsis) >= 2
-        and sum(v >= 0 for v in moms) >= 2
+        and sum(50 <= value <= 72 for value in rsi_values) >= 2
+        and sum(value >= 0 for value in momentum_values) >= 2
     ) or (
         direction == "SELL"
-        and sum(28 <= v <= 50 for v in rsis) >= 2
-        and sum(v <= 0 for v in moms) >= 2
+        and sum(28 <= value <= 50 for value in rsi_values) >= 2
+        and sum(value <= 0 for value in momentum_values) >= 2
     )
     add(
         "momentum",
-        "RSI & Momentum confirmation",
-        "PASS" if mom_ok else "WAIT",
+        "RSI and momentum confirmation",
+        "PASS" if momentum_ok else "WAIT",
         (
-            "At least 2 timeframes support live direction."
-            if mom_ok
-            else "Momentum not yet confirmed."
+            "At least two timeframes support the live direction without an extreme RSI reading."
+            if momentum_ok
+            else "RSI or momentum does not yet confirm the live direction on enough timeframes."
         ),
     )
 
-    macds = [
-        str(i.get("macd", {}).get("state", "")).lower() for i in [m15, m1h, m4h]
+    macd_states = [
+        str(item.get("macd", {}).get("state", "")).lower() for item in [m15, m1h, m4h]
     ]
-    m_count = (
-        sum("bullish" in s for s in macds)
+    macd_count = (
+        sum("bullish" in state for state in macd_states)
         if direction == "BUY"
-        else sum("bearish" in s for s in macds) if direction == "SELL" else 0
+        else sum("bearish" in state for state in macd_states) if direction == "SELL" else 0
     )
-    add(
-        "macd",
-        "MACD confirmation",
-        "PASS" if m_count >= 2 else "WAIT",
-        f"MACD aligns on {m_count}/3 timeframes.",
-    )
+    if macd_count >= 2:
+        add(
+            "macd",
+            "MACD confirmation",
+            "PASS",
+            f"MACD agrees with the directional setup on {macd_count} of 3 timeframes.",
+        )
+    elif macd_count == 1:
+        add(
+            "macd",
+            "MACD confirmation",
+            "WAIT",
+            "MACD confirmation is present on only one timeframe.",
+        )
+    else:
+        state = "FAIL" if direction != "NEUTRAL" else "WAIT"
+        add(
+            "macd",
+            "MACD confirmation",
+            state,
+            "MACD does not currently support a consistent directional setup.",
+        )
+        if direction != "NEUTRAL":
+            flags.append("MACD disagreement")
 
-    v15 = float(m15.get("volume", {}).get("volume_ratio", 0))
-    v1h = float(m1h.get("volume", {}).get("volume_ratio", 0))
-    tb_r = float(m15.get("volume", {}).get("taker_buy_ratio_20_percent", 50))
-    vol_ok = (v15 >= 1.0 or v1h >= 1.0) and (
-        (direction == "BUY" and tb_r >= 50)
-        or (direction == "SELL" and tb_r <= 50)
+    volume_15m = float(m15.get("volume", {}).get("volume_ratio", 0))
+    volume_1h = float(m1h.get("volume", {}).get("volume_ratio", 0))
+    taker_buy_ratio = float(
+        m15.get("volume", {}).get("taker_buy_ratio_20_percent", 50)
+    )
+    volume_ok = (volume_15m >= 1.0 or volume_1h >= 1.0) and (
+        (direction == "BUY" and taker_buy_ratio >= 50)
+        or (direction == "SELL" and taker_buy_ratio <= 50)
     )
     add(
         "volume",
         "Volume confirmation",
-        "PASS" if vol_ok else "WAIT",
-        f"Volume: 15m x{v15:.2f}, 1h x{v1h:.2f}.",
+        "PASS" if volume_ok else "WAIT",
+        f"Volume status: 15m x{volume_15m:.2f}, 1h x{volume_1h:.2f}.",
     )
 
-    brk = str(m15.get("breakout_status", "No breakout"))
-    strct = str(m1h.get("market_structure", "Range"))
-    s_ok = (
+    breakout = str(m15.get("breakout_status", "No confirmed breakout"))
+    structure = str(m1h.get("market_structure", "Range / mixed structure"))
+    structure_ok = (
         direction == "BUY"
-        and ("bullish" in brk.lower() or "bullish" in strct.lower())
+        and ("bullish breakout" in breakout.lower() or "bullish" in structure.lower())
     ) or (
         direction == "SELL"
-        and ("bearish" in brk.lower() or "bearish" in strct.lower())
+        and ("bearish breakdown" in breakout.lower() or "bearish" in structure.lower())
     )
     add(
         "structure",
-        "Market Structure / Breakout",
-        "PASS" if s_ok else "WAIT",
-        f"15m: {brk}, 1h: {strct}.",
+        "Breakout or market structure",
+        "PASS" if structure_ok else "WAIT",
+        f"15m: {breakout}. 1h: {structure}.",
     )
 
-    l15 = levels.get("15m", {})
-    s_dist = float(l15.get("support_distance_percent") or 0)
-    r_dist = float(l15.get("resistance_distance_percent") or 0)
-    lvl_ok = (
-        r_dist >= 0.35
+    level_15m = levels.get("15m", {})
+    support_distance = float(level_15m.get("support_distance_percent") or 0)
+    resistance_distance = float(level_15m.get("resistance_distance_percent") or 0)
+    level_ok = (
+        resistance_distance >= 0.35
         if direction == "BUY"
-        else s_dist >= 0.35 if direction == "SELL" else False
+        else support_distance >= 0.35 if direction == "SELL" else False
+    )
+    level_reason = (
+        f"Nearest 15m resistance is {resistance_distance:.2f}% above price."
+        if direction == "BUY"
+        else (
+            f"Nearest 15m support is {support_distance:.2f}% below price."
+            if direction == "SELL"
+            else "No directional setup is active for a level-distance assessment."
+        )
     )
     add(
         "key_levels",
-        "Support/Resistance distance",
-        "PASS" if lvl_ok else "WAIT",
-        (
-            f"Nearest level: +{r_dist:.2f}%"
-            if direction == "BUY"
-            else f"Nearest level: -{s_dist:.2f}%"
-        ),
+        "Support/resistance proximity",
+        "PASS" if level_ok else "WAIT" if direction != "NEUTRAL" else "FAIL",
+        level_reason,
     )
+    if direction != "NEUTRAL" and not level_ok:
+        flags.append("Limited room to key level")
 
     add(
         "ai_alignment",
-        "AI vs Live Technical Alignment",
+        "Gemini AI vs live technical alignment",
         "WAIT",
-        "Click manual AI Review for fresh alignment check.",
+        "Browser checks this against the most recent Gemini result. Run Gemini AI Analysis for a fresh comparison.",
     )
 
-    passed = sum(i["state"] == "PASS" for i in items)
-    waiting = sum(i["state"] == "WAIT" for i in items)
-    failed = sum(i["state"] == "FAIL" for i in items)
+    passed = sum(item["state"] == "PASS" for item in items)
+    waiting = sum(item["state"] == "WAIT" for item in items)
+    failed = sum(item["state"] == "FAIL" for item in items)
 
-    grade = (
-        "A"
-        if passed >= 6 and failed == 0
-        else (
-            "B"
-            if passed >= 4 and failed <= 1
-            else "C" if passed >= 2 else "D"
+    if direction == "NEUTRAL" or failed >= 2:
+        grade, execution_state, decision_reason = (
+            "D",
+            "AVOID",
+            "Live conditions are mixed or have major checklist failures. Avoid forcing a practice entry.",
         )
-    )
-    state = (
-        "READY"
-        if grade == "A"
-        else (
-            "WAIT FOR TRIGGER"
-            if grade == "B"
-            else "AVOID" if grade == "D" else "WAIT / LOW QUALITY"
+    elif passed >= 6 and failed == 0:
+        grade, execution_state, decision_reason = (
+            "A",
+            "READY",
+            "Most technical conditions are aligned. Still wait for the stated trigger and define invalidation.",
         )
-    )
+    elif passed >= 4 and failed <= 1:
+        grade, execution_state, decision_reason = (
+            "B",
+            "WAIT FOR TRIGGER",
+            "The setup is developing, but a trigger or additional confirmation is still needed.",
+        )
+    else:
+        grade, execution_state, decision_reason = (
+            "C",
+            "WAIT / LOW QUALITY",
+            "Checklist quality is incomplete. Wait for better alignment rather than forcing a trade.",
+        )
 
     return {
         "grade": grade,
-        "execution_state": state,
+        "execution_state": execution_state,
         "direction": direction,
         "score": {
             "passed": passed,
@@ -1287,11 +1447,7 @@ def build_setup_quality(market_data, technical_result):
             "failed": failed,
             "total": len(items),
         },
-        "decision_reason": (
-            "Technical alignment confirmed."
-            if grade in ("A", "B")
-            else "Conditions mixed; wait for clear structure."
-        ),
+        "decision_reason": decision_reason,
         "risk_flags": flags,
         "items": items,
     }
@@ -1299,23 +1455,23 @@ def build_setup_quality(market_data, technical_result):
 
 def build_market_data():
     ticker = get_btc_ticker()
-    a15 = calculate_market_indicators(
+    analysis_15m = calculate_market_indicators(
         get_btc_klines(interval="15m", limit=250), "15m"
     )
-    a1h = calculate_market_indicators(
+    analysis_1h = calculate_market_indicators(
         get_btc_klines(interval="1h", limit=250), "1h"
     )
-    a4h = calculate_market_indicators(
+    analysis_4h = calculate_market_indicators(
         get_btc_klines(interval="4h", limit=250), "4h"
     )
-    a15["swing_failure_structure"] = calculate_swing_failure_structure(
+    analysis_15m["swing_failure_structure"] = calculate_swing_failure_structure(
         get_btc_klines(interval="15m", limit=250),
-        a15["atr_14"],
-        volume_ratio=a15["volume"]["volume_ratio"],
-        rsi_value=a15["rsi_14"],
-        macd_state=a15["macd"]["state"],
-        trend_1h=a1h["trend"],
-        trend_4h=a4h["trend"],
+        analysis_15m["atr_14"],
+        volume_ratio=analysis_15m["volume"]["volume_ratio"],
+        rsi_value=analysis_15m["rsi_14"],
+        macd_state=analysis_15m["macd"]["state"],
+        trend_1h=analysis_1h["trend"],
+        trend_4h=analysis_4h["trend"],
     )
     return {
         "symbol": "BTCUSDT",
@@ -1324,7 +1480,11 @@ def build_market_data():
         "high_24h_usdt": round_value(ticker["highPrice"]),
         "low_24h_usdt": round_value(ticker["lowPrice"]),
         "quote_volume_24h_usdt": round_value(ticker["quoteVolume"]),
-        "timeframes": {"15m": a15, "1h": a1h, "4h": a4h},
+        "timeframes": {
+            "15m": analysis_15m,
+            "1h": analysis_1h,
+            "4h": analysis_4h,
+        },
     }
 
 
@@ -1346,14 +1506,11 @@ def get_technical_market_data(force_refresh=False):
         return market_data, False, 0.0, None
     except (requests.exceptions.RequestException, ValueError) as error:
         if technical_cache["data"]:
-            return (
-                technical_cache["data"],
-                True,
-                now - technical_cache["updated_at"],
-                str(error),
-            )
+            cached_age = now - technical_cache["updated_at"]
+            return technical_cache["data"], True, cached_age, str(error)
         raise HTTPException(
-            status_code=502, detail="Live market data temporarily unavailable."
+            status_code=502,
+            detail="Live technical market data is temporarily unavailable.",
         ) from error
 
 
@@ -1362,14 +1519,17 @@ def build_data_health(cached, cache_age, refresh_error=None):
         status = (
             "DELAYED" if cache_age <= TECHNICAL_DELAYED_SECONDS else "ERROR"
         )
-        message = "Live refresh failed. Showing last saved technical data."
+        message = "Live refresh failed. Showing the most recent saved technical data."
     elif cached:
         status, message = (
             "CACHED",
-            "Recent technical data served from cache.",
+            "Recent technical data is being served from cache.",
         )
     else:
-        status, message = "LIVE", "Fresh Binance data received."
+        status, message = (
+            "LIVE",
+            "Fresh Binance market data was received successfully.",
+        )
     return {
         "status": status,
         "message": message,
@@ -1404,6 +1564,303 @@ def build_technical_response(
         }
     )
     return result
+
+
+def build_rrg_data(interval):
+    settings = {
+        "1h": {"limit": 220, "lookback": 60, "tail": 4},
+        "1d": {"limit": 220, "lookback": 30, "tail": 4},
+    }
+    if interval not in settings:
+        raise ValueError("Unsupported RRG interval.")
+    config = settings[interval]
+    benchmark_symbol, plotted_symbols = "ETHUSDT", ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    candle_sets = {
+        symbol: get_klines(symbol, interval, config["limit"])
+        for symbol in plotted_symbols
+    }
+    close_sets = {
+        symbol: [float(candle[4]) for candle in candle_sets[symbol]]
+        for symbol in plotted_symbols
+    }
+    timestamps = [int(candle[0]) for candle in candle_sets[benchmark_symbol]]
+    benchmark, lookback, tail, trails = (
+        close_sets[benchmark_symbol],
+        config["lookback"],
+        config["tail"],
+        [],
+    )
+    for symbol in plotted_symbols:
+        if symbol == benchmark_symbol:
+            points = [
+                {"x": 100.0, "y": 100.0, "timestamp": timestamps[index]}
+                for index in range(
+                    max(0, len(timestamps) - tail), len(timestamps)
+                )
+            ]
+            trails.append(
+                {"symbol": benchmark_symbol, "points": points, "direction": "Flat"}
+            )
+            continue
+        ratios = [
+            (asset / base) * 100
+            for asset, base in zip(close_sets[symbol], benchmark)
+        ]
+        ratio_sma = [
+            average(ratios[index - lookback + 1 : index + 1])
+            if index >= lookback - 1
+            else None
+            for index in range(len(ratios))
+        ]
+        ratio_index = [
+            (ratios[index] / ratio_sma[index]) * 100 if ratio_sma[index] else None
+            for index in range(len(ratios))
+        ]
+        momentum_sma = [
+            average(
+                [
+                    value
+                    for value in ratio_index[index - 9 : index + 1]
+                    if value is not None
+                ]
+            )
+            if index >= lookback + 8 and ratio_index[index] is not None
+            else None
+            for index in range(len(ratio_index))
+        ]
+        momentum_index = [
+            (ratio_index[index] / momentum_sma[index]) * 100
+            if momentum_sma[index]
+            else None
+            for index in range(len(ratio_index))
+        ]
+        valid_points = [
+            {
+                "x": round_value(ratio_index[index], 2),
+                "y": round_value(momentum_index[index], 2),
+                "timestamp": timestamps[index],
+            }
+            for index in range(len(ratio_index))
+            if ratio_index[index] is not None and momentum_index[index] is not None
+        ]
+        direction = "Flat"
+        if len(valid_points) >= 2:
+            dx, dy = (
+                valid_points[-1]["x"] - valid_points[-2]["x"],
+                valid_points[-1]["y"] - valid_points[-2]["y"],
+            )
+            direction = (
+                "Flat"
+                if abs(dx) < 0.03 and abs(dy) < 0.03
+                else (
+                    "North-East"
+                    if dx >= 0 and dy >= 0
+                    else "South-East" if dx >= 0 else "North-West" if dy >= 0 else "South-West"
+                )
+            )
+        trails.append(
+            {
+                "symbol": symbol,
+                "points": valid_points[-tail:],
+                "direction": direction,
+            }
+        )
+    return {
+        "benchmark": benchmark_symbol,
+        "interval": interval,
+        "tail_points": tail,
+        "trails": trails,
+        "source": "Binance market data",
+        "updated_at": int(time.time()),
+        "disclaimer": "BTC and SOL are compared with ETH as benchmark in this RRG-style normalized relative-strength visualization. It is not official JdK RRG and is not financial advice.",
+    }
+
+
+def strip_html(text):
+    text = str(text or "")
+    text = re.sub(r"<[^>]+>", " ", text)
+    replacements = {
+        "&nbsp;": " ",
+        "&amp;": "&",
+        "&quot;": '"',
+        "&#39;": "'",
+        "&lt;": "<",
+        "&gt;": ">",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return " ".join(text.split())
+
+
+def parse_rss_time(value):
+    if not value:
+        return None
+    try:
+        parsed = parsedate_to_datetime(value)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def format_rss_time(value):
+    parsed = parse_rss_time(value)
+    return (
+        parsed.strftime("%d %b %Y, %I:%M %p UTC")
+        if parsed
+        else "Published time unavailable"
+    )
+
+
+def get_xml_tag_text(node, tag_name):
+    tag = node.find(tag_name)
+    return tag.text.strip() if tag is not None and tag.text else ""
+
+
+def fetch_rss_news():
+    import xml.etree.ElementTree as element_tree
+
+    collected, seen_urls = [], set()
+    now = datetime.now(timezone.utc)
+    keywords = (
+        "bitcoin",
+        "btc",
+        "crypto",
+        "ethereum",
+        "eth",
+        "solana",
+        "sol",
+        "market",
+        "fed",
+        "etf",
+        "regulation",
+        "stablecoin",
+        "blockchain",
+        "digital asset",
+    )
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; BTC-AI-Signal-News/1.0)",
+        "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+    }
+    for source in RSS_NEWS_SOURCES:
+        source_name, source_url = (
+            source.get("name", "Crypto news"),
+            source.get("url", ""),
+        )
+        try:
+            response = requests.get(
+                source_url, timeout=RSS_NEWS_TIMEOUT_SECONDS, headers=headers
+            )
+            response.raise_for_status()
+            root = element_tree.fromstring(response.content)
+            rss_items = root.findall(".//item")
+            atom_entries = root.findall(".//{http://www.w3.org/2005/Atom}entry")
+            for item in (rss_items if rss_items else atom_entries)[:50]:
+                is_atom = item.tag.endswith("entry")
+                if is_atom:
+                    headline = strip_html(
+                        get_xml_tag_text(
+                            item, "{http://www.w3.org/2005/Atom}title"
+                        )
+                    )
+                    link_element = item.find(
+                        "{http://www.w3.org/2005/Atom}link[@rel='alternate']"
+                    ) or item.find("{http://www.w3.org/2005/Atom}link")
+                    url = (
+                        link_element.get("href", "").strip()
+                        if link_element is not None
+                        else ""
+                    )
+                    description = strip_html(
+                        get_xml_tag_text(
+                            item, "{http://www.w3.org/2005/Atom}summary"
+                        )
+                        or get_xml_tag_text(
+                            item, "{http://www.w3.org/2005/Atom}content"
+                        )
+                    )
+                    published_raw = get_xml_tag_text(
+                        item, "{http://www.w3.org/2005/Atom}published"
+                    ) or get_xml_tag_text(
+                        item, "{http://www.w3.org/2005/Atom}updated"
+                    )
+                else:
+                    headline = strip_html(get_xml_tag_text(item, "title"))
+                    url = get_xml_tag_text(item, "link")
+                    description = strip_html(
+                        get_xml_tag_text(item, "description")
+                    )
+                    published_raw = get_xml_tag_text(item, "pubDate")
+                published_at = parse_rss_time(published_raw)
+                if not headline or not url.startswith(("https://", "http://")):
+                    continue
+                normalized_url = url.split("?")[0].rstrip("/")
+                if normalized_url in seen_urls:
+                    continue
+                searchable = f"{headline} {description}".lower()
+                if not any(keyword in searchable for keyword in keywords):
+                    continue
+                if (
+                    published_at
+                    and (now - published_at).total_seconds() > 7 * 24 * 60 * 60
+                ):
+                    continue
+                seen_urls.add(normalized_url)
+                collected.append(
+                    {
+                        "headline": headline[:260],
+                        "source": source_name,
+                        "url": url[:1000],
+                        "published_time": format_rss_time(published_raw),
+                        "summary": (
+                            description[:650]
+                            if description
+                            else "Open the original article for the publisher summary."
+                        ),
+                        "_published_at": (
+                            published_at.timestamp() if published_at else 0
+                        ),
+                    }
+                )
+        except (
+            requests.exceptions.RequestException,
+            element_tree.ParseError,
+            ValueError,
+        ) as error:
+            print(f"RSS news source unavailable ({source_name}): {error}")
+    collected.sort(key=lambda item: item.get("_published_at", 0), reverse=True)
+    result = []
+    for item in collected[:AI_NEWS_LIMIT]:
+        item.pop("_published_at", None)
+        result.append(item)
+    return result
+
+
+def ensure_groq_configured():
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Groq AI is not configured. Add GROQ_API_KEY on the server.",
+        )
+    return Groq(api_key=api_key)
+
+
+def parse_json_from_model(text):
+    cleaned = str(text or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(
+            r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE
+        ).strip()
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        cleaned = cleaned[start : end + 1]
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as error:
+        raise ValueError("AI returned invalid JSON.") from error
 
 
 def validate_ai_payload(data: dict, provider: str, current_price: float) -> dict:
@@ -1443,8 +1900,7 @@ def validate_ai_payload(data: dict, provider: str, current_price: float) -> dict
         "risk": data.get("risk", "MEDIUM"),
         "market_bias": data.get("market_bias", "Neutral bias"),
         "setup_status": data.get(
-            "setup_status",
-            f"{provider} educational review complete.",
+            "setup_status", f"{provider} educational review complete."
         ),
         "reason": (
             data.get("reason", "")
@@ -1466,35 +1922,8 @@ def validate_ai_payload(data: dict, provider: str, current_price: float) -> dict
         "provider": provider,
         "manual_run_only": True,
         "updated_at": int(time.time()),
-        "disclaimer": (
-            "Educational AI chart analysis only. Not financial advice."
-        ),
+        "disclaimer": "Educational AI chart analysis only. Not financial advice.",
     }
-
-
-def parse_json_from_model(text):
-    cleaned = str(text or "").strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(
-            r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE
-        ).strip()
-    start, end = cleaned.find("{"), cleaned.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        cleaned = cleaned[start : end + 1]
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as error:
-        raise ValueError("AI returned invalid JSON.") from error
-
-
-def ensure_groq_configured():
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Groq AI is not configured. Add GROQ_API_KEY.",
-        )
-    return Groq(api_key=api_key)
 
 
 def cooldown_remaining(cache, cooldown_seconds):
@@ -1509,7 +1938,7 @@ def cooldown_remaining(cache, cooldown_seconds):
 def health():
     return {
         "status": "ok",
-        "message": "BTC Signal Dashboard Backend Live",
+        "message": "BTC Signal Website backend running",
         "market_data_source": "Binance",
         "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
         "groq_configured": bool(os.getenv("GROQ_API_KEY")),
@@ -1529,87 +1958,111 @@ def btc_price(force_refresh: bool = False):
     try:
         ticker = get_btc_ticker()
         current_price = float(ticker["lastPrice"])
-        prev_close, d_change = get_btc_daily_change(current_price)
-        res = {
+        previous_daily_close, daily_change_percent = get_btc_daily_change(
+            current_price
+        )
+        result = {
             "bitcoin": {
                 "usd": current_price,
-                "usd_24h_change": d_change,
+                "usd_24h_change": daily_change_percent,
                 "price_change_24h_usd": float(ticker["priceChange"]),
                 "open_price_24h_usd": float(ticker["openPrice"]),
-                "previous_daily_close": prev_close,
+                "previous_daily_close": previous_daily_close,
             },
             "source": "Binance",
+            "daily_change_basis": "Previous completed UTC daily candle close",
             "cached": False,
             "updated_at": int(now),
         }
-        price_cache["data"], price_cache["updated_at"] = res, now
-        return res
-    except Exception as error:
+        price_cache["data"], price_cache["updated_at"] = result, now
+        return result
+    except (requests.exceptions.RequestException, ValueError) as error:
         if price_cache["data"]:
-            return {**price_cache["data"], "cached": True}
+            return {
+                **price_cache["data"],
+                "cached": True,
+                "warning": "Live market feed is temporarily unavailable. Showing last saved price.",
+            }
         raise HTTPException(
-            status_code=502, detail=f"Price feed error: {error}"
+            status_code=502,
+            detail=f"Failed to fetch BTC price from Binance: {str(error)}",
         ) from error
 
 
 @app.get("/api/btc/chart")
 def btc_chart(days: int = 7, interval: str = "1h"):
     now = time.time()
-    allowed = {"15m", "1h", "1d", "1w"}
-    if interval not in allowed:
-        raise HTTPException(status_code=400, detail="Unsupported interval.")
-    cache_key = f"{interval}:{days}"
-    limit = {"15m": 96, "1h": 168, "1d": 30, "1w": 20}.get(interval, 100)
-    cached = chart_cache["data"].get(cache_key)
-    if cached and now - cached["updated_at"] < 60:
-        return {**cached, "cached": True}
+    allowed_intervals = {"15m", "1h", "1d", "1w"}
+    if interval not in allowed_intervals:
+        raise HTTPException(status_code=400, detail="Unsupported chart interval.")
+    safe_days = max(1, min(days, 3650))
+    cache_key = f"{interval}:{safe_days}"
+    candles_needed = {
+        "15m": min(max(safe_days * 96, 48), 1000),
+        "1h": min(max(safe_days * 24, 24), 1000),
+        "1d": min(max(safe_days, 7), 1000),
+        "1w": min(max(math.ceil(safe_days / 7), 8), 1000),
+    }[interval]
+    cached_chart = chart_cache["data"].get(cache_key)
+    if cached_chart and now - cached_chart["updated_at"] < 60:
+        return {**cached_chart, "cached": True}
     try:
-        candles = get_btc_klines(interval=interval, limit=limit)
-        res = {
-            "prices": [[int(c[0]), float(c[4])] for c in candles],
+        candles = get_btc_klines(interval=interval, limit=candles_needed)
+        result = {
+            "prices": [
+                [int(candle[0]), float(candle[4])] for candle in candles
+            ],
             "interval": interval,
-            "days": days,
+            "days": safe_days,
             "source": "Binance",
             "cached": False,
             "updated_at": int(now),
         }
-        chart_cache["data"][cache_key], chart_cache["updated_at"] = res, now
-        return res
-    except Exception as error:
-        if cached:
-            return {**cached, "cached": True}
+        chart_cache["data"][cache_key], chart_cache["updated_at"] = result, now
+        return result
+    except requests.exceptions.RequestException as error:
+        if cached_chart:
+            return {
+                **cached_chart,
+                "cached": True,
+                "warning": "Live chart feed is temporarily unavailable. Showing last saved chart.",
+            }
         raise HTTPException(
-            status_code=502, detail=f"Chart feed error: {error}"
+            status_code=502,
+            detail=f"Failed to fetch BTC chart from Binance: {str(error)}",
         ) from error
 
 
 @app.get("/api/btc/candles")
 def btc_candles(interval: str = "15m", limit: int = 200):
-    allowed = {"1m", "5m", "15m", "1h", "4h", "1d", "1w"}
-    if interval not in allowed:
-        raise HTTPException(status_code=400, detail="Unsupported interval.")
+    allowed_intervals = {"1m", "5m", "15m", "1h", "4h", "1d", "1w"}
+    if interval not in allowed_intervals:
+        raise HTTPException(status_code=400, detail="Unsupported candle interval.")
+    safe_limit = max(20, min(limit, 500))
     try:
-        raw = get_btc_klines(interval=interval, limit=min(limit, 500))
+        raw_candles = get_btc_klines(interval=interval, limit=safe_limit)
         candles = [
             {
-                "time": int(int(c[0]) / 1000),
-                "open": float(c[1]),
-                "high": float(c[2]),
-                "low": float(c[3]),
-                "close": float(c[4]),
-                "volume": float(c[5]),
+                "time": int(int(candle[0]) / 1000),
+                "open": float(candle[1]),
+                "high": float(candle[2]),
+                "low": float(candle[3]),
+                "close": float(candle[4]),
+                "volume": float(candle[5]),
             }
-            for c in raw
+            for candle in raw_candles
         ]
         return {
             "symbol": "BTCUSDT",
             "interval": interval,
             "candles": candles,
+            "source": "Binance",
             "updated_at": int(time.time()),
         }
-    except Exception as error:
+    except requests.exceptions.RequestException as error:
         raise HTTPException(
-            status_code=502, detail=f"Binance candle error: {error}"
+            status_code=502,
+            detail=f"Could not load Binance candles: {str(error)}",
         ) from error
 
 
@@ -1630,88 +2083,53 @@ def technical_signal(force_refresh: bool = False):
 def rrg(interval: str = "1d"):
     now = time.time()
     if interval not in {"1h", "1d"}:
-        raise HTTPException(status_code=400, detail="RRG interval 1h or 1d.")
-    cached = rrg_cache["data"].get(interval)
-    if cached and now - cached["updated_at"] < 300:
-        return {**cached, "cached": True}
+        raise HTTPException(status_code=400, detail="RRG interval must be 1h or 1d.")
+    cached_data = rrg_cache["data"].get(interval)
+    cache_ttl = 300 if interval == "1h" else 900
+    if cached_data and now - cached_data["updated_at"] < cache_ttl:
+        return {**cached_data, "cached": True}
     try:
-        symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-        candles = {s: get_klines(s, interval, 120) for s in symbols}
-        closes = {s: [float(c[4]) for c in candles[s]] for s in symbols}
-        times = [int(c[0]) for c in candles["ETHUSDT"]]
-        trails = []
-        for s in symbols:
-            if s == "ETHUSDT":
-                trails.append(
-                    {
-                        "symbol": "ETHUSDT",
-                        "points": [
-                            {"x": 100.0, "y": 100.0, "timestamp": times[i]}
-                            for i in range(-4, 0)
-                        ],
-                        "direction": "Flat",
-                    }
-                )
-                continue
-            ratios = [(p / b) * 100 for p, b in zip(closes[s], closes["ETHUSDT"])]
-            r_sma = [
-                average(ratios[i - 20 + 1 : i + 1]) if i >= 19 else None
-                for i in range(len(ratios))
-            ]
-            rs_idx = [
-                (ratios[i] / r_sma[i]) * 100 if r_sma[i] else None
-                for i in range(len(ratios))
-            ]
-            m_sma = [
-                average(
-                    [
-                        v
-                        for v in rs_idx[i - 9 : i + 1]
-                        if v is not None
-                    ]
-                )
-                if i >= 28 and rs_idx[i] is not None
-                else None
-                for i in range(len(rs_idx))
-            ]
-            mom_idx = [
-                (rs_idx[i] / m_sma[i]) * 100 if m_sma[i] else None
-                for i in range(len(rs_idx))
-            ]
-            pts = [
-                {
-                    "x": round_value(rs_idx[i]),
-                    "y": round_value(mom_idx[i]),
-                    "timestamp": times[i],
-                }
-                for i in range(len(rs_idx))
-                if rs_idx[i] and mom_idx[i]
-            ]
-            trails.append(
-                {"symbol": s, "points": pts[-4:], "direction": "North-East"}
-            )
-        res = {
-            "benchmark": "ETHUSDT",
-            "interval": interval,
-            "trails": trails,
-            "updated_at": int(now),
-        }
-        rrg_cache["data"][interval] = res
-        return res
-    except Exception as error:
-        if cached:
-            return {**cached, "cached": True}
+        result = build_rrg_data(interval)
+        rrg_cache["data"][interval], rrg_cache["updated_at"] = (
+            result,
+            result["updated_at"],
+        )
+        return result
+    except requests.exceptions.RequestException as error:
+        if cached_data:
+            return {
+                **cached_data,
+                "cached": True,
+                "warning": "RRG feed unavailable. Showing cached data.",
+            }
         raise HTTPException(
-            status_code=502, detail=f"RRG calculation error: {error}"
+            status_code=502, detail=f"Failed to build RRG data: {str(error)}"
         ) from error
 
 
+@app.get("/api/ai-signal")
+def get_saved_ai_signal():
+    if not ai_signal_cache["data"]:
+        raise HTTPException(
+            status_code=404,
+            detail="No Gemini AI analysis has been run yet. Use Run Gemini AI Analysis to generate technical analysis.",
+        )
+    cache_age = time.time() - ai_signal_cache["updated_at"]
+    return {
+        **ai_signal_cache["data"],
+        "cached": True,
+        "cache_age_seconds": round_value(cache_age, 1),
+        "manual_run_only": True,
+    }
+
+
 @app.post("/api/ai-signal/run")
-def run_gemini_ai_signal():
+def run_ai_signal():
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
-            status_code=503, detail="GEMINI_API_KEY is not configured."
+            status_code=503,
+            detail="Gemini AI is not configured. Add GEMINI_API_KEY on the server.",
         )
     try:
         market_data, _, _, _ = get_technical_market_data(force_refresh=True)
@@ -1775,19 +2193,23 @@ Rules:
             time.time(),
         )
         return result
+    except HTTPException:
+        raise
     except Exception as error:
-        print(f"Gemini error: {error}")
+        print(f"Gemini AI analysis error: {error}")
         raise HTTPException(
-            status_code=503, detail=f"Gemini AI error: {error}"
+            status_code=503,
+            detail="Gemini AI could not respond. Please try again later.",
         ) from error
 
 
 @app.post("/api/groq-live-analysis")
 def run_groq_live_analysis():
-    rem = cooldown_remaining(groq_live_cache, GROQ_LIVE_COOLDOWN_SECONDS)
-    if rem > 0:
+    remaining = cooldown_remaining(groq_live_cache, GROQ_LIVE_COOLDOWN_SECONDS)
+    if remaining > 0:
         raise HTTPException(
-            status_code=429, detail=f"Groq cooldown active ({rem}s)."
+            status_code=429,
+            detail=f"Groq live-chart cooldown active. Please wait {remaining} seconds.",
         )
     try:
         client = ensure_groq_configured()
@@ -1823,87 +2245,28 @@ Return JSON:
             time.time(),
         )
         return result
+    except HTTPException:
+        raise
     except Exception as error:
         print(f"Groq live analysis error: {error}")
         raise HTTPException(
-            status_code=503, detail=f"Groq live analysis error: {error}"
+            status_code=503,
+            detail="Groq live-chart analysis is temporarily unavailable. Please try again later.",
         ) from error
-
-
-def strip_html(text):
-    text = re.sub(r"<[^>]+>", " ", str(text or ""))
-    return " ".join(text.split())
-
-
-def parse_rss_time(value):
-    try:
-        p = parsedate_to_datetime(value)
-        return (
-            p.astimezone(timezone.utc)
-            if p.tzinfo
-            else p.replace(tzinfo=timezone.utc)
-        )
-    except Exception:
-        return None
-
-
-def fetch_rss_news():
-    import xml.etree.ElementTree as ET
-
-    collected, seen = [], set()
-    headers = {"User-Agent": "Mozilla/5.0"}
-    for src in RSS_NEWS_SOURCES:
-        try:
-            r = requests.get(
-                src["url"], timeout=RSS_NEWS_TIMEOUT_SECONDS, headers=headers
-            )
-            root = ET.fromstring(r.content)
-            items = root.findall(".//item") or root.findall(
-                ".//{[http://www.w3.org/2005/Atom](http://www.w3.org/2005/Atom)}entry"
-            )
-            for item in items[:20]:
-                title = item.find("title")
-                title_text = (
-                    title.text.strip()
-                    if title is not None and title.text
-                    else ""
-                )
-                link = item.find("link")
-                link_text = (
-                    link.text.strip() if link is not None and link.text else ""
-                )
-                if not link_text:
-                    link_text = item.find(
-                        "{[http://www.w3.org/2005/Atom](http://www.w3.org/2005/Atom)}link"
-                    ).attrib.get("href", "")
-                desc = item.find("description") or item.find(
-                    "{[http://www.w3.org/2005/Atom](http://www.w3.org/2005/Atom)}summary"
-                )
-                desc_text = (
-                    desc.text.strip() if desc is not None and desc.text else ""
-                )
-                if not title_text or not link_text:
-                    continue
-                if link_text in seen:
-                    continue
-                seen.add(link_text)
-                collected.append(
-                    {
-                        "headline": strip_html(title_text)[:250],
-                        "source": src["name"],
-                        "url": link_text,
-                        "published_time": "Recent",
-                        "summary": strip_html(desc_text)[:400]
-                        or "Open article for full details.",
-                    }
-                )
-        except Exception as e:
-            print(f"RSS source {src['name']} error: {e}")
-    return collected[:AI_NEWS_LIMIT]
 
 
 @app.post("/api/groq-news")
 def run_groq_news():
+    remaining = cooldown_remaining(
+        groq_news_cache,
+        GROQ_NEWS_COOLDOWN_SECONDS,
+    )
+    if remaining > 0:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Groq news cooldown active. Please wait {remaining} seconds.",
+        )
+
     news_items = fetch_rss_news()
     overview = (
         "Latest RSS crypto headlines loaded. Open articles for full context."
@@ -1929,86 +2292,121 @@ def run_groq_news():
     except Exception as e:
         print(f"Groq news summary error: {e}")
 
-    return {
+    now = time.time()
+    result = {
         "news": news_items,
         "news_overview": overview,
         "news_market_bias": sentiment,
-        "updated_at": int(time.time()),
+        "updated_at": int(now),
         "provider": "GROQ",
         "manual_run_only": True,
         "disclaimer": (
-            "News context only. Does not generate signals or trade levels."
+            "News context only. Groq news output never creates BUY/SELL signals, "
+            "entry prices, stop losses, or targets. Not financial advice."
         ),
     }
+    groq_news_cache["data"] = result
+    groq_news_cache["updated_at"] = now
+    return result
 
 
 @app.post("/api/news/translate")
-def translate_news(payload: dict = Body(...)):
-    headline = payload.get("headline", "")
-    summary = payload.get("summary", "")
+def translate_news_to_hindi(payload: dict = Body(...)):
+    headline = str(payload.get("headline", "")).strip()[:300]
+    summary = str(payload.get("summary", "")).strip()[:1200]
+    source = str(payload.get("source", "")).strip()[:100]
+    if not headline:
+        raise HTTPException(
+            status_code=400, detail="News headline is required for translation."
+        )
     try:
         client = ensure_groq_configured()
-        prompt = f"Translate to natural Hindi in JSON: {{\"headline_hi\": \"...\", \"summary_hi\": \"...\"}}\nHeadline: {headline}\nSummary: {summary}"
-        comp = client.chat.completions.create(
+        prompt = f"""Translate this crypto-news headline and publisher summary into simple natural Hindi in Devanagari. Preserve names, numbers, tickers, prices, dates and factual meaning. Do not add predictions, advice or new facts. Return only JSON: {{\"headline_hi\": \"...\", \"summary_hi\": \"...\"}}. Source: {source}\nHeadline: {headline}\nSummary: {summary}"""
+        completion = client.chat.completions.create(
             model=GROQ_MODEL,
             temperature=0.1,
-            max_tokens=500,
+            max_tokens=700,
             response_format={"type": "json_object"},
             messages=[{"role": "user", "content": prompt}],
         )
-        return parse_json_from_model(comp.choices[0].message.content)
-    except Exception as e:
+        result = parse_json_from_model(completion.choices[0].message.content)
+        return {
+            "headline_hi": str(result.get("headline_hi", "")).strip(),
+            "summary_hi": str(result.get("summary_hi", "")).strip(),
+            "provider": "GROQ",
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Groq Hindi translation error: {error}")
         raise HTTPException(
-            status_code=503, detail=f"Translation error: {e}"
-        ) from e
+            status_code=503,
+            detail="Groq Hindi translation is temporarily unavailable. Please try again later.",
+        ) from error
 
 
 @app.post("/api/chart-analyser")
 async def chart_analyser(file: UploadFile = File(...)):
+    allowed_types = {"image/png", "image/jpeg", "image/webp"}
+    max_file_size = 8 * 1024 * 1024
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400, detail="Upload a PNG, JPG, or WEBP chart image only."
+        )
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(
+            status_code=400, detail="The uploaded chart image is empty."
+        )
+    if len(image_bytes) > max_file_size:
+        raise HTTPException(
+            status_code=413,
+            detail="Chart image is too large. Maximum size is 8 MB.",
+        )
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
-            status_code=503, detail="GEMINI_API_KEY not configured."
+            status_code=503,
+            detail="Gemini API key is not configured on the server.",
         )
-    bytes_data = await file.read()
+    prompt = """You are a cautious technical-analysis assistant for an educational BTC/crypto chart screenshot analyser. Analyze only visible information in the uploaded chart image. Do not invent exact prices, indicators, symbols, timeframes, or levels that cannot be read clearly. Return only JSON in simple Hinglish. Output BUY only if clear bullish setup and visible confirmation are present, SELL only for clear bearish confirmation, otherwise HOLD. Never promise profit, certainty, or guaranteed targets. Educational analysis only, never automated trade order."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "signal": {"type": "string", "enum": ["BUY", "SELL", "HOLD"]},
+            "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+            "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
+            "trend": {"type": "string"},
+            "pattern": {"type": "string"},
+            "support": {"type": "string"},
+            "resistance": {"type": "string"},
+            "reason": {"type": "string"},
+            "entry_idea": {"type": "string"},
+            "invalidation_idea": {"type": "string"},
+            "warning": {"type": "string"},
+        },
+        "required": [
+            "signal",
+            "confidence",
+            "risk",
+            "trend",
+            "pattern",
+            "support",
+            "resistance",
+            "reason",
+            "entry_idea",
+            "invalidation_idea",
+            "warning",
+        ],
+    }
     try:
         client = genai.Client(api_key=api_key)
-        prompt = "Analyze chart screenshot in Hinglish. Output BUY, SELL, or HOLD only. Return valid JSON."
-        schema = {
-            "type": "object",
-            "properties": {
-                "signal": {"type": "string", "enum": ["BUY", "SELL", "HOLD"]},
-                "confidence": {"type": "integer"},
-                "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
-                "trend": {"type": "string"},
-                "pattern": {"type": "string"},
-                "support": {"type": "string"},
-                "resistance": {"type": "string"},
-                "reason": {"type": "string"},
-                "entry_idea": {"type": "string"},
-                "invalidation_idea": {"type": "string"},
-                "warning": {"type": "string"},
-            },
-            "required": [
-                "signal",
-                "confidence",
-                "risk",
-                "trend",
-                "pattern",
-                "support",
-                "resistance",
-                "reason",
-                "entry_idea",
-                "invalidation_idea",
-                "warning",
-            ],
-        }
-        res = client.models.generate_content(
+        response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=[
                 prompt,
                 types.Part.from_bytes(
-                    data=bytes_data, mime_type=file.content_type
+                    data=image_bytes, mime_type=file.content_type
                 ),
             ],
             config=types.GenerateContentConfig(
@@ -2016,11 +2414,20 @@ async def chart_analyser(file: UploadFile = File(...)):
                 response_json_schema=schema,
             ),
         )
-        return json.loads(res.text)
-    except Exception as e:
+        result = json.loads(response.text)
+        result["source"] = "Uploaded chart screenshot + Gemini AI analysis"
+        result["provider"] = "GEMINI"
+        result["disclaimer"] = (
+            "Educational chart analysis only. Not financial advice or an"
+            " automated trading instruction."
+        )
+        return result
+    except Exception as error:
+        print(f"Gemini chart analysis error: {error}")
         raise HTTPException(
-            status_code=503, detail=f"Analyser error: {e}"
-        ) from e
+            status_code=503,
+            detail="Chart Gemini AI is temporarily unavailable. Please try again later.",
+        ) from error
 
 
 app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
