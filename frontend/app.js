@@ -1114,3 +1114,4 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(refreshLivePrice, 15000);
   setInterval(refreshTechnicalAnalysis, 60000);
 });
+ 
