@@ -13,6 +13,7 @@
   --yellow: #facc15;
   --blue: #38bdf8;
   --purple: #a78bfa;
+  --cyan: #22d3ee;
   --amber: #fbbf24;
   --shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
   --ai-color: #a78bfa;
@@ -586,6 +587,46 @@ canvas {
   background:
     radial-gradient(circle at 88% 0%, rgba(139, 92, 246, 0.15), transparent 22rem),
     linear-gradient(145deg, rgba(19, 38, 65, 0.94), rgba(9, 21, 37, 0.98));
+}
+
+.provider-card {
+  background:
+    radial-gradient(circle at 88% 0%, rgba(139, 92, 246, 0.12), transparent 22rem),
+    linear-gradient(145deg, rgba(19, 38, 65, 0.94), rgba(9, 21, 37, 0.98));
+  border-left: 3px solid var(--border-strong);
+}
+
+.provider-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.engine-card {
+  border-left-color: var(--technical-color);
+}
+
+.gemini-card {
+  border-left-color: var(--cyan);
+}
+
+.gemini-card h2 {
+  color: var(--cyan);
+}
+
+.groq-card {
+  border-left-color: var(--purple);
+}
+
+.groq-card h2 {
+  color: var(--purple);
+}
+
+.provider-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
 .signal-details {
