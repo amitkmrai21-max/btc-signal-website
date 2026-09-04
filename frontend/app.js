@@ -31,7 +31,6 @@ const ALERT_SETTINGS_STORAGE_KEY = "btcAiSignalAlertSettingsV1";
 const ALERT_RUNTIME_STORAGE_KEY = "btcAiSignalAlertRuntimeV1";
 const LAYOUT_STORAGE_KEY = "btcAiSignalCustomLayoutV1";
 const DASHBOARD_PREFS_KEY = "btcAiSignalDashboardPreferences";
-const NEWS_TRANSLATION_STORAGE_KEY = "btcAiSignalNewsTranslationsV1";
 
 const timeframeSettings = {
   "1W": { days: 90, interval: "1w", label: "Weekly", maxPoints: 20 },
@@ -71,11 +70,14 @@ function setRiskBadge(elementId, risk) {
 // ==========================================================================
 function initLiveCandlestickChart() {
   const container = getEl("liveCandlestickChart");
-  if (!container || liveCandleChart || !window.LightweightCharts) return;
+  if (!container || liveCandleChart || typeof LightweightCharts === "undefined") return;
+
+  const width = container.clientWidth > 50 ? container.clientWidth : 800;
+  const height = window.innerWidth <= 720 ? 360 : 520;
 
   liveCandleChart = LightweightCharts.createChart(container, {
-    width: container.clientWidth || 800,
-    height: window.innerWidth <= 720 ? 360 : 520,
+    width: width,
+    height: height,
     layout: {
       background: { color: "#07111f" },
       textColor: "#cbd5e1",
@@ -105,10 +107,13 @@ function initLiveCandlestickChart() {
 
   new ResizeObserver((entries) => {
     if (!entries[0] || !liveCandleChart) return;
-    liveCandleChart.applyOptions({
-      width: entries[0].contentRect.width,
-      height: window.innerWidth <= 720 ? 360 : 520
-    });
+    const nextWidth = entries[0].contentRect.width;
+    if (nextWidth > 50) {
+      liveCandleChart.applyOptions({
+        width: nextWidth,
+        height: window.innerWidth <= 720 ? 360 : 520
+      });
+    }
   }).observe(container);
 }
 
@@ -124,13 +129,15 @@ async function loadLiveCandles() {
     const candles = Array.isArray(data.candles) ? data.candles : [];
     if (!candles.length) throw new Error("No candle data received.");
 
-    liveCandleSeries.setData(candles.map(c => ({
-      time: Number(c.time),
-      open: Number(c.open),
-      high: Number(c.high),
-      low: Number(c.low),
-      close: Number(c.close)
-    })));
+    if (liveCandleSeries) {
+      liveCandleSeries.setData(candles.map(c => ({
+        time: Number(c.time),
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close)
+      })));
+    }
 
     latestVisibleCandle = candles[candles.length - 1];
     setText("liveChartTimeframe", liveChartTimeframe);
@@ -188,7 +195,7 @@ function connectLiveCandleStream() {
 // ==========================================================================
 function renderLatestAiChartOverlay(aiData, provider) {
   clearLatestAiChartOverlay();
-  if (!liveCandleChart || !latestVisibleCandle) return;
+  if (!liveCandleChart || !latestVisibleCandle || typeof LightweightCharts === "undefined") return;
 
   const signal = String(aiData?.signal || "HOLD").toUpperCase();
   if (signal === "HOLD" || !aiData?.overlay_allowed) {
@@ -582,6 +589,7 @@ function renderSetupQuality(data) {
 // 8. HISTORICAL CHART & RRG ROTATION
 // ==========================================================================
 async function loadHistoricalBtcChart() {
+  if (typeof Chart === "undefined") return;
   const selected = timeframeSettings[activeHistoryTimeframe] || timeframeSettings["1D"];
   try {
     const res = await fetch(`/api/btc/chart?days=${selected.days}&interval=${selected.interval}`, { cache: "no-store" });
@@ -623,6 +631,7 @@ async function loadHistoricalBtcChart() {
 }
 
 async function loadRrg() {
+  if (typeof Chart === "undefined") return;
   const status = getEl("rrgStatus");
   if (status) status.textContent = `Loading ${activeRrgTimeframe} RRG-style data...`;
   try {
@@ -639,7 +648,7 @@ async function loadRrg() {
 
 function renderRrgChart(data) {
   const canvas = getEl("rrgChart");
-  if (!canvas || !Array.isArray(data?.trails)) return;
+  if (!canvas || !Array.isArray(data?.trails) || typeof Chart === "undefined") return;
   if (rrgChartInstance) rrgChartInstance.destroy();
 
   const colors = {
@@ -924,7 +933,6 @@ function setupLayoutEditor() {
     window.location.reload();
   });
 
-  // Restore layout
   try {
     const saved = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) || "[]");
     if (Array.isArray(saved) && saved.length) {
@@ -1002,7 +1010,7 @@ function setupPreferences() {
 // 14. INITIALIZATION & EVENT LISTENERS
 // ==========================================================================
 document.addEventListener("DOMContentLoaded", () => {
-  // Navigation Tabs
+  // Navigation Tabs with Safe Canvas Resize
   document.querySelectorAll(".app-tab").forEach(tab => {
     tab.addEventListener("click", () => {
       document.querySelectorAll(".app-tab").forEach(t => t.classList.remove("active"));
@@ -1012,7 +1020,14 @@ document.addEventListener("DOMContentLoaded", () => {
         p.classList.toggle("active", p.dataset.panel === target);
       });
       if (target === "live-chart") {
-        setTimeout(() => liveCandleChart?.applyOptions({ width: getEl("liveCandlestickChart")?.clientWidth }), 100);
+        setTimeout(() => {
+          initLiveCandlestickChart();
+          if (liveCandleChart) {
+            const containerWidth = getEl("liveCandlestickChart")?.clientWidth || 800;
+            liveCandleChart.applyOptions({ width: containerWidth });
+            liveCandleChart.timeScale().fitContent();
+          }
+        }, 120);
       }
     });
   });
@@ -1049,9 +1064,23 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // RRG Timeframes
-  getEl("rrg1hBtn")?.addEventListener("click", () => { activeRrgTimeframe = "1h"; loadRrg(); });
-  getEl("rrg1dBtn")?.addEventListener("click", () => { activeRrgTimeframe = "1d"; loadRrg(); });
+  // Historical Chart Zoom buttons
+  getEl("zoomInBtn")?.addEventListener("click", () => btcHistoryChart?.zoom({ x: 1.35 }));
+  getEl("zoomOutBtn")?.addEventListener("click", () => btcHistoryChart?.zoom({ x: 0.74 }));
+  getEl("resetZoomBtn")?.addEventListener("click", () => btcHistoryChart?.resetZoom());
+
+  // RRG Timeframes & Reset
+  getEl("rrg1hBtn")?.addEventListener("click", () => {
+    getEl("rrg1hBtn")?.classList.add("active");
+    getEl("rrg1dBtn")?.classList.remove("active");
+    activeRrgTimeframe = "1h"; loadRrg();
+  });
+  getEl("rrg1dBtn")?.addEventListener("click", () => {
+    getEl("rrg1dBtn")?.classList.add("active");
+    getEl("rrg1hBtn")?.classList.remove("active");
+    activeRrgTimeframe = "1d"; loadRrg();
+  });
+  getEl("rrgResetBtn")?.addEventListener("click", () => rrgChartInstance?.resetZoom());
 
   // Paper Trading Actions
   getEl("paperBuyBtn")?.addEventListener("click", () => executePaperTrade(true));
@@ -1064,6 +1093,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Browser Alerts
   getEl("enableNotificationsBtn")?.addEventListener("click", () => {
     if ("Notification" in window) Notification.requestPermission();
+  });
+  getEl("testNotificationBtn")?.addEventListener("click", () => {
+    sendBrowserAlert("Test Notification", "Browser alerts are working properly!");
   });
 
   // Sub-systems setup
@@ -1079,6 +1111,6 @@ document.addEventListener("DOMContentLoaded", () => {
   loadRrg();
 
   // Auto-Refresh Intervals
-  setInterval(refreshLivePrice, 15000); // 15s price refresh
-  setInterval(refreshTechnicalAnalysis, 60000); // 60s deterministic engine loop
+  setInterval(refreshLivePrice, 15000);
+  setInterval(refreshTechnicalAnalysis, 60000);
 });
