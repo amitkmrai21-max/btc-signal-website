@@ -34,7 +34,6 @@ const PAPER_STORAGE_KEY = "btcAiSignalPaperPortfolioV2";
 const DEFAULT_PAPER_CASH = 100000;
 const PAPER_MIN_TRADE_INR = 100;
 const PAPER_EPSILON = 0.00000001;
-const AI_PLAN_STORAGE_KEY = "btcAiSignalLatestPlanV1";
 const AI_NEWS_STORAGE_KEY = "btcAiSignalLatestNewsV1";
 const NEWS_TRANSLATION_STORAGE_KEY = "btcAiSignalNewsTranslationsV1";
 const ALERT_SETTINGS_STORAGE_KEY = "btcAiSignalAlertSettingsV1";
@@ -173,10 +172,9 @@ function saveProviderPlan(provider, data) {
   const plan = { data, savedAt: Date.now() };
   latestProviderPlans[provider] = plan;
   try { localStorage.setItem(PROVIDER_PLAN_STORAGE_KEYS[provider], JSON.stringify(plan)); } catch (error) { console.error(error); }
-  // Also track whichever provider ran most recently (either one) for the chart
-  // overlay/plan-lock system, which shows only the latest-clicked provider's lines.
+  // Also track whichever provider ran most recently (either one), in memory only —
+  // the Gemini-success chart-lock hookup reads this right after saving.
   latestAiPlan = plan;
-  try { localStorage.setItem(AI_PLAN_STORAGE_KEY, JSON.stringify(plan)); } catch (error) { console.error(error); }
 }
 
 function loadSavedProviderPlan(provider) {
@@ -215,20 +213,19 @@ function updateSignalConfirmation(technicalData) {
   setText("liveTechnicalUpdated", `Updated: ${formatUpdatedAt(technicalData?.updated_at)}`);
   if (!lastAi) {
     setText("lastAiSignal", "No previous AI analysis"); setText("lastAiConfidence", "Confidence: --"); setText("lastAiUpdated", "Updated: --");
-    setText("combinedDecision", technicalSignal); setText("combinedDecisionReason", "Gemini AI is unavailable. Showing live technical fallback only.");
+    setText("combinedDecision", technicalSignal); setText("combinedDecisionReason", "No manual Gemini or Groq analysis yet. Showing live technical fallback only.");
     return;
   }
   setText("lastAiSignal", lastAi.signal); setText("lastAiConfidence", `Confidence: ${lastAi.confidence}`); setText("lastAiUpdated", `Updated: ${formatStoredSignalTime(lastAi.updatedAt)}`);
   const aiBuy = isBuyLike(lastAi.signal), aiSell = isSellLike(lastAi.signal), technicalBuy = isBuyLike(technicalSignal), technicalSell = isSellLike(technicalSignal);
   let decision = "WAIT FOR CONFIRMATION";
   let reason = "The last AI view and live technical conditions are not fully aligned. Do not force an entry.";
-  if ((aiBuy && technicalBuy) || (aiSell && technicalSell)) { decision = aiBuy ? "BUY SETUP CONFIRMED" : "SELL SETUP CONFIRMED"; reason = "The last successful Gemini AI view and current live technical signal are aligned."; }
-  else if ((aiBuy && technicalSell) || (aiSell && technicalBuy)) { decision = "AI SIGNAL INVALIDATED — NO ENTRY"; reason = "Current live technical conditions oppose the last Gemini AI signal."; }
+  if ((aiBuy && technicalBuy) || (aiSell && technicalSell)) { decision = aiBuy ? "BUY SETUP CONFIRMED" : "SELL SETUP CONFIRMED"; reason = "The last successful manual AI view and current live technical signal are aligned."; }
+  else if ((aiBuy && technicalSell) || (aiSell && technicalBuy)) { decision = "AI SIGNAL INVALIDATED — NO ENTRY"; reason = "Current live technical conditions oppose the last manual AI signal."; }
   else if (String(technicalSignal).toUpperCase().includes("NO TRADE")) { reason = "The previous AI idea is not currently confirmed by live technical data."; }
   setText("combinedDecision", decision); setText("combinedDecisionReason", reason);
 }
 
-function loadSavedAiPlan() { try { const saved = localStorage.getItem(AI_PLAN_STORAGE_KEY); if (!saved) return null; const plan = JSON.parse(saved); if (!plan?.data || !Number.isFinite(Number(plan.savedAt))) return null; latestAiPlan = plan; return plan; } catch (error) { console.error(error); return null; } }
 
 function calculateTechnicalSignal(market15m = {}, market1h = {}) {
   const trend15m = String(market15m.trend || "").toUpperCase(), trend1h = String(market1h.trend || "").toUpperCase();
@@ -1507,7 +1504,6 @@ async function loadAiAnalysis() {
     saveAiNews(data);
 
     renderGeminiCard(data);
-    renderLiveChartAiOverlay(data);
     renderGeminiNews(data);
   } catch (error) {
     console.error(error);
@@ -1571,10 +1567,6 @@ setupChartAnalyser();
 setupLayoutEditor();
 setupLiveCandlestickChart();
 
-loadSavedAiPlan();
-if (latestAiPlan?.data) {
-  renderLiveChartAiOverlay(latestAiPlan.data);
-}
 renderSavedProviderPlanIfAny("GEMINI");
 renderSavedProviderPlanIfAny("GROQ");
 
@@ -1980,32 +1972,6 @@ function setupLiveCandlestickChart() {
     }
   }, 15000);
 }
-function getLiveChartAiState(signal) {
-  const normalized = String(signal || "NO TRADE").toUpperCase();
-
-  if (normalized.includes("BUY")) {
-    return {
-      label: "BUY",
-      color: "#22c55e",
-      seriesPosition: "belowBar"
-    };
-  }
-
-  if (normalized.includes("SELL")) {
-    return {
-      label: "SELL",
-      color: "#ef4444",
-      seriesPosition: "aboveBar"
-    };
-  }
-
-  return {
-    label: "HOLD",
-    color: "#facc15",
-    seriesPosition: "inBar"
-  };
-}
-
 function clearLiveChartAiOverlay() {
   if (liveCandleSeries && Array.isArray(liveAiPriceLines)) {
     liveAiPriceLines.forEach((priceLine) => {
@@ -2041,168 +2007,9 @@ function clearLiveChartAiOverlay() {
 
   liveAiLevelSeries = [];
 }
-
-function addLiveChartPriceLine(price, title, color, lineStyle) {
-  const numericPrice = Number(price);
-
-  if (
-    !liveCandleSeries ||
-    !Number.isFinite(numericPrice) ||
-    numericPrice <= 0
-  ) {
-    return;
-  }
-
-  const line = liveCandleSeries.createPriceLine({
-    price: numericPrice,
-    color,
-    lineWidth: 2,
-    lineStyle,
-    axisLabelVisible: true,
-    title
-  });
-
-  liveAiPriceLines.push(line);
-}
-
-function renderLiveChartAiOverlay(aiData) {
-  if (!liveCandleChart || !liveCandleSeries) {
-    return;
-  }
-
-  clearLiveChartAiOverlay();
-
-  const state = getLiveChartAiState(aiData?.signal);
-
-  const entry = Number(aiData?.entry_price || 0);
-  const stopLoss = Number(aiData?.stop_loss_price || 0);
-  const target1 = Number(aiData?.target_1_price || 0);
-  const target2 = Number(aiData?.target_2_price || 0);
-
-  if (state.label === "HOLD") {
-    return;
-  }
-
-  const lineEndTime = Math.floor(Date.now() / 1000);
-
-  addLiveChartLevelSegment(
-    entry,
-    `${state.label} ENTRY ${formatLiveCandlePrice(entry)}`,
-    state.color,
-    lineEndTime
-  );
-
-  addLiveChartLevelSegment(
-    stopLoss,
-    `STOP LOSS ${formatLiveCandlePrice(stopLoss)}`,
-    "#ef4444",
-    lineEndTime
-  );
-
-  addLiveChartLevelSegment(
-    target1,
-    `TARGET 1 ${formatLiveCandlePrice(target1)}`,
-    "#facc15",
-    lineEndTime
-  );
-
-  addLiveChartLevelSegment(
-    target2,
-    `TARGET 2 ${formatLiveCandlePrice(target2)}`,
-    "#a78bfa",
-    lineEndTime
-  );
-}
-
-function addLiveChartLevelSegment(price, label, color, lastTime) {
-  const numericPrice = Number(price);
-
-  if (
-    !liveCandleSeries ||
-    !Number.isFinite(numericPrice) ||
-    numericPrice <= 0 ||
-    !Number.isFinite(lastTime)
-  ) {
-    return;
-  }
-
-  const priceLine = liveCandleSeries.createPriceLine({
-    price: numericPrice,
-    color,
-    lineWidth: 2,
-    lineStyle: LightweightCharts.LineStyle.Dashed,
-    axisLabelVisible: true,
-    title: label,
-  });
-
-  liveAiPriceLines.push(priceLine);
-}
 /* ===== Groq live-chart and news integration ===== */
 (() => {
   let groqNewsRequestInProgress = false;
-
-  function isGroqValidOverlay(data) {
-    const signal = String(data?.signal || "").toUpperCase();
-
-    return (
-      data?.overlay_allowed === true &&
-      data?.valid_position === true &&
-      (signal === "BUY" || signal === "SELL") &&
-      Number(data?.entry_price) > 0 &&
-      Number(data?.stop_loss_price) > 0 &&
-      Number(data?.target_1_price) > 0 &&
-      Number(data?.target_2_price) > 0
-    );
-  }
-
-  function renderGroqLiveOverlay(data) {
-    if (typeof clearLiveChartAiOverlay !== "function") return;
-
-    clearLiveChartAiOverlay();
-
-    if (!isGroqValidOverlay(data)) {
-      return;
-    }
-
-    if (typeof addLiveChartLevelSegment !== "function") {
-      return;
-    }
-
-    const signal = String(data.signal).toUpperCase();
-    const entry = Number(data.entry_price);
-    const stopLoss = Number(data.stop_loss_price);
-    const target1 = Number(data.target_1_price);
-    const target2 = Number(data.target_2_price);
-    const lineEndTime = Math.floor(Date.now() / 1000);
-
-    addLiveChartLevelSegment(
-      entry,
-      `GROQ • ${signal} — SETUP ACTIVE | ENTRY ${formatLiveCandlePrice(entry)}`,
-      signal === "BUY" ? "#22c55e" : "#ef4444",
-      lineEndTime
-    );
-
-    addLiveChartLevelSegment(
-      stopLoss,
-      `GROQ • STOP LOSS ${formatLiveCandlePrice(stopLoss)}`,
-      "#ef4444",
-      lineEndTime
-    );
-
-    addLiveChartLevelSegment(
-      target1,
-      `GROQ • TARGET 1 ${formatLiveCandlePrice(target1)}`,
-      "#facc15",
-      lineEndTime
-    );
-
-    addLiveChartLevelSegment(
-      target2,
-      `GROQ • TARGET 2 ${formatLiveCandlePrice(target2)}`,
-      "#a78bfa",
-      lineEndTime
-    );
-  }
 
   async function runGroqNews() {
     if (groqNewsRequestInProgress) return;
@@ -2445,21 +2252,8 @@ function addLiveChartLevelSegment(price, label, color, lastTime) {
     }
 
     if (!isValid) {
-      let label = `${name} • HOLD — NO CONFIRMED SETUP`;
-      let color = "#facc15";
-
-      if (signal.includes("BUY")) {
-        label = `${name} • BUY WATCH — WAIT FOR CONFIRMATION`;
-      } else if (signal.includes("SELL")) {
-        label = `${name} • SELL WATCH — WAIT FOR CONFIRMATION`;
-      } else if (signal.includes("INVALID")) {
-        label = `${name} • INVALIDATED — WAIT`;
-        color = "#ef4444";
-      } else if (signal.includes("NO TRADE")) {
-        label = `${name} • NO TRADE — WAIT`;
-      }
-
-      addForwardStatusLine(currentPrice, label, color);
+      const label = `${name} • HOLD — NO CONFIRMED SETUP`;
+      addForwardStatusLine(currentPrice, label, "#facc15");
       return;
     }
 
@@ -2580,27 +2374,6 @@ function addLiveChartLevelSegment(price, label, color, lastTime) {
         `${lock?.provider || "AI"} analysis active • technical refresh paused for ${lockLabel()}.`
       );
     }
-  }
-
-  const originalRefreshAllData =
-    typeof refreshAllData === "function" ? refreshAllData : null;
-
-  if (originalRefreshAllData) {
-    window.refreshAllData = async function () {
-      if (planLocked()) {
-        refreshLockUi();
-
-        try {
-          await refreshFastData();
-        } catch (error) {
-          console.error(error);
-        }
-
-        return;
-      }
-
-      return originalRefreshAllData();
-    };
   }
 
   const originalLoadAiAnalysis =
