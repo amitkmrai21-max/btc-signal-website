@@ -390,7 +390,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
     def rounded(value):
         return round_value(value) if value is not None else None
 
-    def build_filter_result(direction, signal, status, prior_high, prior_low, protected_level, break_level, retest_level, invalidation_level, conclusion, reason, quality, passed_filters, waiting_filters, failed_filters, break_event):
+    def build_filter_result(direction, signal, status, prior_high, prior_low, protected_level, break_level, retest_level, invalidation_level, conclusion, reason, quality, passed_filters, waiting_filters, failed_filters, break_event, confirmation_close=None):
         return {
             "timeframe": "15m",
             "current_price": rounded(current_price),
@@ -407,6 +407,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
             "break_status": status,
             "retest_level": rounded(retest_level),
             "invalidation_level": rounded(invalidation_level),
+            "confirmation_close": rounded(confirmation_close),
             "signal": signal,
             "direction": direction,
             "quality": quality,
@@ -459,6 +460,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
         protected_level, break_level, invalidation_level = active_high, bullish_break_level, active_low
         second_close_ok = any(closes[index] > active_high for index in range(break_index + 1, len(candles)))
         retest_seen = final_confirmation = failed_break = False
+        confirmation_close_price = None
         for index in range(break_index + 1, len(candles)):
             if closes[index] < active_high - retest_tolerance:
                 failed_break = True
@@ -466,6 +468,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
                 retest_seen = True
             if retest_seen and closes[index] > opens[index] and closes[index] > active_high and lows[index] <= active_high + retest_tolerance:
                 final_confirmation = True
+                confirmation_close_price = closes[index]
         momentum_ok, trend_1h_ok, trend_4h_ok = bullish_momentum_ok, bullish_1h_ok, not bullish_4h_blocked
     else:
         break_index = bearish_break_index
@@ -473,6 +476,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
         protected_level, break_level, invalidation_level = active_low, bearish_break_level, active_high
         second_close_ok = any(closes[index] < active_low for index in range(break_index + 1, len(candles)))
         retest_seen = final_confirmation = failed_break = False
+        confirmation_close_price = None
         for index in range(break_index + 1, len(candles)):
             if closes[index] > active_low + retest_tolerance:
                 failed_break = True
@@ -480,6 +484,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
                 retest_seen = True
             if retest_seen and closes[index] < opens[index] and closes[index] < active_low and highs[index] >= active_low - retest_tolerance:
                 final_confirmation = True
+                confirmation_close_price = closes[index]
         momentum_ok, trend_1h_ok, trend_4h_ok = bearish_momentum_ok, bearish_1h_ok, not bearish_4h_blocked
 
     passed, waiting, failed = ["0.30 ATR body-close break"], [], []
@@ -516,7 +521,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
         return build_filter_result(direction, watch_signal, "BREAK FAILED / BACK INSIDE", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{watch_signal} — break moved back inside the prior swing range. Do not enter; wait for a fresh break and retest.", "Price body-close accepted back inside the old swing structure.", "LOW", passed, waiting, failed, "Break failed; price returned inside")
     mandatory_filters_ok = volume_ok and second_close_ok and trend_1h_ok and trend_4h_ok and momentum_ok and retest_seen and final_confirmation
     if mandatory_filters_ok:
-        return build_filter_result(direction, final_signal, f"{final_signal} CONFIRMED — HIGH QUALITY", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{final_signal} — high-quality 15m break, volume, second close, trend alignment, retest, and confirmation candle are all present. Run Gemini AI Analysis now; proceed only if Gemini agrees.", "All mandatory fakeout filters passed.", "HIGH", passed, waiting, failed, "Bullish break + support retest hold" if direction == "BULLISH" else "Bearish break + resistance retest rejection")
+        return build_filter_result(direction, final_signal, f"{final_signal} CONFIRMED — HIGH QUALITY", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{final_signal} — high-quality 15m break, volume, second close, trend alignment, retest, and confirmation candle are all present. Run Gemini AI Analysis now; proceed only if Gemini agrees.", "All mandatory fakeout filters passed.", "HIGH", passed, waiting, failed, "Bullish break + support retest hold" if direction == "BULLISH" else "Bearish break + resistance retest rejection", confirmation_close_price)
     status = f"{direction} BREAK / FILTERS PENDING" if not failed else f"{direction} BREAK / FILTER FAILED"
     return build_filter_result(direction, watch_signal, status, active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{watch_signal} — a structure break exists, but final {final_signal} is blocked until every fakeout filter passes. Review failed/pending filters below.", "Break is not yet high quality enough for a final signal.", "MEDIUM" if len(failed) <= 1 else "LOW", passed, waiting, failed, "Bullish break awaiting filters" if direction == "BULLISH" else "Bearish break awaiting filters")
 
@@ -692,47 +697,127 @@ def calculate_key_level_distance(market_data):
     return result
 
 
+def compute_engine_candidate_levels(sfs, current_price):
+    """Deterministic candidate Entry/Stop/Target1/Target2 from the swing-failure-structure
+    result, per the ATR-based formula: Entry = confirmation candle close (fallback: current
+    price); Stop = invalidation level -/+ 0.25*ATR; Target1/2 = Entry +/- 1R/2R."""
+    direction = sfs.get("direction")
+    invalidation = sfs.get("invalidation_level")
+    atr_value = float(sfs.get("atr_14") or 0)
+    if direction not in ("BULLISH", "BEARISH") or invalidation is None or atr_value <= 0:
+        return None
+    entry = float(sfs.get("confirmation_close") or current_price or 0)
+    if entry <= 0:
+        return None
+    if direction == "BULLISH":
+        stop = invalidation - (0.25 * atr_value)
+        r = entry - stop
+        if r <= 0:
+            return None
+        target_1, target_2 = entry + r, entry + (2 * r)
+    else:
+        stop = invalidation + (0.25 * atr_value)
+        r = stop - entry
+        if r <= 0:
+            return None
+        target_1, target_2 = entry - r, entry - (2 * r)
+    return {
+        "entry_price": round_value(entry),
+        "stop_loss_price": round_value(stop),
+        "target_1_price": round_value(target_1),
+        "target_2_price": round_value(target_2),
+    }
+
+
 def technical_main_signal(market_data):
     timeframes = market_data["timeframes"]
     analysis_15m, analysis_1h, analysis_4h = timeframes["15m"], timeframes["1h"], timeframes["4h"]
+    # Informational per-timeframe badges only (used by the multi-timeframe intelligence
+    # panels) — the actual Engine decision below comes from the swing-failure-structure.
     signal_15m = timeframe_signal_from_indicators(analysis_15m)
     signal_1h = timeframe_signal_from_indicators(analysis_1h)
     signal_4h = timeframe_signal_from_indicators(analysis_4h)
-    buy_count = [signal_15m, signal_1h, signal_4h].count("BUY")
-    sell_count = [signal_15m, signal_1h, signal_4h].count("SELL")
-    if buy_count >= 2 and signal_4h != "SELL":
-        signal, risk = "BUY WATCH", "MEDIUM"
-        reason = "Technical fallback: higher-timeframe trend and momentum are mostly bullish. Wait for entry confirmation near the listed key levels."
-        setup_status, market_bias = "Technical bullish setup — confirmation required", "Bullish technical bias"
-    elif sell_count >= 2 and signal_4h != "BUY":
-        signal, risk = "SELL WATCH", "MEDIUM"
-        reason = "Technical fallback: higher-timeframe trend and momentum are mostly bearish. Wait for entry confirmation near the listed key levels."
-        setup_status, market_bias = "Technical bearish setup — confirmation required", "Bearish technical bias"
+
+    sfs = analysis_15m.get("swing_failure_structure") or {}
+    raw_signal = str(sfs.get("signal", "NO TRADE")).upper()
+    current_price = float(sfs.get("current_price") or analysis_15m.get("price") or 0)
+    direction = sfs.get("direction", "NEUTRAL")
+
+    # Legacy/internal labels normalize to the final user-facing set: BUY, SELL, HOLD.
+    # Only a fully-confirmed swing-failure-structure break (all mandatory filters passed)
+    # produces BUY/SELL; BUY WATCH / SELL WATCH / NO TRADE / failed or pending states all
+    # normalize to HOLD, keeping the detailed reason so the user knows why.
+    final_signal = raw_signal if raw_signal in ("BUY", "SELL") else "HOLD"
+
+    checklist = sfs.get("filter_checklist", {})
+    passed_filters = checklist.get("passed", [])
+    waiting_filters = checklist.get("waiting", [])
+    failed_filters = checklist.get("failed", [])
+    total_checks = len(passed_filters) + len(waiting_filters) + len(failed_filters)
+    base_confidence = round((len(passed_filters) / total_checks) * 100) if total_checks else 50
+    confidence = max(65, base_confidence) if final_signal in ("BUY", "SELL") else min(58, base_confidence)
+
+    risk = "MEDIUM" if final_signal in ("BUY", "SELL") or sfs.get("quality") == "MEDIUM" else "HIGH"
+    market_bias = (
+        "Bullish technical bias" if direction == "BULLISH"
+        else "Bearish technical bias" if direction == "BEARISH"
+        else "Neutral / mixed technical bias"
+    )
+    setup_status = sfs.get("break_status") or "Mixed technical setup — wait"
+    reason = sfs.get("final_conclusion") or sfs.get("reason") or "Technical fallback: waiting for a clearer confirmed structure."
+
+    levels = compute_engine_candidate_levels(sfs, current_price) if final_signal in ("BUY", "SELL") else None
+    if levels:
+        buy_ok = final_signal == "BUY" and levels["stop_loss_price"] < levels["entry_price"] < levels["target_1_price"] < levels["target_2_price"]
+        sell_ok = final_signal == "SELL" and levels["target_2_price"] < levels["target_1_price"] < levels["entry_price"] < levels["stop_loss_price"]
+        if not (buy_ok or sell_ok):
+            levels = None
+            final_signal = "HOLD"
+            reason = "Candidate levels failed validation ordering, so no confirmed setup was accepted."
+            setup_status = "Mixed technical setup — wait"
+            risk = "HIGH"
+
+    if levels:
+        entry_idea = f"Educational candidate entry: ${levels['entry_price']:,.2f}"
+        stop_loss_idea = f"Educational candidate invalidation: ${levels['stop_loss_price']:,.2f}"
+        target_1, target_2 = f"${levels['target_1_price']:,.2f}", f"${levels['target_2_price']:,.2f}"
+        confirmation_needed = "No extra confirmation required by the current engine rules."
+        entry_price, stop_loss_price = levels["entry_price"], levels["stop_loss_price"]
+        target_1_price, target_2_price = levels["target_1_price"], levels["target_2_price"]
     else:
-        signal, risk = "NO TRADE", "HIGH"
-        reason = "Technical fallback: 15m, 1h and 4h signals are mixed or lack enough alignment. Wait for clearer confirmation."
-        setup_status, market_bias = "Mixed technical setup — wait", "Neutral / mixed technical bias"
-    resistance = analysis_15m["support_resistance"]["resistance_20"]
-    support = analysis_15m["support_resistance"]["support_20"]
-    atr_value = analysis_15m["atr_14"]
-    if signal == "BUY WATCH":
-        confirmation = f"15m candle close above ${resistance:,.2f} with volume confirmation"
-        entry_idea = f"Educational idea: wait for bullish confirmation above ${resistance:,.2f}."
-        stop_loss = f"Educational invalidation: below ${support:,.2f} or the recent 15m support."
-        target_1, target_2 = f"${resistance + atr_value:,.2f}", f"${resistance + (atr_value * 2):,.2f}"
-    elif signal == "SELL WATCH":
-        confirmation = f"15m candle close below ${support:,.2f} with volume confirmation"
-        entry_idea = f"Educational idea: wait for bearish confirmation below ${support:,.2f}."
-        stop_loss = f"Educational invalidation: above ${resistance:,.2f} or the recent 15m resistance."
-        target_1, target_2 = f"${support - atr_value:,.2f}", f"${support - (atr_value * 2):,.2f}"
-    else:
-        confirmation = "Wait for 15m, 1h and 4h trend/momentum alignment."
-        entry_idea, stop_loss, target_1, target_2 = "No educational entry idea while technical signals are mixed.", "No trade is preferred until a clearer setup appears.", "--", "--"
+        entry_idea = "No educational entry idea while technical signals are mixed."
+        stop_loss_idea = "No trade is preferred until a clearer setup appears."
+        target_1, target_2 = "--", "--"
+        entry_price = stop_loss_price = target_1_price = target_2_price = 0
+        pending = waiting_filters + failed_filters
+        confirmation_needed = "; ".join(pending) if pending else "Wait for 15m, 1h and 4h trend/momentum alignment."
 
     def timeframe_data(analysis, signal_value):
         return {"signal": signal_value, "summary": f"{analysis['trend']} trend; RSI {analysis['rsi_14']}; {analysis['macd']['state']}.", "key_level": f"${analysis['support_resistance']['support_20']:,.2f} / ${analysis['support_resistance']['resistance_20']:,.2f}"}
 
-    return {"signal": signal, "confidence": None, "reason": reason, "risk": risk, "market_bias": market_bias, "setup_status": setup_status, "confirmation_needed": confirmation, "entry_idea": entry_idea, "stop_loss_idea": stop_loss, "target_1": target_1, "target_2": target_2, "timeframes": {"15m": timeframe_data(analysis_15m, signal_15m), "1h": timeframe_data(analysis_1h, signal_1h), "4h": timeframe_data(analysis_4h, signal_4h)}}
+    return {
+        "signal": final_signal,
+        "confidence": confidence,
+        "reason": reason,
+        "risk": risk,
+        "market_bias": market_bias,
+        "setup_status": setup_status,
+        "confirmation_needed": confirmation_needed,
+        "entry_idea": entry_idea,
+        "stop_loss_idea": stop_loss_idea,
+        "target_1": target_1,
+        "target_2": target_2,
+        "entry_price": entry_price,
+        "stop_loss_price": stop_loss_price,
+        "target_1_price": target_1_price,
+        "target_2_price": target_2_price,
+        # Engine candidate levels are shown in the card only — never plotted on the chart.
+        "overlay_allowed": False,
+        "provider": "ENGINE",
+        "manual_run_only": False,
+        "swing_failure_structure": sfs,
+        "timeframes": {"15m": timeframe_data(analysis_15m, signal_15m), "1h": timeframe_data(analysis_1h, signal_1h), "4h": timeframe_data(analysis_4h, signal_4h)},
+    }
 
 
 def build_setup_quality(market_data, technical_result):
@@ -878,24 +963,20 @@ DETERMINISTIC MULTI-TIMEFRAME TECHNICAL CLASSIFICATION:
 {json.dumps(technical_result, indent=2)}
 
 PRIMARY DECISION RULES:
-- Treat deterministic classification as the primary directional constraint.
-- If its signal is BUY WATCH, return only BUY WATCH or NO TRADE.
-- If its signal is SELL WATCH, return only SELL WATCH or NO TRADE.
-- If its signal is NO TRADE, return only NO TRADE.
-- Return STRONG BUY only when 4h, 1h and 15m are all bullish and supplied confirmation is already satisfied.
-- Return STRONG SELL only when 4h, 1h and 15m are all bearish and supplied confirmation is already satisfied.
+- The signal must be exactly BUY, SELL, or HOLD. No other label is allowed.
+- Treat the deterministic classification above as the primary directional constraint: if its signal is not a confirmed BUY or SELL, return HOLD.
 - Do not invent prices, volume readings, candle closes, news events or confirmations.
-- Use simple Hinglish. No profit promises or certainty.
+- Use simple Hinglish for reason and confirmation_needed. No profit promises, certainty language, or order-placement wording.
 - Always return numeric entry_price, stop_loss_price, target_1_price and target_2_price.
-- For BUY WATCH or STRONG BUY: stop must be below entry and targets above entry.
-- For SELL WATCH or STRONG SELL: stop must be above entry and targets below entry.
-- For NO TRADE: set all price fields to 0.
+- For BUY: stop_loss_price must be below entry_price, target_1_price and target_2_price above entry_price (stop_loss_price < entry_price < target_1_price < target_2_price).
+- For SELL: stop_loss_price must be above entry_price, target_1_price and target_2_price below entry_price (target_2_price < target_1_price < entry_price < stop_loss_price).
+- For HOLD: set all four price fields to 0.
 """
 
 
 def get_ai_response_schema():
     timeframe_schema = {"type": "object", "properties": {"signal": {"type": "string", "enum": ["BULLISH", "BEARISH", "NEUTRAL"]}, "summary": {"type": "string"}, "key_level": {"type": "string"}}, "required": ["signal", "summary", "key_level"]}
-    return {"type": "object", "properties": {"signal": {"type": "string", "enum": ["STRONG BUY", "BUY WATCH", "NO TRADE", "SELL WATCH", "STRONG SELL"]}, "confidence": {"type": "integer", "minimum": 0, "maximum": 100}, "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]}, "market_bias": {"type": "string"}, "setup_status": {"type": "string"}, "reason": {"type": "string"}, "confirmation_needed": {"type": "string"}, "entry_idea": {"type": "string"}, "stop_loss_idea": {"type": "string"}, "target_1": {"type": "string"}, "target_2": {"type": "string"}, "entry_price": {"type": "number"}, "stop_loss_price": {"type": "number"}, "target_1_price": {"type": "number"}, "target_2_price": {"type": "number"}, "timeframes": {"type": "object", "properties": {"15m": timeframe_schema, "1h": timeframe_schema, "4h": timeframe_schema}, "required": ["15m", "1h", "4h"]}}, "required": ["signal", "confidence", "risk", "market_bias", "setup_status", "reason", "confirmation_needed", "entry_idea", "stop_loss_idea", "target_1", "target_2", "entry_price", "stop_loss_price", "target_1_price", "target_2_price", "timeframes"]}
+    return {"type": "object", "properties": {"signal": {"type": "string", "enum": ["BUY", "SELL", "HOLD"]}, "confidence": {"type": "integer", "minimum": 0, "maximum": 100}, "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]}, "market_bias": {"type": "string"}, "setup_status": {"type": "string"}, "reason": {"type": "string"}, "confirmation_needed": {"type": "string"}, "entry_idea": {"type": "string"}, "stop_loss_idea": {"type": "string"}, "target_1": {"type": "string"}, "target_2": {"type": "string"}, "entry_price": {"type": "number"}, "stop_loss_price": {"type": "number"}, "target_1_price": {"type": "number"}, "target_2_price": {"type": "number"}, "timeframes": {"type": "object", "properties": {"15m": timeframe_schema, "1h": timeframe_schema, "4h": timeframe_schema}, "required": ["15m", "1h", "4h"]}}, "required": ["signal", "confidence", "risk", "market_bias", "setup_status", "reason", "confirmation_needed", "entry_idea", "stop_loss_idea", "target_1", "target_2", "entry_price", "stop_loss_price", "target_1_price", "target_2_price", "timeframes"]}
 
 
 def build_rrg_data(interval):
@@ -1037,9 +1118,11 @@ def parse_json_from_model(text):
     except json.JSONDecodeError as error:
         raise ValueError("AI returned invalid JSON.") from error
 
-def enforce_trade_levels(result, current_price):
+def enforce_trade_levels(result, current_price, provider_label="AI"):
     result = result if isinstance(result, dict) else {}
     signal = str(result.get("signal", "HOLD")).upper().strip()
+    # Normalize any legacy/invalid label (BUY WATCH, SELL WATCH, WATCH, NO TRADE,
+    # INVALIDATED, STRONG BUY, STRONG SELL, ...) to HOLD. Only BUY/SELL/HOLD survive.
     if signal not in {"BUY", "SELL", "HOLD"}:
         signal = "HOLD"
     try:
@@ -1066,7 +1149,7 @@ def enforce_trade_levels(result, current_price):
     buy_levels_valid = signal == "BUY" and all_levels_present and stop_loss_price < entry_price < target_1_price < target_2_price
     sell_levels_valid = signal == "SELL" and all_levels_present and target_2_price < target_1_price < entry_price < stop_loss_price
     if not (buy_levels_valid or sell_levels_valid):
-        return {**result, "signal": "HOLD", "confidence": confidence, "reason": "Groq returned incomplete or invalid levels, so no confirmed setup was accepted.", "entry_price": 0, "stop_loss_price": 0, "target_1_price": 0, "target_2_price": 0, "valid_position": False, "current_price": round_value(current_price)}
+        return {**result, "signal": "HOLD", "confidence": confidence, "reason": f"{provider_label} returned incomplete or invalid levels, so no confirmed setup was accepted.", "entry_price": 0, "stop_loss_price": 0, "target_1_price": 0, "target_2_price": 0, "valid_position": False, "current_price": round_value(current_price)}
     return {**result, "signal": signal, "confidence": confidence, "reason": reason, "entry_price": entry_price, "stop_loss_price": stop_loss_price, "target_1_price": target_1_price, "target_2_price": target_2_price, "valid_position": True, "current_price": round_value(current_price)}
 
 
@@ -1230,9 +1313,9 @@ def run_ai_signal():
                 raise HTTPException(status_code=503, detail="Gemini is temporarily busy or unavailable. Please try again in a few seconds.") from error
         if response is None or not getattr(response, "text", None):
             raise HTTPException(status_code=503, detail="Gemini did not return an analysis. Please try again shortly.")
-        result = json.loads(response.text)
+        result = enforce_trade_levels(json.loads(response.text), market_data["current_price_usdt"], provider_label="Gemini")
         now = time.time()
-        result.update({"market_data": market_data, "source": "Binance market data + Gemini technical analysis", "analysis_mode": "gemini_manual_technical_only", "cached": False, "market_data_cached": market_data_cached, "updated_at": int(now), "manual_run_only": True, "provider": "GEMINI", "disclaimer": "Educational technical market analysis only. No news is sent to Gemini. Not financial advice or an automated trading instruction."})
+        result.update({"market_data": market_data, "source": "Binance market data + Gemini technical analysis", "analysis_mode": "gemini_manual_technical_only", "cached": False, "market_data_cached": market_data_cached, "updated_at": int(now), "manual_run_only": True, "provider": "GEMINI", "overlay_allowed": result["valid_position"], "disclaimer": "Educational technical market analysis only. No news is sent to Gemini. Not financial advice or an automated trading instruction."})
         ai_signal_cache["data"], ai_signal_cache["updated_at"] = result, now
         return result
     except HTTPException:
@@ -1262,7 +1345,7 @@ def run_groq_live_analysis():
         ],
         )
         text = completion.choices[0].message.content if completion.choices else ""
-        result = enforce_trade_levels(parse_json_from_model(text), market_data["current_price_usdt"])
+        result = enforce_trade_levels(parse_json_from_model(text), market_data["current_price_usdt"], provider_label="Groq")
         now = time.time()
         result.update({"market_data": market_data, "source": "Binance market data + Groq live-chart backup analysis", "analysis_mode": "groq_manual_live_chart_only", "provider": "GROQ", "cached": False, "market_data_cached": market_data_cached, "updated_at": int(now), "manual_run_only": True, "overlay_allowed": result["valid_position"], "disclaimer": "Educational live-chart backup analysis only. Groq does not receive news in this endpoint. Not financial advice or an automated trading instruction."})
         groq_live_cache["data"], groq_live_cache["updated_at"] = result, now
@@ -1535,5 +1618,3 @@ app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 @app.get("/")
 def home():
     return FileResponse("frontend/index.html")
-
-
