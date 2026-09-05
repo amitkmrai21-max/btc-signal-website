@@ -971,6 +971,7 @@ PRIMARY DECISION RULES:
 - For BUY: stop_loss_price must be below entry_price, target_1_price and target_2_price above entry_price (stop_loss_price < entry_price < target_1_price < target_2_price).
 - For SELL: stop_loss_price must be above entry_price, target_1_price and target_2_price below entry_price (target_2_price < target_1_price < entry_price < stop_loss_price).
 - For HOLD: set all four price fields to 0.
+- confidence must reflect how clearly the supplied data supports your signal classification, not "confidence to trade". A HOLD from genuinely mixed or conflicting data can still be a meaningful confidence (for example 40-60); only use a low number like 0-20 when the data is truly sparse or contradictory.
 """
 
 
@@ -1165,6 +1166,7 @@ DETERMINISTIC TECHNICAL CLASSIFICATION:
 
 Return ONLY one valid JSON object with these keys: signal, confidence, risk, market_bias, setup_status, reason, confirmation_needed, entry_idea, stop_loss_idea, target_1, target_2, entry_price, stop_loss_price, target_1_price, target_2_price, timeframes.
 The signal must be exactly BUY, SELL, or HOLD. If the deterministic classification is not confirmed BUY or SELL, return HOLD. For HOLD all numeric price fields must be 0. BUY requires stop_loss_price < entry_price < target_1_price < target_2_price. SELL requires target_2_price < target_1_price < entry_price < stop_loss_price. Never promise profit or imply an order will be placed.
+confidence must reflect how clearly the supplied data supports your signal classification, not "confidence to trade". A HOLD from genuinely mixed or conflicting data can still be a meaningful confidence (for example 40-60); only use a low number like 0-20 when the data is truly sparse or contradictory.
 """
 
 def groq_news_prompt(news_items):
