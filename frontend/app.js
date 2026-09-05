@@ -1970,6 +1970,15 @@ function setupLiveCandlestickChart() {
       loadLiveCandlestickChart();
     }
   }, 15000);
+
+  if (!setupLiveCandlestickChart.visibilityBound) {
+    setupLiveCandlestickChart.visibilityBound = true;
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        loadLiveCandlestickChart();
+      }
+    });
+  }
 }
 function clearLiveChartAiOverlay() {
   if (liveCandleSeries && Array.isArray(liveAiPriceLines)) {
@@ -2140,12 +2149,24 @@ function clearLiveChartAiOverlay() {
     statusSeries = [];
   }
 
+  function setHoldBadge(text) {
+    const badge = document.getElementById("liveChartHoldBadge");
+    if (!badge) return;
+    if (!text) {
+      badge.hidden = true;
+      return;
+    }
+    badge.textContent = text;
+    badge.hidden = false;
+  }
+
   function clearAllAiChartMarks() {
     if (typeof clearLiveChartAiOverlay === "function") {
       clearLiveChartAiOverlay();
     }
 
     clearStatusSeries();
+    setHoldBadge(null);
   }
 
   function addForwardStatusLine(price, label, color) {
@@ -2171,8 +2192,9 @@ function clearLiveChartAiOverlay() {
       lineWidth: 2,
       lineStyle: LightweightCharts.LineStyle.Dashed,
       priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false
+      lastValueVisible: true,
+      crosshairMarkerVisible: false,
+      title: label
     });
 
     series.setData([
@@ -2181,22 +2203,6 @@ function clearLiveChartAiOverlay() {
     ]);
 
     statusSeries.push(series);
-
-    const priceLine = candleSeries.createPriceLine({
-      price: numericPrice,
-      color,
-      lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dotted,
-      axisLabelVisible: true,
-      title: label
-    });
-
-    if (
-      typeof liveAiPriceLines !== "undefined" &&
-      Array.isArray(liveAiPriceLines)
-    ) {
-      liveAiPriceLines.push(priceLine);
-    }
 
     chart.timeScale().applyOptions({
       rightOffset: 12
@@ -2244,15 +2250,15 @@ function clearLiveChartAiOverlay() {
     const signal = String(data?.signal || "HOLD").toUpperCase();
     const name = String(provider || "AI").toUpperCase();
     const isValid = validPosition(data);
-    const currentPrice = getCurrentPrice(data);
 
-    if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+    if (!isValid) {
+      setHoldBadge(`${name} HOLD`);
       return;
     }
 
-    if (!isValid) {
-      const label = `${name} • HOLD — NO CONFIRMED SETUP`;
-      addForwardStatusLine(currentPrice, label, "#facc15");
+    const currentPrice = getCurrentPrice(data);
+
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
       return;
     }
 
