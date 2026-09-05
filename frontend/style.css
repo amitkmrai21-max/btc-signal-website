@@ -3329,6 +3329,27 @@ body[data-accent="green"] .settings-choice.active {
   width: 100% !important;
 }
 
+.live-chart-hold-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  padding: 7px 12px;
+  border: 1px solid rgba(250, 204, 21, 0.75);
+  border-radius: 8px;
+  color: #fef3c7;
+  background: rgba(120, 53, 15, 0.82);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+
 .live-chart-bottom-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
