@@ -27,7 +27,7 @@ app.add_middleware(
 
 BINANCE_BASE_URL = "https://data-api.binance.vision"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 AI_NEWS_LIMIT = 15
 RSS_NEWS_TIMEOUT_SECONDS = 12
 TECHNICAL_CACHE_SECONDS = 30
@@ -1169,25 +1169,6 @@ The signal must be exactly BUY, SELL, or HOLD. If the deterministic classificati
 confidence must reflect how clearly the supplied data supports your signal classification, not "confidence to trade". A HOLD from genuinely mixed or conflicting data can still be a meaningful confidence (for example 40-60); only use a low number like 0-20 when the data is truly sparse or contradictory.
 """
 
-def groq_news_prompt(news_items):
-    compact_items = [
-        {"headline": item.get("headline", ""), "source": item.get("source", ""), "published_time": item.get("published_time", ""), "summary": item.get("summary", "")}
-        for item in news_items[:AI_NEWS_LIMIT]
-    ]
-    return f"""
-Analyze the RSS news items below only. This is news context, not trading advice. Do not provide trading signals, entries, stop losses, targets, or price predictions.
-
-NEWS ITEMS:
-{json.dumps(compact_items, ensure_ascii=False)}
-
-Return one valid JSON object only with these keys:
-{{"overall_sentiment":"NEUTRAL","overview":"Short Hinglish overview.","items":[]}}
-
-For every supplied news item, include one object in items with these keys:
-headline, source, market_impact, market_relevance, headline_hi, summary_hi.
-Sentiment values must be BULLISH, BEARISH, NEUTRAL, or UNCLEAR. Keep same item count and order. Preserve names, tickers, numbers, dates, and facts. No Markdown or code fences.
-"""
-
 def cooldown_remaining(cache, cooldown_seconds):
     elapsed = time.time() - cache["updated_at"]
     return max(0, int(math.ceil(cooldown_seconds - elapsed)))
@@ -1297,18 +1278,21 @@ def run_ai_signal():
         technical_result = technical_main_signal(market_data)
         client = genai.Client(api_key=api_key)
         response = None
-        for attempt, delay_seconds in enumerate((0, 3), start=1):
+        fallback_model = "gemini-3.8-flash" if GEMINI_MODEL != "gemini-3.8-flash" else "gemini-3.7-flash"
+        attempts = [(GEMINI_MODEL, 0), (GEMINI_MODEL, 4), (GEMINI_MODEL, 8), (fallback_model, 2)]
+        total_attempts = len(attempts)
+        for attempt, (model_name, delay_seconds) in enumerate(attempts, start=1):
             if delay_seconds:
                 time.sleep(delay_seconds)
             try:
-                response = client.models.generate_content(model=GEMINI_MODEL, contents=build_ai_prompt(market_data, technical_result), config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=get_ai_response_schema()))
+                response = client.models.generate_content(model=model_name, contents=build_ai_prompt(market_data, technical_result), config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=get_ai_response_schema()))
                 if not response or not getattr(response, "text", None):
                     raise ValueError("Gemini returned an empty response.")
                 break
             except Exception as error:
                 error_text = str(error)
-                print(f"Gemini attempt {attempt}/2 failed: {error_text}")
-                if ("503" in error_text or "UNAVAILABLE" in error_text or "high demand" in error_text.lower()) and attempt < 2:
+                print(f"Gemini attempt {attempt}/{total_attempts} ({model_name}) failed: {error_text}")
+                if ("503" in error_text or "UNAVAILABLE" in error_text or "high demand" in error_text.lower()) and attempt < total_attempts:
                     continue
                 if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
                     raise HTTPException(status_code=429, detail="Gemini quota is temporarily exhausted. Please wait and try again later.") from error
@@ -1422,7 +1406,6 @@ Rules:
             model=GROQ_MODEL,
             temperature=0.1,
             max_tokens=350,
-            response_format={"type": "json_object"},
             messages=[
                 {
                     "role": "system",
