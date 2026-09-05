@@ -1226,7 +1226,7 @@ def btc_candles(interval: str = "15m", limit: int = 200):
     allowed_intervals = {"1m", "5m", "15m", "1h", "4h", "1d", "1w"}
     if interval not in allowed_intervals:
         raise HTTPException(status_code=400, detail="Unsupported candle interval.")
-    safe_limit = max(20, min(limit, 500))
+    safe_limit = max(20, min(limit, 1000))
     try:
         raw_candles = get_btc_klines(interval=interval, limit=safe_limit)
         candles = [{"time": int(int(candle[0]) / 1000), "open": float(candle[1]), "high": float(candle[2]), "low": float(candle[3]), "close": float(candle[4]), "volume": float(candle[5])} for candle in raw_candles]
