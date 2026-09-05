@@ -19,13 +19,13 @@ let activeDragMoved = false;
 let activeDragStart = null;
 
 const liveChartSettings = {
-  "1m": { limit: 180 },
-  "5m": { limit: 180 },
-  "15m": { limit: 200 },
-  "1h": { limit: 200 },
-  "4h": { limit: 200 },
-  "1d": { limit: 200 },
-  "1w": { limit: 200 }
+  "1m": { limit: 500 },
+  "5m": { limit: 500 },
+  "15m": { limit: 1000 },
+  "1h": { limit: 1000 },
+  "4h": { limit: 1000 },
+  "1d": { limit: 500 },
+  "1w": { limit: 300 }
 };
 
 let btcChart;
