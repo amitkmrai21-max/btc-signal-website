@@ -26,7 +26,7 @@ app.add_middleware(
 )
 
 BINANCE_BASE_URL = "https://data-api.binance.vision"
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 AI_NEWS_LIMIT = 15
 RSS_NEWS_TIMEOUT_SECONDS = 12
