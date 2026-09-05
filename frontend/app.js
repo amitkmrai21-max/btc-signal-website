@@ -2037,6 +2037,165 @@ function setupChartDrawingTools() {
   });
 }
 
+/* ===== Drag-to-move for existing drawings =====
+   Whole-shape dragging only (the line/rectangle keeps its shape and shifts as one
+   piece) — not per-endpoint resizing. Hit-testing works in pixel space: horizontal/
+   vertical lines check distance to the line's single axis, trend lines check
+   point-to-segment distance, rectangles check "point is inside the box". While a
+   drawing is being dragged, the chart's own pan/zoom is temporarily disabled so a
+   drag never turns into a chart pan by accident. */
+let activeDragDrawing = null;
+let activeDragStart = null;
+
+function distanceToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSq = dx * dx + dy * dy;
+  if (lengthSq === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / lengthSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+function getContainerPoint(event) {
+  const container = document.getElementById("liveCandlestickChart");
+  if (!container) return null;
+  const rect = container.getBoundingClientRect();
+  const source = event.touches && event.touches[0] ? event.touches[0] : event;
+  return { x: source.clientX - rect.left, y: source.clientY - rect.top };
+}
+
+function findDrawingAtPoint(x, y) {
+  if (!liveCandleChart || !liveCandleSeries) return null;
+  const timeScale = liveCandleChart.timeScale();
+  const HIT_PX = 8;
+
+  for (let i = userChartDrawings.length - 1; i >= 0; i -= 1) {
+    const drawing = userChartDrawings[i];
+
+    if (drawing.type === "horizontal") {
+      const lineY = liveCandleSeries.priceToCoordinate(drawing.price);
+      if (lineY !== null && Math.abs(lineY - y) <= HIT_PX) return drawing;
+    } else if (drawing.type === "vertical") {
+      const lineX = timeScale.timeToCoordinate(drawing.time);
+      if (lineX !== null && Math.abs(lineX - x) <= HIT_PX) return drawing;
+    } else if (drawing.type === "trend") {
+      const x1 = timeScale.timeToCoordinate(drawing.t1);
+      const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
+      const x2 = timeScale.timeToCoordinate(drawing.t2);
+      const y2 = liveCandleSeries.priceToCoordinate(drawing.p2);
+      if (x1 !== null && y1 !== null && x2 !== null && y2 !== null && distanceToSegment(x, y, x1, y1, x2, y2) <= HIT_PX) {
+        return drawing;
+      }
+    } else if (drawing.type === "rectangle") {
+      const x1 = timeScale.timeToCoordinate(drawing.t1);
+      const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
+      const x2 = timeScale.timeToCoordinate(drawing.t2);
+      const y2 = liveCandleSeries.priceToCoordinate(drawing.p2);
+      if (x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
+        const withinX = x >= Math.min(x1, x2) && x <= Math.max(x1, x2);
+        const withinY = y >= Math.min(y1, y2) && y <= Math.max(y1, y2);
+        if (withinX && withinY) return drawing;
+      }
+    }
+  }
+  return null;
+}
+
+function handleDrawingMouseDown(event) {
+  if (chartDrawingMode !== "cursor") return;
+  const point = getContainerPoint(event);
+  if (!point) return;
+  const drawing = findDrawingAtPoint(point.x, point.y);
+  if (!drawing) return;
+
+  event.preventDefault();
+  activeDragDrawing = drawing;
+  activeDragStart = { x: point.x, y: point.y, original: { ...drawing } };
+  liveCandleChart?.applyOptions({ handleScroll: false, handleScale: false });
+
+  const container = document.getElementById("liveCandlestickChart");
+  if (container) container.style.cursor = "grabbing";
+}
+
+function handleDrawingMouseMove(event) {
+  if (!activeDragDrawing || !liveCandleChart || !liveCandleSeries) return;
+  const point = getContainerPoint(event);
+  if (!point) return;
+
+  const timeScale = liveCandleChart.timeScale();
+  const drawing = activeDragDrawing;
+  const original = activeDragStart.original;
+  const dX = point.x - activeDragStart.x;
+  const dY = point.y - activeDragStart.y;
+
+  if (drawing.type === "horizontal") {
+    const newPrice = liveCandleSeries.coordinateToPrice(point.y);
+    if (Number.isFinite(newPrice)) {
+      drawing.price = newPrice;
+      drawing.ref?.applyOptions({ price: newPrice });
+    }
+    return;
+  }
+
+  if (drawing.type === "vertical") {
+    const newTime = timeScale.coordinateToTime(point.x);
+    if (newTime !== null) drawing.time = newTime;
+    return;
+  }
+
+  // Trend line and rectangle: shift both stored points by the same pixel delta,
+  // then convert back to time/price so the shape keeps its size while moving.
+  const origX1 = timeScale.timeToCoordinate(original.t1);
+  const origY1 = liveCandleSeries.priceToCoordinate(original.p1);
+  const origX2 = timeScale.timeToCoordinate(original.t2);
+  const origY2 = liveCandleSeries.priceToCoordinate(original.p2);
+  if (origX1 === null || origY1 === null || origX2 === null || origY2 === null) return;
+
+  const newT1 = timeScale.coordinateToTime(origX1 + dX);
+  const newP1 = liveCandleSeries.coordinateToPrice(origY1 + dY);
+  const newT2 = timeScale.coordinateToTime(origX2 + dX);
+  const newP2 = liveCandleSeries.coordinateToPrice(origY2 + dY);
+  if (newT1 === null || newT2 === null || !Number.isFinite(newP1) || !Number.isFinite(newP2) || newT1 === newT2) return;
+
+  drawing.t1 = newT1;
+  drawing.p1 = newP1;
+  drawing.t2 = newT2;
+  drawing.p2 = newP2;
+
+  if (drawing.type === "trend" && drawing.ref) {
+    const ordered = newT1 <= newT2
+      ? [{ time: newT1, value: newP1 }, { time: newT2, value: newP2 }]
+      : [{ time: newT2, value: newP2 }, { time: newT1, value: newP1 }];
+    drawing.ref.setData(ordered);
+  }
+  // Rectangles re-read t1/p1/t2/p2 every animation frame via repositionDrawingOverlays,
+  // so updating the stored values above is all that's needed for them to follow the drag.
+}
+
+function handleDrawingMouseUp() {
+  if (!activeDragDrawing) return;
+  activeDragDrawing = null;
+  activeDragStart = null;
+  liveCandleChart?.applyOptions({ handleScroll: true, handleScale: true });
+
+  const container = document.getElementById("liveCandlestickChart");
+  if (container) container.style.cursor = "";
+
+  saveUserDrawings();
+}
+
+function setupDrawingDrag() {
+  const container = document.getElementById("liveCandlestickChart");
+  if (!container) return;
+  container.addEventListener("mousedown", handleDrawingMouseDown);
+  container.addEventListener("touchstart", handleDrawingMouseDown, { passive: false });
+  window.addEventListener("mousemove", handleDrawingMouseMove);
+  window.addEventListener("touchmove", handleDrawingMouseMove, { passive: false });
+  window.addEventListener("mouseup", handleDrawingMouseUp);
+  window.addEventListener("touchend", handleDrawingMouseUp);
+}
+
 function createLiveCandlestickChart() {
   const container = document.getElementById("liveCandlestickChart");
 
@@ -2086,6 +2245,7 @@ function createLiveCandlestickChart() {
 });
 
   liveCandleChart.subscribeClick(handleChartDrawingClick);
+  setupDrawingDrag();
 
   new ResizeObserver(() => {
     if (!liveCandleChart || !container.clientWidth) return;
