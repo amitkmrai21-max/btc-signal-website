@@ -1313,7 +1313,7 @@ def run_ai_signal():
                 raise HTTPException(status_code=503, detail="Gemini is temporarily busy or unavailable. Please try again in a few seconds.") from error
         if response is None or not getattr(response, "text", None):
             raise HTTPException(status_code=503, detail="Gemini did not return an analysis. Please try again shortly.")
-        result = enforce_trade_levels(json.loads(response.text), market_data["current_price_usdt"], provider_label="Gemini")
+        result = enforce_trade_levels(parse_json_from_model(response.text), market_data["current_price_usdt"], provider_label="Gemini")
         now = time.time()
         result.update({"market_data": market_data, "source": "Binance market data + Gemini technical analysis", "analysis_mode": "gemini_manual_technical_only", "cached": False, "market_data_cached": market_data_cached, "updated_at": int(now), "manual_run_only": True, "provider": "GEMINI", "overlay_allowed": result["valid_position"], "disclaimer": "Educational technical market analysis only. No news is sent to Gemini. Not financial advice or an automated trading instruction."})
         ai_signal_cache["data"], ai_signal_cache["updated_at"] = result, now
