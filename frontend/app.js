@@ -1279,7 +1279,7 @@ function renderGeminiNews(aiData = null) {
 
   overview.textContent =
     newsData?.overview ||
-    "News will update only when you run Gemini AI Analysis.";
+    "News will update only when you run Refresh News with Groq.";
 
   bias.textContent = `News bias: ${marketBias}`;
   bias.className = `news-bias-badge ${getNewsImpactClass(marketBias)}`;
@@ -1290,8 +1290,8 @@ function renderGeminiNews(aiData = null) {
         month: "short",
         hour: "2-digit",
         minute: "2-digit"
-      })} • Updated only with manual Gemini analysis`
-    : "News updates only when you run Gemini AI Analysis.";
+      })} • Updated only with manual Groq News refresh`
+    : "News updates only when you run Refresh News with Groq.";
 
   container.innerHTML = "";
 
