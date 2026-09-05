@@ -1800,6 +1800,243 @@ function setLiveChartStatus(message, type = "connecting") {
   }
 }
 
+/* ===== Chart drawing tools (cursor, horizontal line, vertical line, trend line, rectangle) =====
+   Horizontal lines use candleSeries.createPriceLine() (a native full-width axis reference,
+   which is exactly right for a horizontal line). Trend lines use a 2-point LineSeries (a
+   native chart primitive, same pattern as the AI overlay lines). Vertical lines and
+   rectangles don't map onto a (time, value) series, so they're drawn as SVG shapes in an
+   overlay layer on top of the chart and repositioned every animation frame (only while at
+   least one such shape exists) by converting their stored time/price back to pixels via
+   the chart's own timeToCoordinate/priceToCoordinate — this keeps them lined up correctly
+   through panning, zooming, and resizing. */
+const CHART_DRAWINGS_STORAGE_KEY = "btcChartDrawingsV1";
+const DRAWING_COLOR = "#38bdf8";
+let chartDrawingMode = "cursor";
+let chartDrawingPendingPoint = null;
+let userChartDrawings = [];
+let drawingRepositionFrame = null;
+
+function getDrawingOverlaySvg() {
+  return document.getElementById("liveChartDrawingOverlay");
+}
+
+function setDrawingToolHint(text) {
+  const hint = document.getElementById("drawingToolHint");
+  if (hint) hint.textContent = text || "";
+}
+
+function setChartDrawingMode(mode) {
+  chartDrawingMode = mode;
+  chartDrawingPendingPoint = null;
+
+  document.querySelectorAll(".drawing-tool-btn[data-draw-tool]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.drawTool === mode);
+  });
+
+  const hints = {
+    cursor: "",
+    horizontal: "Click the chart to place a horizontal line.",
+    vertical: "Click the chart to place a vertical line.",
+    trend: "Click the start point, then the end point.",
+    rectangle: "Click one corner, then the opposite corner."
+  };
+
+  setDrawingToolHint(hints[mode] || "");
+}
+
+function saveUserDrawings() {
+  try {
+    const serializable = userChartDrawings.map(({ id, type, color, price, time, t1, p1, t2, p2 }) => ({ id, type, color, price, time, t1, p1, t2, p2 }));
+    localStorage.setItem(CHART_DRAWINGS_STORAGE_KEY, JSON.stringify(serializable));
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function scheduleDrawingReposition() {
+  if (drawingRepositionFrame) return;
+  drawingRepositionFrame = window.requestAnimationFrame(drawingRepositionLoop);
+}
+
+function drawingRepositionLoop() {
+  repositionDrawingOverlays();
+  const hasOverlayDrawings = userChartDrawings.some((drawing) => drawing.type === "vertical" || drawing.type === "rectangle");
+  drawingRepositionFrame = hasOverlayDrawings ? window.requestAnimationFrame(drawingRepositionLoop) : null;
+}
+
+function repositionDrawingOverlays() {
+  if (!liveCandleChart || !liveCandleSeries) return;
+  const container = document.getElementById("liveCandlestickChart");
+  const height = container ? container.clientHeight : 520;
+
+  userChartDrawings.forEach((drawing) => {
+    if (drawing.type === "vertical" && drawing.el) {
+      const x = liveCandleChart.timeScale().timeToCoordinate(drawing.time);
+      if (x === null) {
+        drawing.el.setAttribute("opacity", "0");
+        return;
+      }
+      drawing.el.setAttribute("opacity", "1");
+      drawing.el.setAttribute("x1", x);
+      drawing.el.setAttribute("x2", x);
+      drawing.el.setAttribute("y1", 0);
+      drawing.el.setAttribute("y2", height);
+    } else if (drawing.type === "rectangle" && drawing.el) {
+      const x1 = liveCandleChart.timeScale().timeToCoordinate(drawing.t1);
+      const x2 = liveCandleChart.timeScale().timeToCoordinate(drawing.t2);
+      const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
+      const y2 = liveCandleSeries.priceToCoordinate(drawing.p2);
+      if (x1 === null || x2 === null || y1 === null || y2 === null) {
+        drawing.el.setAttribute("opacity", "0");
+        return;
+      }
+      drawing.el.setAttribute("opacity", "1");
+      drawing.el.setAttribute("x", Math.min(x1, x2));
+      drawing.el.setAttribute("y", Math.min(y1, y2));
+      drawing.el.setAttribute("width", Math.max(1, Math.abs(x2 - x1)));
+      drawing.el.setAttribute("height", Math.max(1, Math.abs(y2 - y1)));
+    }
+  });
+}
+
+function addDrawing(type, points, color = DRAWING_COLOR, persist = true) {
+  if (!liveCandleChart || !liveCandleSeries || !window.LightweightCharts) return null;
+
+  const id = `d${Date.now()}${Math.random().toString(16).slice(2, 6)}`;
+  const drawing = { id, type, color, ...points };
+
+  if (type === "horizontal") {
+    const numericPrice = Number(points.price);
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) return null;
+    drawing.ref = liveCandleSeries.createPriceLine({
+      price: numericPrice,
+      color,
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Solid,
+      axisLabelVisible: true,
+      title: "H-Line"
+    });
+  } else if (type === "trend") {
+    if (points.t1 === points.t2) return null;
+    const series = liveCandleChart.addLineSeries({
+      color,
+      lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Solid,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false
+    });
+    const orderedPoints = points.t1 <= points.t2
+      ? [{ time: points.t1, value: points.p1 }, { time: points.t2, value: points.p2 }]
+      : [{ time: points.t2, value: points.p2 }, { time: points.t1, value: points.p1 }];
+    series.setData(orderedPoints);
+    drawing.ref = series;
+  } else if (type === "vertical") {
+    const svg = getDrawingOverlaySvg();
+    if (!svg) return null;
+    const el = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    el.setAttribute("stroke", color);
+    el.setAttribute("stroke-width", "1.5");
+    el.setAttribute("stroke-dasharray", "4,3");
+    svg.appendChild(el);
+    drawing.el = el;
+  } else if (type === "rectangle") {
+    const svg = getDrawingOverlaySvg();
+    if (!svg) return null;
+    const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    el.setAttribute("fill", `${color}26`);
+    el.setAttribute("stroke", color);
+    el.setAttribute("stroke-width", "1.5");
+    svg.appendChild(el);
+    drawing.el = el;
+  } else {
+    return null;
+  }
+
+  userChartDrawings.push(drawing);
+  if (persist) saveUserDrawings();
+  scheduleDrawingReposition();
+  return drawing;
+}
+
+function clearAllUserDrawings() {
+  userChartDrawings.forEach((drawing) => {
+    if (drawing.ref) {
+      try {
+        if (drawing.type === "horizontal") liveCandleSeries?.removePriceLine(drawing.ref);
+        else liveCandleChart?.removeSeries(drawing.ref);
+      } catch (error) {
+        console.warn("Could not remove drawing.", error);
+      }
+    }
+    if (drawing.el) drawing.el.remove();
+  });
+  userChartDrawings = [];
+  saveUserDrawings();
+}
+
+function loadSavedDrawings() {
+  try {
+    const saved = localStorage.getItem(CHART_DRAWINGS_STORAGE_KEY);
+    if (!saved) return;
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) return;
+    parsed.forEach((item) => {
+      if (!item || !item.type) return;
+      addDrawing(item.type, {
+        price: item.price, time: item.time,
+        t1: item.t1, p1: item.p1, t2: item.t2, p2: item.p2
+      }, item.color || DRAWING_COLOR, false);
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function handleChartDrawingClick(param) {
+  if (chartDrawingMode === "cursor") return;
+  if (!param || !param.time || !param.point || !liveCandleSeries) return;
+
+  const price = liveCandleSeries.coordinateToPrice(param.point.y);
+  if (!Number.isFinite(price)) return;
+  const time = param.time;
+
+  if (chartDrawingMode === "horizontal") {
+    addDrawing("horizontal", { price });
+    setChartDrawingMode("cursor");
+    return;
+  }
+
+  if (chartDrawingMode === "vertical") {
+    addDrawing("vertical", { time });
+    setChartDrawingMode("cursor");
+    return;
+  }
+
+  if (chartDrawingMode === "trend" || chartDrawingMode === "rectangle") {
+    if (!chartDrawingPendingPoint) {
+      chartDrawingPendingPoint = { time, price };
+      setDrawingToolHint("Now click the second point.");
+      return;
+    }
+    const first = chartDrawingPendingPoint;
+    addDrawing(chartDrawingMode, { t1: first.time, p1: first.price, t2: time, p2: price });
+    setChartDrawingMode("cursor");
+  }
+}
+
+function setupChartDrawingTools() {
+  document.querySelectorAll(".drawing-tool-btn[data-draw-tool]").forEach((btn) => {
+    btn.addEventListener("click", () => setChartDrawingMode(btn.dataset.drawTool));
+  });
+
+  document.getElementById("clearDrawingsBtn")?.addEventListener("click", () => {
+    if (userChartDrawings.length && window.confirm("Clear all drawings from the chart?")) {
+      clearAllUserDrawings();
+    }
+  });
+}
+
 function createLiveCandlestickChart() {
   const container = document.getElementById("liveCandlestickChart");
 
@@ -1848,6 +2085,8 @@ function createLiveCandlestickChart() {
   wickDownColor: "#fca5a5"
 });
 
+  liveCandleChart.subscribeClick(handleChartDrawingClick);
+
   new ResizeObserver(() => {
     if (!liveCandleChart || !container.clientWidth) return;
 
@@ -1855,6 +2094,8 @@ function createLiveCandlestickChart() {
       width: container.clientWidth,
       height: window.innerWidth <= 720 ? 360 : 520
     });
+
+    scheduleDrawingReposition();
   }).observe(container);
 
   return true;
@@ -1960,6 +2201,8 @@ function setupLiveCandlestickChart() {
     });
 
   loadLiveCandlestickChart();
+  setupChartDrawingTools();
+  loadSavedDrawings();
 
   if (liveChartRefreshTimer) {
     window.clearInterval(liveChartRefreshTimer);
