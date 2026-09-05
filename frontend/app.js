@@ -1834,7 +1834,7 @@ function setChartDrawingMode(mode) {
   });
 
   const hints = {
-    cursor: "",
+    cursor: "Click a drawing to delete it. Drag it to move, or drag an endpoint dot to resize.",
     horizontal: "Click the chart to place a horizontal line.",
     vertical: "Click the chart to place a vertical line.",
     trend: "Click the start point, then the end point.",
@@ -1860,7 +1860,7 @@ function scheduleDrawingReposition() {
 
 function drawingRepositionLoop() {
   repositionDrawingOverlays();
-  const hasOverlayDrawings = userChartDrawings.some((drawing) => drawing.type === "vertical" || drawing.type === "rectangle");
+  const hasOverlayDrawings = userChartDrawings.some((drawing) => drawing.type === "vertical" || drawing.type === "rectangle" || drawing.type === "trend");
   drawingRepositionFrame = hasOverlayDrawings ? window.requestAnimationFrame(drawingRepositionLoop) : null;
 }
 
@@ -1895,8 +1895,50 @@ function repositionDrawingOverlays() {
       drawing.el.setAttribute("y", Math.min(y1, y2));
       drawing.el.setAttribute("width", Math.max(1, Math.abs(x2 - x1)));
       drawing.el.setAttribute("height", Math.max(1, Math.abs(y2 - y1)));
+      positionHandlePair(drawing, x1, y1, x2, y2);
+    } else if (drawing.type === "trend" && drawing.handleEls) {
+      const x1 = liveCandleChart.timeScale().timeToCoordinate(drawing.t1);
+      const x2 = liveCandleChart.timeScale().timeToCoordinate(drawing.t2);
+      const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
+      const y2 = liveCandleSeries.priceToCoordinate(drawing.p2);
+      positionHandlePair(drawing, x1, y1, x2, y2);
     }
   });
+}
+
+function positionHandlePair(drawing, x1, y1, x2, y2) {
+  const [handle1, handle2] = drawing.handleEls || [];
+  if (!handle1 || !handle2) return;
+  if (x1 === null || y1 === null) {
+    handle1.setAttribute("opacity", "0");
+  } else {
+    handle1.setAttribute("opacity", "1");
+    handle1.setAttribute("cx", x1);
+    handle1.setAttribute("cy", y1);
+  }
+  if (x2 === null || y2 === null) {
+    handle2.setAttribute("opacity", "0");
+  } else {
+    handle2.setAttribute("opacity", "1");
+    handle2.setAttribute("cx", x2);
+    handle2.setAttribute("cy", y2);
+  }
+}
+
+function createDrawingHandlePair(color) {
+  const svg = getDrawingOverlaySvg();
+  if (!svg) return null;
+  const makeHandle = () => {
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("r", "5");
+    circle.setAttribute("fill", "#07111f");
+    circle.setAttribute("stroke", color);
+    circle.setAttribute("stroke-width", "2");
+    circle.setAttribute("class", "drawing-handle");
+    svg.appendChild(circle);
+    return circle;
+  };
+  return [makeHandle(), makeHandle()];
 }
 
 function addDrawing(type, points, color = DRAWING_COLOR, persist = true) {
@@ -1931,6 +1973,7 @@ function addDrawing(type, points, color = DRAWING_COLOR, persist = true) {
       : [{ time: points.t2, value: points.p2 }, { time: points.t1, value: points.p1 }];
     series.setData(orderedPoints);
     drawing.ref = series;
+    drawing.handleEls = createDrawingHandlePair(color);
   } else if (type === "vertical") {
     const svg = getDrawingOverlaySvg();
     if (!svg) return null;
@@ -1949,6 +1992,7 @@ function addDrawing(type, points, color = DRAWING_COLOR, persist = true) {
     el.setAttribute("stroke-width", "1.5");
     svg.appendChild(el);
     drawing.el = el;
+    drawing.handleEls = createDrawingHandlePair(color);
   } else {
     return null;
   }
@@ -1959,18 +2003,29 @@ function addDrawing(type, points, color = DRAWING_COLOR, persist = true) {
   return drawing;
 }
 
-function clearAllUserDrawings() {
-  userChartDrawings.forEach((drawing) => {
-    if (drawing.ref) {
-      try {
-        if (drawing.type === "horizontal") liveCandleSeries?.removePriceLine(drawing.ref);
-        else liveCandleChart?.removeSeries(drawing.ref);
-      } catch (error) {
-        console.warn("Could not remove drawing.", error);
-      }
+function removeDrawingElements(drawing) {
+  if (drawing.ref) {
+    try {
+      if (drawing.type === "horizontal") liveCandleSeries?.removePriceLine(drawing.ref);
+      else liveCandleChart?.removeSeries(drawing.ref);
+    } catch (error) {
+      console.warn("Could not remove drawing.", error);
     }
-    if (drawing.el) drawing.el.remove();
-  });
+  }
+  if (drawing.el) drawing.el.remove();
+  if (Array.isArray(drawing.handleEls)) drawing.handleEls.forEach((handle) => handle.remove());
+}
+
+function deleteDrawing(drawing) {
+  const index = userChartDrawings.indexOf(drawing);
+  if (index === -1) return;
+  removeDrawingElements(drawing);
+  userChartDrawings.splice(index, 1);
+  saveUserDrawings();
+}
+
+function clearAllUserDrawings() {
+  userChartDrawings.forEach(removeDrawingElements);
   userChartDrawings = [];
   saveUserDrawings();
 }
@@ -2035,6 +2090,8 @@ function setupChartDrawingTools() {
       clearAllUserDrawings();
     }
   });
+
+  setChartDrawingMode("cursor");
 }
 
 /* ===== Drag-to-move for existing drawings =====
@@ -2045,6 +2102,8 @@ function setupChartDrawingTools() {
    drawing is being dragged, the chart's own pan/zoom is temporarily disabled so a
    drag never turns into a chart pan by accident. */
 let activeDragDrawing = null;
+let activeDragHandle = null;
+let activeDragMoved = false;
 let activeDragStart = null;
 
 function distanceToSegment(px, py, x1, y1, x2, y2) {
@@ -2065,37 +2124,41 @@ function getContainerPoint(event) {
   return { x: source.clientX - rect.left, y: source.clientY - rect.top };
 }
 
-function findDrawingAtPoint(x, y) {
+/* Returns { drawing, handle } where handle is "point1"/"point2" (grabbed an
+   endpoint — resize just that point) or "move" (grabbed the body — shift the
+   whole shape). Endpoints are checked first so precise corner-grabs always win
+   over a whole-shape grab in the same area. */
+function findDrawingHandleAtPoint(x, y) {
   if (!liveCandleChart || !liveCandleSeries) return null;
   const timeScale = liveCandleChart.timeScale();
-  const HIT_PX = 8;
+  const LINE_HIT_PX = 8;
+  const ENDPOINT_HIT_PX = 10;
 
   for (let i = userChartDrawings.length - 1; i >= 0; i -= 1) {
     const drawing = userChartDrawings[i];
 
     if (drawing.type === "horizontal") {
       const lineY = liveCandleSeries.priceToCoordinate(drawing.price);
-      if (lineY !== null && Math.abs(lineY - y) <= HIT_PX) return drawing;
+      if (lineY !== null && Math.abs(lineY - y) <= LINE_HIT_PX) return { drawing, handle: "move" };
     } else if (drawing.type === "vertical") {
       const lineX = timeScale.timeToCoordinate(drawing.time);
-      if (lineX !== null && Math.abs(lineX - x) <= HIT_PX) return drawing;
-    } else if (drawing.type === "trend") {
+      if (lineX !== null && Math.abs(lineX - x) <= LINE_HIT_PX) return { drawing, handle: "move" };
+    } else if (drawing.type === "trend" || drawing.type === "rectangle") {
       const x1 = timeScale.timeToCoordinate(drawing.t1);
       const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
       const x2 = timeScale.timeToCoordinate(drawing.t2);
       const y2 = liveCandleSeries.priceToCoordinate(drawing.p2);
-      if (x1 !== null && y1 !== null && x2 !== null && y2 !== null && distanceToSegment(x, y, x1, y1, x2, y2) <= HIT_PX) {
-        return drawing;
-      }
-    } else if (drawing.type === "rectangle") {
-      const x1 = timeScale.timeToCoordinate(drawing.t1);
-      const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
-      const x2 = timeScale.timeToCoordinate(drawing.t2);
-      const y2 = liveCandleSeries.priceToCoordinate(drawing.p2);
-      if (x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
+      if (x1 === null || y1 === null || x2 === null || y2 === null) continue;
+
+      if (Math.hypot(x - x1, y - y1) <= ENDPOINT_HIT_PX) return { drawing, handle: "point1" };
+      if (Math.hypot(x - x2, y - y2) <= ENDPOINT_HIT_PX) return { drawing, handle: "point2" };
+
+      if (drawing.type === "trend") {
+        if (distanceToSegment(x, y, x1, y1, x2, y2) <= LINE_HIT_PX) return { drawing, handle: "move" };
+      } else {
         const withinX = x >= Math.min(x1, x2) && x <= Math.max(x1, x2);
         const withinY = y >= Math.min(y1, y2) && y <= Math.max(y1, y2);
-        if (withinX && withinY) return drawing;
+        if (withinX && withinY) return { drawing, handle: "move" };
       }
     }
   }
@@ -2106,28 +2169,47 @@ function handleDrawingMouseDown(event) {
   if (chartDrawingMode !== "cursor") return;
   const point = getContainerPoint(event);
   if (!point) return;
-  const drawing = findDrawingAtPoint(point.x, point.y);
-  if (!drawing) return;
+  const hit = findDrawingHandleAtPoint(point.x, point.y);
+  if (!hit) return;
 
   event.preventDefault();
-  activeDragDrawing = drawing;
-  activeDragStart = { x: point.x, y: point.y, original: { ...drawing } };
+  activeDragDrawing = hit.drawing;
+  activeDragHandle = hit.handle;
+  activeDragMoved = false;
+  activeDragStart = { x: point.x, y: point.y, original: { ...hit.drawing } };
   liveCandleChart?.applyOptions({ handleScroll: false, handleScale: false });
 
   const container = document.getElementById("liveCandlestickChart");
-  if (container) container.style.cursor = "grabbing";
+  if (container) container.style.cursor = hit.handle === "move" ? "grabbing" : "crosshair";
 }
+
+function applyTrendOrRectanglePoints(drawing) {
+  if (drawing.type === "trend" && drawing.ref) {
+    const ordered = drawing.t1 <= drawing.t2
+      ? [{ time: drawing.t1, value: drawing.p1 }, { time: drawing.t2, value: drawing.p2 }]
+      : [{ time: drawing.t2, value: drawing.p2 }, { time: drawing.t1, value: drawing.p1 }];
+    drawing.ref.setData(ordered);
+  }
+  // Rectangles re-read t1/p1/t2/p2 every animation frame via repositionDrawingOverlays,
+  // so updating the stored values is all that's needed for them to follow the drag.
+}
+
+const DRAWING_CLICK_MOVE_THRESHOLD_PX = 4;
 
 function handleDrawingMouseMove(event) {
   if (!activeDragDrawing || !liveCandleChart || !liveCandleSeries) return;
   const point = getContainerPoint(event);
   if (!point) return;
 
+  if (!activeDragMoved) {
+    const movedDistance = Math.hypot(point.x - activeDragStart.x, point.y - activeDragStart.y);
+    if (movedDistance < DRAWING_CLICK_MOVE_THRESHOLD_PX) return;
+    activeDragMoved = true;
+  }
+
   const timeScale = liveCandleChart.timeScale();
   const drawing = activeDragDrawing;
   const original = activeDragStart.original;
-  const dX = point.x - activeDragStart.x;
-  const dY = point.y - activeDragStart.y;
 
   if (drawing.type === "horizontal") {
     const newPrice = liveCandleSeries.coordinateToPrice(point.y);
@@ -2144,14 +2226,35 @@ function handleDrawingMouseMove(event) {
     return;
   }
 
-  // Trend line and rectangle: shift both stored points by the same pixel delta,
-  // then convert back to time/price so the shape keeps its size while moving.
+  if (activeDragHandle === "point1" || activeDragHandle === "point2") {
+    // Resize: move only the grabbed endpoint, leave the other one fixed.
+    const newTime = timeScale.coordinateToTime(point.x);
+    const newPrice = liveCandleSeries.coordinateToPrice(point.y);
+    if (newTime === null || !Number.isFinite(newPrice)) return;
+    const otherTime = activeDragHandle === "point1" ? drawing.t2 : drawing.t1;
+    if (newTime === otherTime) return;
+
+    if (activeDragHandle === "point1") {
+      drawing.t1 = newTime;
+      drawing.p1 = newPrice;
+    } else {
+      drawing.t2 = newTime;
+      drawing.p2 = newPrice;
+    }
+    applyTrendOrRectanglePoints(drawing);
+    return;
+  }
+
+  // Move: shift both stored points by the same pixel delta, so the shape keeps
+  // its size while moving.
   const origX1 = timeScale.timeToCoordinate(original.t1);
   const origY1 = liveCandleSeries.priceToCoordinate(original.p1);
   const origX2 = timeScale.timeToCoordinate(original.t2);
   const origY2 = liveCandleSeries.priceToCoordinate(original.p2);
   if (origX1 === null || origY1 === null || origX2 === null || origY2 === null) return;
 
+  const dX = point.x - activeDragStart.x;
+  const dY = point.y - activeDragStart.y;
   const newT1 = timeScale.coordinateToTime(origX1 + dX);
   const newP1 = liveCandleSeries.coordinateToPrice(origY1 + dY);
   const newT2 = timeScale.coordinateToTime(origX2 + dX);
@@ -2162,25 +2265,30 @@ function handleDrawingMouseMove(event) {
   drawing.p1 = newP1;
   drawing.t2 = newT2;
   drawing.p2 = newP2;
-
-  if (drawing.type === "trend" && drawing.ref) {
-    const ordered = newT1 <= newT2
-      ? [{ time: newT1, value: newP1 }, { time: newT2, value: newP2 }]
-      : [{ time: newT2, value: newP2 }, { time: newT1, value: newP1 }];
-    drawing.ref.setData(ordered);
-  }
-  // Rectangles re-read t1/p1/t2/p2 every animation frame via repositionDrawingOverlays,
-  // so updating the stored values above is all that's needed for them to follow the drag.
+  applyTrendOrRectanglePoints(drawing);
 }
 
 function handleDrawingMouseUp() {
   if (!activeDragDrawing) return;
+  const drawing = activeDragDrawing;
+  const moved = activeDragMoved;
+
   activeDragDrawing = null;
+  activeDragHandle = null;
+  activeDragMoved = false;
   activeDragStart = null;
   liveCandleChart?.applyOptions({ handleScroll: true, handleScale: true });
 
   const container = document.getElementById("liveCandlestickChart");
   if (container) container.style.cursor = "";
+
+  if (!moved) {
+    // A plain click (no drag movement) on a drawing deletes it, after confirming.
+    if (window.confirm("Delete this drawing?")) {
+      deleteDrawing(drawing);
+    }
+    return;
+  }
 
   saveUserDrawings();
 }
