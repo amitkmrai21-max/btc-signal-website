@@ -1604,7 +1604,7 @@ async def chart_analyser(file: UploadFile = File(...)):
     try:
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(model=GEMINI_MODEL, contents=[prompt, types.Part.from_bytes(data=image_bytes, mime_type=file.content_type)], config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=schema))
-        result = json.loads(response.text)
+        result = parse_json_from_model(response.text)
         result["source"] = "Uploaded chart screenshot + Gemini AI analysis"
         result["provider"] = "GEMINI"
         result["disclaimer"] = "Educational chart analysis only. Not financial advice or an automated trading instruction."
