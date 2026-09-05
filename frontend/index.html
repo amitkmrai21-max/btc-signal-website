@@ -1,24 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BTC AI Signal Dashboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BTC Signal Website</title>
 
   <link rel="stylesheet" href="/frontend/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 
 <body>
   <header class="topbar">
     <div class="brand">
       <img class="brand-logo" src="/frontend/image-1.png" alt="BTC AI Signal logo">
+
       <div class="brand-text">
         <h1>BTC AI Signal</h1>
-        <p>Live market analysis, virtual paper trading and multi-AI signals</p>
+        <p>Live market analysis, virtual paper trading and Gemini/Groq AI signals</p>
       </div>
     </div>
 
@@ -38,135 +39,67 @@
     <button class="app-tab" type="button" data-tab="technical">Technical</button>
     <button class="app-tab" type="button" data-tab="tools">Tools</button>
     <button class="app-tab" type="button" data-tab="news">News</button>
-    <button id="settingsMenuButton" class="settings-menu-button" type="button" aria-label="Open settings" aria-controls="settingsDrawer">
+    <button
+      id="settingsMenuButton"
+      class="settings-menu-button"
+      type="button"
+      aria-label="Open settings"
+      aria-controls="settingsDrawer"
+    >
       ☰
     </button>
   </nav>
 
   <main class="dashboard">
-    <!-- ==================== DASHBOARD TAB ==================== -->
     <section class="tab-panel active" data-panel="dashboard">
       <section class="card hero-card">
-        <h2>Live Market Overview</h2>
+        <h2>Live Market</h2>
+
         <div class="metrics">
           <div class="metric-box">
             <span>BTC Price</span>
             <strong id="btcPrice">$--</strong>
           </div>
+
           <div class="metric-box">
             <span>Daily Change</span>
             <strong id="btcChange">--%</strong>
           </div>
+
           <div class="metric-box">
-            <span>Engine Status</span>
+            <span>AI Signal</span>
             <strong id="signalBox">Loading...</strong>
           </div>
         </div>
+
         <p id="marketUpdatedAt" class="status-line">Updating live market price...</p>
       </section>
 
-      <!-- 3 INDEPENDENT SIGNAL CARDS -->
-      <div class="signals-decision-grid">
-        <!-- 1. TECHNICAL ENGINE CARD (AUTOMATIC) -->
-        <section class="card signal-engine-card">
-          <div class="section-heading">
-            <div>
-              <h2>Technical Engine</h2>
-              <p>Automatic deterministic model (No chart lines)</p>
-            </div>
-            <span id="engineSignalBox" class="signal-badge badge-hold">HOLD</span>
-          </div>
-          <div class="signal-metrics-row">
-            <div><span>Risk:</span> <strong id="engineRiskBadge">--</strong></div>
-            <div><span>Confidence:</span> <strong id="engineQuality">--%</strong></div>
-            <div><span>Updated:</span> <strong id="engineUpdatedAt">--</strong></div>
-          </div>
-          <div class="ai-copy">
-            <h3>Technical Reason</h3>
-            <p id="engineReason">Evaluating 15m breakout, volume, and structure...</p>
-          </div>
-          <div class="trade-levels-grid">
-            <div class="level-box"><span>Candidate Entry</span><strong id="engineEntry">--</strong></div>
-            <div class="level-box"><span>Candidate Stop</span><strong id="engineStopLoss">--</strong></div>
-            <div class="level-box"><span>Candidate T1</span><strong id="engineTarget1">--</strong></div>
-            <div class="level-box"><span>Candidate T2</span><strong id="engineTarget2">--</strong></div>
-          </div>
-        </section>
-
-        <!-- 2. GEMINI AI REVIEW CARD (MANUAL) -->
-        <section class="card signal-gemini-card">
-          <div class="section-heading">
-            <div>
-              <h2>Gemini AI Review</h2>
-              <p>Manual review with future chart lines</p>
-            </div>
-            <span id="geminiSignalAction" class="signal-badge badge-hold">--</span>
-          </div>
-          <div class="signal-metrics-row">
-            <div><span>Risk:</span> <strong id="geminiRiskBadge">--</strong></div>
-            <div><span>Confidence:</span> <strong id="geminiConfidence">--%</strong></div>
-            <div><span>Updated:</span> <strong id="geminiUpdatedAt">--</strong></div>
-          </div>
-          <div class="ai-copy">
-            <h3>Gemini Analysis</h3>
-            <p id="geminiReason">Click "Run Gemini AI Analysis" to review.</p>
-          </div>
-          <div class="trade-levels-grid">
-            <div class="level-box"><span>Entry</span><strong id="geminiEntry">--</strong></div>
-            <div class="level-box"><span>Stop Loss</span><strong id="geminiStopLoss">--</strong></div>
-            <div class="level-box"><span>Target 1</span><strong id="geminiTarget1">--</strong></div>
-            <div class="level-box"><span>Target 2</span><strong id="geminiTarget2">--</strong></div>
-          </div>
-        </section>
-
-        <!-- 3. GROQ CHART AI REVIEW CARD (MANUAL) -->
-        <section class="card signal-groq-card">
-          <div class="section-heading">
-            <div>
-              <h2>Groq Chart AI Review</h2>
-              <p>Manual review with future chart lines</p>
-            </div>
-            <span id="groqSignalAction" class="signal-badge badge-hold">--</span>
-          </div>
-          <div class="signal-metrics-row">
-            <div><span>Risk:</span> <strong id="groqRiskBadge">--</strong></div>
-            <div><span>Confidence:</span> <strong id="groqConfidence">--%</strong></div>
-            <div><span>Updated:</span> <strong id="groqUpdatedAt">--</strong></div>
-          </div>
-          <div class="ai-copy">
-            <h3>Groq Analysis</h3>
-            <p id="groqReason">Click "Run Groq Live Chart Analysis" to review.</p>
-          </div>
-          <div class="trade-levels-grid">
-            <div class="level-box"><span>Entry</span><strong id="groqEntry">--</strong></div>
-            <div class="level-box"><span>Stop Loss</span><strong id="groqStopLoSS">--</strong></div>
-            <div class="level-box"><span>Target 1</span><strong id="groqTarget1">--</strong></div>
-            <div class="level-box"><span>Target 2</span><strong id="groqTarget2">--</strong></div>
-          </div>
-        </section>
-      </div>
-
-      <!-- HISTORICAL CHART & SCREENSHOT ANALYSER -->
       <section class="card chart-card">
         <div class="chart-and-analyser-grid">
           <div class="chart-panel">
             <div class="chart-toolbar">
-              <h2>BTC Historical Chart</h2>
+              <h2>BTC Chart</h2>
+
               <div class="timeframe-buttons" aria-label="BTC chart timeframe">
                 <button class="timeframe-btn" type="button" data-timeframe="1W">Weekly</button>
                 <button class="timeframe-btn active" type="button" data-timeframe="1D">Daily</button>
                 <button class="timeframe-btn" type="button" data-timeframe="1H">Hourly</button>
                 <button class="timeframe-btn" type="button" data-timeframe="15M">15 Min</button>
               </div>
+
               <div class="chart-controls" aria-label="Chart zoom controls">
                 <button id="zoomInBtn" class="chart-control-btn" type="button">Zoom In</button>
                 <button id="zoomOutBtn" class="chart-control-btn" type="button">Zoom Out</button>
                 <button id="resetZoomBtn" class="chart-control-btn" type="button">Reset View</button>
               </div>
             </div>
+
             <p class="chart-help">
-              Mouse wheel or pinch to zoom. Drag to zoom-select. After zooming, drag left/right to explore the chart.
+              Mouse wheel or pinch to zoom. Drag to zoom-select. After zooming,
+              drag left/right to explore the chart.
             </p>
+
             <canvas id="btcChart"></canvas>
           </div>
 
@@ -175,10 +108,14 @@
               <h2>AI Chart Analyser</h2>
               <p>Upload a BTC/crypto chart screenshot for educational Gemini AI analysis.</p>
             </div>
+
             <label class="chart-upload-label" for="chartImageInput">Upload Chart Screenshot</label>
             <input id="chartImageInput" type="file" accept="image/png,image/jpeg,image/webp" />
+
             <img id="chartImagePreview" class="chart-image-preview" alt="Selected chart preview" hidden />
+
             <button id="analyseChartBtn" class="analyse-chart-btn" type="button">Analyse with Gemini AI</button>
+
             <p id="chartAnalyseStatus" class="chart-analyse-status">
               Upload PNG, JPG, or WEBP chart image. Maximum 8 MB.
             </p>
@@ -188,6 +125,7 @@
                 <span id="uploadedChartSignal" class="uploaded-chart-signal">HOLD</span>
                 <span id="uploadedChartConfidence" class="uploaded-chart-confidence">Confidence: --%</span>
               </div>
+
               <p><span>Risk</span><strong id="uploadedChartRisk">--</strong></p>
               <p><span>Trend</span><strong id="uploadedChartTrend">--</strong></p>
               <p><span>Pattern</span><strong id="uploadedChartPattern">--</strong></p>
@@ -198,87 +136,259 @@
                 <h3>AI Reason</h3>
                 <p id="uploadedChartReason">--</p>
               </div>
+
               <div class="uploaded-chart-copy">
                 <h3>Educational Entry Idea</h3>
                 <p id="uploadedChartEntry">--</p>
               </div>
+
               <div class="uploaded-chart-copy">
                 <h3>Invalidation Idea</h3>
                 <p id="uploadedChartInvalidation">--</p>
               </div>
+
               <p id="uploadedChartWarning" class="uploaded-chart-warning">--</p>
             </div>
           </aside>
         </div>
       </section>
-    </section>
 
-    <!-- ==================== LIVE CHART TAB ==================== -->
-    <section class="tab-panel" data-panel="live-chart">
-      <section class="card live-chart-card">
+      <section class="card engine-card provider-card">
         <div class="section-heading">
           <div>
-            <h2>Live BTCUSDT Candlestick Chart</h2>
-            <p>Binance spot-market candles update live. Select a timeframe to inspect price structure before using the Swing Structure and Gemini AI tools.</p>
-          </div>
-          <span id="liveChartConnection" class="live-chart-connection live-connecting">Connecting…</span>
-        </div>
-
-        <div class="live-chart-toolbar">
-          <div class="live-chart-timeframes">
-            <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1m">1m</button>
-            <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="5m">5m</button>
-            <button class="live-chart-timeframe-btn active" type="button" data-live-timeframe="15m">15m</button>
-            <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1h">1h</button>
-            <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="4h">4h</button>
-            <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1d">1d</button>
-            <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1w">1w</button>
+            <h2>Technical Engine</h2>
+            <p id="engineUpdatedAt">Updating automatically...</p>
           </div>
 
-          <div class="live-chart-actions">
-            <button id="liveChartResetBtn" class="chart-control-btn" type="button">Reset View</button>
-            <button id="liveChartRefreshBtn" class="chart-control-btn" type="button">Refresh Candles</button>
+          <span id="engineRiskBadge" class="risk-badge">Risk: --</span>
+        </div>
+
+        <div class="signal-details">
+          <div class="signal-tag date-tag">
+            <span class="tag-label">SOURCE</span>
+            <span>Automatic • every 60s</span>
+          </div>
+
+          <div class="signal-tag buy-tag">
+            <span class="tag-label">ENGINE SIGNAL</span>
+            <span id="engineSignalBox">Loading...</span>
+          </div>
+
+          <div class="signal-tag confidence-tag">
+            <span class="tag-label">CONFIDENCE</span>
+            <span id="engineQuality">--%</span>
           </div>
         </div>
 
-        <div class="live-chart-stats">
-          <article class="live-chart-stat">
-            <span>Symbol</span>
-            <strong>BTCUSDT</strong>
+        <div class="ai-copy">
+          <h3>Why this signal?</h3>
+          <p id="engineReason">Analyzing live technical structure...</p>
+        </div>
+
+        <div class="trade-ideas">
+          <article class="idea-box">
+            <h3>Candidate Entry</h3>
+            <p id="engineEntry">Waiting for a confirmed structure...</p>
           </article>
-          <article class="live-chart-stat">
-            <span>Timeframe</span>
-            <strong id="liveChartTimeframe">15m</strong>
+
+          <article class="idea-box">
+            <h3>Candidate Stop-Loss</h3>
+            <p id="engineStopLoss">Waiting for a confirmed structure...</p>
           </article>
-          <article class="live-chart-stat">
-            <span>Live Price</span>
-            <strong id="liveChartPrice">Loading…</strong>
+
+          <article class="idea-box">
+            <h3>Candidate Target 1</h3>
+            <p id="engineTarget1">--</p>
           </article>
-          <article class="live-chart-stat">
-            <span>Current Candle</span>
-            <strong id="liveChartCandle">Loading…</strong>
+
+          <article class="idea-box">
+            <h3>Candidate Target 2</h3>
+            <p id="engineTarget2">--</p>
           </article>
         </div>
 
-        <div id="liveCandlestickChart" class="live-candlestick-chart"></div>
+        <p class="provider-note">Automatic and deterministic — never plots lines on the live chart. Educational only.</p>
+      </section>
 
-        <div class="live-chart-bottom-grid">
-          <article class="live-chart-note">
-            <h3>Live structure workflow</h3>
-            <p>Use the 15m view with the Swing Failure &amp; Structure Break card. A wick is not confirmation: wait for body close, ATR buffer, retest, and final BUY/SELL quality confirmation.</p>
+      <section class="card gemini-card provider-card">
+        <div class="section-heading">
+          <div>
+            <h2>Gemini AI Review</h2>
+            <p id="geminiUpdatedAt">Not run yet — click "Run Gemini AI Analysis".</p>
+          </div>
+
+          <span id="geminiRiskBadge" class="risk-badge">Risk: --</span>
+        </div>
+
+        <div class="signal-details">
+          <div class="signal-tag date-tag">
+            <span class="tag-label">SOURCE</span>
+            <span>Manual • button only</span>
+          </div>
+
+          <div class="signal-tag buy-tag">
+            <span class="tag-label">GEMINI SIGNAL</span>
+            <span id="geminiSignalAction">Not run yet</span>
+          </div>
+
+          <div class="signal-tag confidence-tag">
+            <span class="tag-label">CONFIDENCE</span>
+            <span id="geminiConfidence">--%</span>
+          </div>
+        </div>
+
+        <div class="ai-copy">
+          <h3>Why this signal?</h3>
+          <p id="geminiReason">Run Gemini AI Analysis to get an educational chart review.</p>
+        </div>
+
+        <div class="trade-ideas">
+          <article class="idea-box">
+            <h3>Entry</h3>
+            <p id="geminiEntry">--</p>
           </article>
 
-          <article class="live-chart-note">
-            <h3>Manual AI confirmation</h3>
-            <p>The Engine never draws chart lines. When you manually run Gemini or Groq, valid educational setups are drawn into future candles only.</p>
+          <article class="idea-box">
+            <h3>Stop-Loss</h3>
+            <p id="geminiStopLoss">--</p>
+          </article>
+
+          <article class="idea-box">
+            <h3>Target 1</h3>
+            <p id="geminiTarget1">--</p>
+          </article>
+
+          <article class="idea-box">
+            <h3>Target 2</h3>
+            <p id="geminiTarget2">--</p>
           </article>
         </div>
 
-        <p id="liveChartStatus" class="live-chart-status">Loading Binance candles…</p>
+        <p class="provider-note">Only shown on the chart when this is the most recently run provider and the signal is BUY or SELL.</p>
+      </section>
+
+      <section class="card groq-card provider-card">
+        <div class="section-heading">
+          <div>
+            <h2>Groq Chart AI Review</h2>
+            <p id="groqUpdatedAt">Not run yet — click "Run Groq Live Chart Analysis".</p>
+          </div>
+
+          <span id="groqRiskBadge" class="risk-badge">Risk: --</span>
+        </div>
+
+        <div class="signal-details">
+          <div class="signal-tag date-tag">
+            <span class="tag-label">SOURCE</span>
+            <span>Manual • button only</span>
+          </div>
+
+          <div class="signal-tag buy-tag">
+            <span class="tag-label">GROQ SIGNAL</span>
+            <span id="groqSignalAction">Not run yet</span>
+          </div>
+
+          <div class="signal-tag confidence-tag">
+            <span class="tag-label">CONFIDENCE</span>
+            <span id="groqConfidence">--%</span>
+          </div>
+        </div>
+
+        <div class="ai-copy">
+          <h3>Why this signal?</h3>
+          <p id="groqReason">Run Groq Live Chart Analysis to get an educational backup review.</p>
+        </div>
+
+        <div class="trade-ideas">
+          <article class="idea-box">
+            <h3>Entry</h3>
+            <p id="groqEntry">--</p>
+          </article>
+
+          <article class="idea-box">
+            <h3>Stop-Loss</h3>
+            <p id="groqStopLoss">--</p>
+          </article>
+
+          <article class="idea-box">
+            <h3>Target 1</h3>
+            <p id="groqTarget1">--</p>
+          </article>
+
+          <article class="idea-box">
+            <h3>Target 2</h3>
+            <p id="groqTarget2">--</p>
+          </article>
+        </div>
+
+        <p class="provider-note">Only shown on the chart when this is the most recently run provider and the signal is BUY or SELL.</p>
       </section>
     </section>
 
-    <!-- ==================== TECHNICAL TAB ==================== -->
+    <section class="tab-panel" data-panel="live-chart">
+  <section class="card live-chart-card">
+    <div class="section-heading">
+      <div>
+        <h2>Live BTCUSDT Candlestick Chart</h2>
+        <p>Binance spot-market candles update live. Select a timeframe to inspect price structure before using the Swing Structure and Gemini AI tools.</p>
+      </div>
+      <span id="liveChartConnection" class="live-chart-connection live-connecting">Connecting…</span>
+    </div>
+
+    <div class="live-chart-toolbar">
+      <div class="live-chart-timeframes">
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1m">1m</button>
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="5m">5m</button>
+        <button class="live-chart-timeframe-btn active" type="button" data-live-timeframe="15m">15m</button>
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1h">1h</button>
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="4h">4h</button>
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1d">1d</button>
+        <button class="live-chart-timeframe-btn" type="button" data-live-timeframe="1w">1w</button>
+      </div>
+
+      <div class="live-chart-actions">
+        <button id="liveChartResetBtn" class="chart-control-btn" type="button">Reset View</button>
+        <button id="liveChartRefreshBtn" class="chart-control-btn" type="button">Refresh Candles</button>
+      </div>
+    </div>
+
+    <div class="live-chart-stats">
+      <article class="live-chart-stat">
+        <span>Symbol</span>
+        <strong>BTCUSDT</strong>
+      </article>
+      <article class="live-chart-stat">
+        <span>Timeframe</span>
+        <strong id="liveChartTimeframe">15m</strong>
+      </article>
+      <article class="live-chart-stat">
+        <span>Live Price</span>
+        <strong id="liveChartPrice">Loading…</strong>
+      </article>
+      <article class="live-chart-stat">
+        <span>Current Candle</span>
+        <strong id="liveChartCandle">Loading…</strong>
+      </article>
+    </div>
+
+    <div id="liveCandlestickChart" class="live-candlestick-chart"></div>
+
+    <div class="live-chart-bottom-grid">
+      <article class="live-chart-note">
+        <h3>Live structure workflow</h3>
+        <p>Use the 15m view with the Swing Failure &amp; Structure Break card. A wick is not confirmation: wait for body close, ATR buffer, retest, and final BUY/SELL quality confirmation.</p>
+      </article>
+
+      <article class="live-chart-note">
+        <h3>Manual AI confirmation</h3>
+        <p>When the technical card says BUY — FINAL or SELL — FINAL, run Gemini AI Analysis manually. Review both directions before using paper trading.</p>
+      </article>
+    </div>
+
+    <p id="liveChartStatus" class="live-chart-status">Loading Binance candles…</p>
+  </section>
+</section>
+
     <section class="tab-panel" data-panel="technical">
       <section class="card rrg-card">
         <div class="section-heading">
@@ -399,8 +509,7 @@
           </section>
         </section>
 
-        <!-- TECHNICAL SIGNAL INTELLIGENCE -->
-        <section class="card technical-intelligence-card layout-editable" data-layout-id="technical-intelligence">
+                <section class="card technical-intelligence-card layout-editable" data-layout-id="technical-intelligence">
           <div class="section-heading technical-intelligence-heading">
             <div>
               <h2>Technical Signal Intelligence</h2>
@@ -452,7 +561,7 @@
 
           <div class="key-distance-heading">
             <h3>Key-Level Distance</h3>
-            <p>Distance is calculated from each timeframe’s current price to its recent 20-candle support and resistance.</p>
+            <p>Distance is calculated from each timeframe's current price to its recent 20-candle support and resistance.</p>
           </div>
 
           <div class="key-distance-grid">
@@ -490,90 +599,88 @@
             </article>
           </div>
         </section>
+        
+<section class="card swing-structure-card layout-editable" data-layout-id="swing-structure">
+  <div class="section-heading">
+    <div>
+      <h2>Swing Failure &amp; Structure Break</h2>
+      <p>
+        15-minute BTC structure. A wick alone does not confirm a break:
+        confirmation requires a completed candle body close beyond the protected
+        level with the ATR buffer.
+      </p>
+    </div>
+    <span id="swingSignalBadge" class="swing-signal-badge swing-neutral">Loading...</span>
+  </div>
 
-        <!-- SWING FAILURE & STRUCTURE BREAK -->
-        <section class="card swing-structure-card layout-editable" data-layout-id="swing-structure">
-          <div class="section-heading">
-            <div>
-              <h2>Swing Failure &amp; Structure Break</h2>
-              <p>
-                15-minute BTC structure. A wick alone does not confirm a break:
-                confirmation requires a completed candle body close beyond the protected
-                level with the ATR buffer.
-              </p>
-            </div>
-            <span id="swingSignalBadge" class="swing-signal-badge swing-neutral">Loading...</span>
-          </div>
+  <div class="swing-structure-grid">
+    <article class="swing-structure-item swing-price-item">
+      <span>Timeframe</span>
+      <strong id="swingTimeframe">15m</strong>
+    </article>
 
-          <div class="swing-structure-grid">
-            <article class="swing-structure-item swing-price-item">
-              <span>Timeframe</span>
-              <strong id="swingTimeframe">15m</strong>
-            </article>
+    <article class="swing-structure-item swing-price-item">
+      <span>Current Price</span>
+      <strong id="swingCurrentPrice">$—</strong>
+    </article>
 
-            <article class="swing-structure-item swing-price-item">
-              <span>Current Price</span>
-              <strong id="swingCurrentPrice">$—</strong>
-            </article>
+    <article class="swing-structure-item">
+      <span>Prior Swing High</span>
+      <strong id="swingPriorHigh">$—</strong>
+    </article>
 
-            <article class="swing-structure-item">
-              <span>Prior Swing High</span>
-              <strong id="swingPriorHigh">$—</strong>
-            </article>
+    <article class="swing-structure-item">
+      <span>Prior Swing Low</span>
+      <strong id="swingPriorLow">$—</strong>
+    </article>
 
-            <article class="swing-structure-item">
-              <span>Prior Swing Low</span>
-              <strong id="swingPriorLow">$—</strong>
-            </article>
+    <article class="swing-structure-item failed-level">
+      <span>Break Event</span>
+      <strong id="swingFailedLevel">$—</strong>
+    </article>
 
-            <article class="swing-structure-item failed-level">
-              <span>Break Event</span>
-              <strong id="swingFailedLevel">$—</strong>
-            </article>
+    <article class="swing-structure-item protected-level">
+      <span>Protected Break Level</span>
+      <strong id="swingProtectedLevel">$—</strong>
+    </article>
 
-            <article class="swing-structure-item protected-level">
-              <span>Protected Break Level</span>
-              <strong id="swingProtectedLevel">$—</strong>
-            </article>
+    <article class="swing-structure-item break-level">
+      <span>Break Level</span>
+      <strong id="swingBreakLevel">Close below $—</strong>
+    </article>
 
-            <article class="swing-structure-item break-level">
-              <span>Break Level</span>
-              <strong id="swingBreakLevel">Close below $—</strong>
-            </article>
+    <article class="swing-structure-item status-level">
+      <span>Break Status</span>
+      <strong id="swingBreakStatus">Loading...</strong>
+    </article>
 
-            <article class="swing-structure-item status-level">
-              <span>Break Status</span>
-              <strong id="swingBreakStatus">Loading...</strong>
-            </article>
+    <article class="swing-structure-item">
+      <span>Retest Level</span>
+      <strong id="swingRetestLevel">$—</strong>
+    </article>
 
-            <article class="swing-structure-item">
-              <span>Retest Level</span>
-              <strong id="swingRetestLevel">$—</strong>
-            </article>
+    <article class="swing-structure-item invalidation-level">
+      <span>Invalidation Level</span>
+      <strong id="swingInvalidationLevel">$—</strong>
+    </article>
+  </div>
 
-            <article class="swing-structure-item invalidation-level">
-              <span>Invalidation Level</span>
-              <strong id="swingInvalidationLevel">$—</strong>
-            </article>
-          </div>
-
-          <div class="swing-structure-footer">
-            <p id="swingStructureReason">Loading 15m swing structure…</p>
-            <p class="swing-final-conclusion">
-              <span>Final Conclusion</span>
-              <strong id="swingFinalConclusion">Loading final structure conclusion...</strong>
-            </p>
-            <div class="swing-filter-panel">
-              <span id="swingFilterSummary">Quality: Loading...</span>
-              <p id="swingFilterDetails">Checking fakeout filters...</p>
-            </div>
-            <p id="swingConfirmationRule">
-              Wicks do not confirm a break. Waiting for completed candle-body confirmation.
-            </p>
-          </div>
-        </section>
-
-        <!-- SETUP QUALITY & TRADE CHECKLIST -->
+  <div class="swing-structure-footer">
+    <p id="swingStructureReason">Loading 15m swing structure…</p>
+    <p class="swing-final-conclusion">
+  <span>Final Conclusion</span>
+  <strong id="swingFinalConclusion">Loading final structure conclusion...</strong>
+</p>
+    <div class="swing-filter-panel">
+  <span id="swingFilterSummary">Quality: Loading...</span>
+  <p id="swingFilterDetails">Checking fakeout filters...</p>
+</div>
+    <p id="swingConfirmationRule">
+      Wicks do not confirm a break. Waiting for completed candle-body confirmation.
+    </p>
+  </div>
+</section>
+        
         <section class="card setup-quality-card layout-editable" data-layout-id="setup-quality">
           <div class="section-heading">
             <div>
@@ -588,7 +695,7 @@
             <article class="setup-grade-panel">
               <span class="technical-label">Setup Grade</span>
               <strong id="setupGrade">--</strong>
-              <p id="setupScore">-- / 8 checks passed</p>
+              <p id="setupScore">-- / 9 checks passed</p>
             </article>
 
             <article class="setup-decision-panel">
@@ -614,12 +721,11 @@
           </p>
         </section>
 
-        <!-- SIGNAL CONFIRMATION -->
         <section class="card signal-comparison-card layout-editable" data-layout-id="signal-confirmation">
           <div class="section-heading">
             <div>
               <h2>Signal Confirmation</h2>
-              <p>Compares the most recent successful Gemini AI view with current live technical conditions.</p>
+              <p>Compares the most recent successful Gemini or Groq AI view with current live technical conditions.</p>
             </div>
           </div>
 
@@ -646,14 +752,13 @@
           </article>
         </section>
 
-        <!-- ADVANCED TRADE PLAN -->
         <section class="card trade-plan-card layout-editable" data-layout-id="advanced-trade-plan">
           <div class="section-heading">
             <div>
               <h2>Advanced Trade Plan</h2>
-              <p>AI-guided educational setup summary. Wait for confirmation before considering any practice trade.</p>
+              <p>Automatic Engine setup summary. Wait for confirmation before considering any practice trade.</p>
             </div>
-            <span class="plan-badge">AI-GUIDED</span>
+            <span class="plan-badge">ENGINE</span>
           </div>
 
           <div class="trade-plan-grid">
@@ -686,7 +791,6 @@
       </div>
     </section>
 
-    <!-- ==================== TOOLS TAB ==================== -->
     <section class="tab-panel" data-panel="tools">
       <section class="card alerts-card">
         <div class="section-heading">
@@ -766,7 +870,7 @@
             <input id="signalChangeAlertToggle" type="checkbox" checked />
             <span>
               <strong>Signal changes</strong>
-              <small>Example: BUY changes to HOLD or SELL.</small>
+              <small>Example: BUY WATCH changes to NO TRADE or SELL WATCH.</small>
             </span>
           </label>
 
@@ -786,7 +890,6 @@
             </span>
           </label>
         </div>
-
         <div class="alert-summary-grid">
           <article class="alert-summary-item">
             <span>Current BTC price</span>
@@ -889,50 +992,48 @@
       </section>
     </section>
 
-    <!-- ==================== NEWS TAB ==================== -->
     <section class="tab-panel" data-panel="news">
-      <section class="card gemini-news-card groq-news-card">
-        <div class="section-heading">
-          <div>
-            <h2>Groq AI News Context</h2>
-            <p id="geminiNewsUpdated">
-              News refreshes only when you manually run Groq News.
-            </p>
-          </div>
-
-          <div class="news-heading-actions">
-            <button id="groqNewsBtn" class="groq-news-btn" type="button">
-              Refresh News with Groq
-            </button>
-
-            <span id="geminiNewsBias" class="news-bias-badge news-impact-neutral">
-              News bias: UNCLEAR
-            </span>
-          </div>
-        </div>
-
-        <div class="gemini-news-intro">
-          <h3>Latest market context</h3>
-          <p id="geminiNewsOverview">
-            Click “Refresh News with Groq” to load RSS headlines, sentiment, and Hindi explanation.
-          </p>
-        </div>
-
-        <div id="geminiNewsList" class="gemini-news-list" aria-live="polite">
-          <p class="gemini-news-empty">
-            No Groq news snapshot yet. News is separate from Gemini technical analysis.
-          </p>
-        </div>
-
-        <p class="gemini-news-note">
-          Groq processes RSS news for summary, sentiment, and Hindi explanation only.
-          This section never produces BUY/SELL signals, Entry, Stop Loss, Target 1, or Target 2.
-          News context is educational and not financial advice.
+  <section class="card gemini-news-card groq-news-card">
+    <div class="section-heading">
+      <div>
+        <h2>Groq AI News Context</h2>
+        <p id="geminiNewsUpdated">
+          News refreshes only when you manually run Groq News.
         </p>
-      </section>
-    </section>
+      </div>
 
-    <!-- DISCLAIMER -->
+      <div class="news-heading-actions">
+        <button id="groqNewsBtn" class="groq-news-btn" type="button">
+          Refresh News with Groq
+        </button>
+
+        <span id="geminiNewsBias" class="news-bias-badge news-impact-neutral">
+          News bias: UNCLEAR
+        </span>
+      </div>
+    </div>
+
+    <div class="gemini-news-intro">
+      <h3>Latest market context</h3>
+      <p id="geminiNewsOverview">
+        Click "Refresh News with Groq" to load RSS headlines, sentiment, and Hindi explanation.
+      </p>
+    </div>
+
+    <div id="geminiNewsList" class="gemini-news-list" aria-live="polite">
+      <p class="gemini-news-empty">
+        No Groq news snapshot yet. News is separate from Gemini technical analysis.
+      </p>
+    </div>
+
+    <p class="gemini-news-note">
+      Groq processes RSS news for summary, sentiment, and Hindi explanation only.
+      This section never produces BUY/SELL signals, Entry, Stop Loss, Target 1, or Target 2.
+      News context is educational and not financial advice.
+    </p>
+  </section>
+</section>
+
     <section class="disclaimer-card">
       <p id="disclaimerText">
         Educational market analysis only. Not financial advice or an automated trading instruction.
@@ -940,7 +1041,6 @@
     </section>
   </main>
 
-  <!-- ==================== SETTINGS DRAWER ==================== -->
   <aside id="settingsDrawer" class="settings-drawer" aria-label="Dashboard preferences">
     <div class="settings-drawer-header">
       <div>
