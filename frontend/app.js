@@ -197,7 +197,7 @@ function renderSavedProviderPlanIfAny(provider) {
 }
 
 function saveLastAiSignal(aiData) {
-  const snapshot = { signal: aiData?.signal || "NO TRADE", confidence: aiData?.confidence ?? "--", reason: aiData?.reason || "No AI explanation available.", updatedAt: aiData?.updated_at ? Number(aiData.updated_at) * 1000 : Date.now() };
+  const snapshot = { signal: aiData?.signal || "HOLD", confidence: aiData?.confidence ?? "--", reason: aiData?.reason || "No AI explanation available.", updatedAt: aiData?.updated_at ? Number(aiData.updated_at) * 1000 : Date.now() };
   try { localStorage.setItem(LAST_AI_SIGNAL_STORAGE_KEY, JSON.stringify(snapshot)); } catch (error) { console.error(error); }
 }
 function getLastAiSignal() { try { const saved = localStorage.getItem(LAST_AI_SIGNAL_STORAGE_KEY); return saved ? JSON.parse(saved) : null; } catch (error) { console.error(error); return null; } }
@@ -207,7 +207,7 @@ function formatStoredSignalTime(timestamp) { const date = new Date(Number(timest
 
 function updateSignalConfirmation(technicalData) {
   const lastAi = getLastAiSignal();
-  const technicalSignal = technicalData?.signal || "NO TRADE";
+  const technicalSignal = technicalData?.signal || "HOLD";
   setText("liveTechnicalSignal", technicalSignal);
   setText("liveTechnicalReason", technicalData?.reason || "--");
   setText("liveTechnicalUpdated", `Updated: ${formatUpdatedAt(technicalData?.updated_at)}`);
@@ -222,7 +222,7 @@ function updateSignalConfirmation(technicalData) {
   let reason = "The last AI view and live technical conditions are not fully aligned. Do not force an entry.";
   if ((aiBuy && technicalBuy) || (aiSell && technicalSell)) { decision = aiBuy ? "BUY SETUP CONFIRMED" : "SELL SETUP CONFIRMED"; reason = "The last successful manual AI view and current live technical signal are aligned."; }
   else if ((aiBuy && technicalSell) || (aiSell && technicalBuy)) { decision = "AI SIGNAL INVALIDATED — NO ENTRY"; reason = "Current live technical conditions oppose the last manual AI signal."; }
-  else if (String(technicalSignal).toUpperCase().includes("NO TRADE")) { reason = "The previous AI idea is not currently confirmed by live technical data."; }
+  else if (String(technicalSignal).toUpperCase().includes("HOLD")) { reason = "The previous AI idea is not currently confirmed by live technical data."; }
   setText("combinedDecision", decision); setText("combinedDecisionReason", reason);
 }
 
@@ -270,7 +270,7 @@ function setDataHealthBadge(health = {}) {
 function getDynamicGeminiAlignment(technicalData) {
   const lastAi = getLastAiSignal();
   const technicalSignal = String(
-    technicalData?.signal || "NO TRADE"
+    technicalData?.signal || "HOLD"
   ).toUpperCase();
 
   if (!lastAi?.signal) {
@@ -281,14 +281,13 @@ function getDynamicGeminiAlignment(technicalData) {
     };
   }
 
-  const aiSignal = String(lastAi.signal || "NO TRADE").toUpperCase();
+  const aiSignal = String(lastAi.signal || "HOLD").toUpperCase();
   const aiBuy = isBuyLike(aiSignal);
   const aiSell = isSellLike(aiSignal);
   const technicalBuy = isBuyLike(technicalSignal);
   const technicalSell = isSellLike(technicalSignal);
-  const aiNoTrade = aiSignal.includes("NO TRADE") || aiSignal.includes("HOLD");
-  const technicalNoTrade =
-    technicalSignal.includes("NO TRADE") || technicalSignal.includes("HOLD");
+  const aiNoTrade = aiSignal.includes("HOLD");
+  const technicalNoTrade = technicalSignal.includes("HOLD");
 
   if ((aiBuy && technicalBuy) || (aiSell && technicalSell)) {
     return {
