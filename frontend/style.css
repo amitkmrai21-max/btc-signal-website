@@ -3350,6 +3350,62 @@ body[data-accent="green"] .settings-choice.active {
   pointer-events: none;
 }
 
+.live-chart-drawing-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.drawing-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.drawing-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.drawing-tool-btn:hover {
+  border-color: var(--blue);
+}
+
+.drawing-tool-btn.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #04121f;
+}
+
+.drawing-clear-btn {
+  margin-left: auto;
+}
+
+.drawing-tool-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .live-chart-bottom-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
