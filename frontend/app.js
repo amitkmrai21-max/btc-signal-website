@@ -6,6 +6,18 @@ let liveAiPriceLines = [];
 let liveAiSignalSeries = null;
 let liveAiLevelSeries = [];
 
+const CHART_DRAWINGS_STORAGE_KEY = "btcChartDrawingsV1";
+const DRAWING_COLOR = "#38bdf8";
+const DRAWING_CLICK_MOVE_THRESHOLD_PX = 4;
+let chartDrawingMode = "cursor";
+let chartDrawingPendingPoint = null;
+let userChartDrawings = [];
+let drawingRepositionFrame = null;
+let activeDragDrawing = null;
+let activeDragHandle = null;
+let activeDragMoved = false;
+let activeDragStart = null;
+
 const liveChartSettings = {
   "1m": { limit: 180 },
   "5m": { limit: 180 },
@@ -1809,12 +1821,6 @@ function setLiveChartStatus(message, type = "connecting") {
    least one such shape exists) by converting their stored time/price back to pixels via
    the chart's own timeToCoordinate/priceToCoordinate — this keeps them lined up correctly
    through panning, zooming, and resizing. */
-const CHART_DRAWINGS_STORAGE_KEY = "btcChartDrawingsV1";
-const DRAWING_COLOR = "#38bdf8";
-let chartDrawingMode = "cursor";
-let chartDrawingPendingPoint = null;
-let userChartDrawings = [];
-let drawingRepositionFrame = null;
 
 function getDrawingOverlaySvg() {
   return document.getElementById("liveChartDrawingOverlay");
@@ -2101,10 +2107,6 @@ function setupChartDrawingTools() {
    point-to-segment distance, rectangles check "point is inside the box". While a
    drawing is being dragged, the chart's own pan/zoom is temporarily disabled so a
    drag never turns into a chart pan by accident. */
-let activeDragDrawing = null;
-let activeDragHandle = null;
-let activeDragMoved = false;
-let activeDragStart = null;
 
 function distanceToSegment(px, py, x1, y1, x2, y2) {
   const dx = x2 - x1;
@@ -2193,8 +2195,6 @@ function applyTrendOrRectanglePoints(drawing) {
   // Rectangles re-read t1/p1/t2/p2 every animation frame via repositionDrawingOverlays,
   // so updating the stored values is all that's needed for them to follow the drag.
 }
-
-const DRAWING_CLICK_MOVE_THRESHOLD_PX = 4;
 
 function handleDrawingMouseMove(event) {
   if (!activeDragDrawing || !liveCandleChart || !liveCandleSeries) return;
