@@ -3359,6 +3359,10 @@ body[data-accent="green"] .settings-choice.active {
   pointer-events: none;
 }
 
+.live-candlestick-chart > .drawing-toolbar {
+  width: auto !important;
+}
+
 .drawing-toolbar {
   position: absolute;
   top: 14px;
