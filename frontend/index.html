@@ -352,20 +352,6 @@
       </div>
     </div>
 
-   <div id="liveCandlestickChart" class="live-candlestick-chart">
-  <div class="drawing-toolbar" aria-label="Chart drawing tools">
-    <button class="drawing-tool-btn active" type="button" data-draw-tool="cursor" title="Cursor">↖</button>
-    <button class="drawing-tool-btn" type="button" data-draw-tool="horizontal" title="Horizontal Line">─</button>
-    <button class="drawing-tool-btn" type="button" data-draw-tool="vertical" title="Vertical Line">┃</button>
-    <button class="drawing-tool-btn" type="button" data-draw-tool="trend" title="Trend Line">╱</button>
-    <button class="drawing-tool-btn" type="button" data-draw-tool="rectangle" title="Rectangle">▭</button>
-    <button id="clearDrawingsBtn" class="drawing-tool-btn drawing-clear-btn" type="button" title="Clear all drawings">🗑</button>
-  </div>
-  <span id="drawingToolHint" class="drawing-tool-hint"></span>
-  <span id="liveChartHoldBadge" class="live-chart-hold-badge" hidden>HOLD</span>
-  <svg id="liveChartDrawingOverlay" class="live-chart-drawing-overlay"></svg>
-</div>
-
     <div class="live-chart-stats">
       <article class="live-chart-stat">
         <span>Symbol</span>
@@ -386,6 +372,15 @@
     </div>
 
     <div id="liveCandlestickChart" class="live-candlestick-chart">
+      <div class="drawing-toolbar" aria-label="Chart drawing tools">
+        <button class="drawing-tool-btn active" type="button" data-draw-tool="cursor" title="Cursor">↖</button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="horizontal" title="Horizontal Line">─</button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="vertical" title="Vertical Line">┃</button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="trend" title="Trend Line">╱</button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="rectangle" title="Rectangle">▭</button>
+        <button id="clearDrawingsBtn" class="drawing-tool-btn drawing-clear-btn" type="button" title="Clear all drawings">🗑</button>
+      </div>
+      <span id="drawingToolHint" class="drawing-tool-hint"></span>
       <span id="liveChartHoldBadge" class="live-chart-hold-badge" hidden>HOLD</span>
       <svg id="liveChartDrawingOverlay" class="live-chart-drawing-overlay"></svg>
     </div>
@@ -405,7 +400,6 @@
     <p id="liveChartStatus" class="live-chart-status">Loading Binance candles…</p>
   </section>
 </section>
-
     <section class="tab-panel" data-panel="technical">
       <section class="card rrg-card">
         <div class="section-heading">
