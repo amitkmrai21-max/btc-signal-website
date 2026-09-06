@@ -3359,6 +3359,13 @@ body[data-accent="green"] .settings-choice.active {
   pointer-events: none;
 }
 
+.drawing-measure-label {
+  paint-order: stroke;
+  stroke: #030a15;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
 .live-candlestick-chart > .drawing-toolbar {
   width: auto !important;
 }
