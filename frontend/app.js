@@ -1844,7 +1844,8 @@ function setChartDrawingMode(mode) {
     horizontal: "Click the chart to place a horizontal line.",
     vertical: "Click the chart to place a vertical line.",
     trend: "Click the start point, then the end point.",
-    rectangle: "Click one corner, then the opposite corner."
+    rectangle: "Click one corner, then the opposite corner.",
+    measure: "Click the start point, then the end point to measure price, %, bars and time."
   };
 
   setDrawingToolHint(hints[mode] || "");
@@ -1866,7 +1867,7 @@ function scheduleDrawingReposition() {
 
 function drawingRepositionLoop() {
   repositionDrawingOverlays();
-  const hasOverlayDrawings = userChartDrawings.some((drawing) => drawing.type === "vertical" || drawing.type === "rectangle" || drawing.type === "trend");
+  const hasOverlayDrawings = userChartDrawings.some((drawing) => drawing.type === "vertical" || drawing.type === "rectangle" || drawing.type === "trend" || drawing.type === "measure");
   drawingRepositionFrame = hasOverlayDrawings ? window.requestAnimationFrame(drawingRepositionLoop) : null;
 }
 
@@ -1908,8 +1909,55 @@ function repositionDrawingOverlays() {
       const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
       const y2 = liveCandleSeries.priceToCoordinate(drawing.p2);
       positionHandlePair(drawing, x1, y1, x2, y2);
+    } else if (drawing.type === "measure" && drawing.el) {
+      const x1 = liveCandleChart.timeScale().timeToCoordinate(drawing.t1);
+      const x2 = liveCandleChart.timeScale().timeToCoordinate(drawing.t2);
+      const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
+      const y2 = liveCandleSeries.priceToCoordinate(drawing.p2);
+      if (x1 === null || x2 === null || y1 === null || y2 === null) {
+        drawing.el.setAttribute("opacity", "0");
+        if (drawing.textEl) drawing.textEl.setAttribute("opacity", "0");
+        return;
+      }
+      drawing.el.setAttribute("opacity", "1");
+      drawing.el.setAttribute("x", Math.min(x1, x2));
+      drawing.el.setAttribute("y", Math.min(y1, y2));
+      drawing.el.setAttribute("width", Math.max(1, Math.abs(x2 - x1)));
+      drawing.el.setAttribute("height", Math.max(1, Math.abs(y2 - y1)));
+      positionHandlePair(drawing, x1, y1, x2, y2);
+
+      if (drawing.textEl) {
+        drawing.textEl.setAttribute("opacity", "1");
+        drawing.textEl.setAttribute("x", Math.min(x1, x2) + 6);
+        drawing.textEl.setAttribute("y", Math.min(y1, y2) - 8 < 12 ? Math.min(y1, y2) + 16 : Math.min(y1, y2) - 8);
+        renderMeasureLabel(drawing.textEl, drawing);
+      }
     }
   });
+}
+
+function getDrawingIntervalSeconds() {
+  const intervals = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800 };
+  return intervals[liveChartTimeframe] || 900;
+}
+
+function formatMeasureDuration(totalSeconds) {
+  const seconds = Math.abs(Math.round(totalSeconds));
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function renderMeasureLabel(textEl, drawing) {
+  const priceDiff = drawing.p2 - drawing.p1;
+  const percent = drawing.p1 !== 0 ? (priceDiff / Math.abs(drawing.p1)) * 100 : 0;
+  const bars = Math.round(Math.abs(drawing.t2 - drawing.t1) / getDrawingIntervalSeconds());
+  const duration = formatMeasureDuration(drawing.t2 - drawing.t1);
+  const sign = priceDiff >= 0 ? "+" : "";
+  textEl.textContent = `${sign}$${priceDiff.toFixed(2)} (${sign}${percent.toFixed(2)}%)  •  ${bars} bars  •  ${duration}`;
 }
 
 function positionHandlePair(drawing, x1, y1, x2, y2) {
@@ -1999,6 +2047,25 @@ function addDrawing(type, points, color = DRAWING_COLOR, persist = true) {
     svg.appendChild(el);
     drawing.el = el;
     drawing.handleEls = createDrawingHandlePair(color);
+  } else if (type === "measure") {
+    if (points.t1 === points.t2) return null;
+    const svg = getDrawingOverlaySvg();
+    if (!svg) return null;
+    const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    el.setAttribute("fill", `${color}26`);
+    el.setAttribute("stroke", color);
+    el.setAttribute("stroke-width", "1.5");
+    el.setAttribute("stroke-dasharray", "5,3");
+    svg.appendChild(el);
+    drawing.el = el;
+    const textEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    textEl.setAttribute("fill", "#f8fafc");
+    textEl.setAttribute("font-size", "12");
+    textEl.setAttribute("font-weight", "700");
+    textEl.setAttribute("class", "drawing-measure-label");
+    svg.appendChild(textEl);
+    drawing.textEl = textEl;
+    drawing.handleEls = createDrawingHandlePair(color);
   } else {
     return null;
   }
@@ -2019,6 +2086,7 @@ function removeDrawingElements(drawing) {
     }
   }
   if (drawing.el) drawing.el.remove();
+  if (drawing.textEl) drawing.textEl.remove();
   if (Array.isArray(drawing.handleEls)) drawing.handleEls.forEach((handle) => handle.remove());
 }
 
@@ -2074,7 +2142,7 @@ function handleChartDrawingClick(param) {
     return;
   }
 
-  if (chartDrawingMode === "trend" || chartDrawingMode === "rectangle") {
+  if (chartDrawingMode === "trend" || chartDrawingMode === "rectangle" || chartDrawingMode === "measure") {
     if (!chartDrawingPendingPoint) {
       chartDrawingPendingPoint = { time, price };
       setDrawingToolHint("Now click the second point.");
@@ -2145,7 +2213,7 @@ function findDrawingHandleAtPoint(x, y) {
     } else if (drawing.type === "vertical") {
       const lineX = timeScale.timeToCoordinate(drawing.time);
       if (lineX !== null && Math.abs(lineX - x) <= LINE_HIT_PX) return { drawing, handle: "move" };
-    } else if (drawing.type === "trend" || drawing.type === "rectangle") {
+    } else if (drawing.type === "trend" || drawing.type === "rectangle" || drawing.type === "measure") {
       const x1 = timeScale.timeToCoordinate(drawing.t1);
       const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
       const x2 = timeScale.timeToCoordinate(drawing.t2);
