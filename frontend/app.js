@@ -1,5 +1,6 @@
 let liveCandleChart = null;
 let liveCandleSeries = null;
+let liveCandleRawData = [];
 let liveChartTimeframe = "15m";
 let liveChartRefreshTimer = null;
 let liveAiPriceLines = [];
@@ -17,6 +18,7 @@ const FIB_LEVELS = [
   { ratio: 0.786, label: "78.6%", color: "#9c27b0" },
   { ratio: 1, label: "100%", color: "#787b86" }
 ];
+const VOLUME_PROFILE_BINS = 24;
 const DRAWING_CLICK_MOVE_THRESHOLD_PX = 4;
 let chartDrawingMode = "cursor";
 let chartDrawingPendingPoint = null;
@@ -1855,7 +1857,9 @@ function setChartDrawingMode(mode) {
     trend: "Click the start point, then the end point.",
     rectangle: "Click one corner, then the opposite corner.",
     measure: "Click the start point, then the end point to measure price, %, bars and time.",
-    fibonacci: "Click the swing high, then the swing low (or reverse) to draw retracement levels."
+    fibonacci: "Click the swing high, then the swing low (or reverse) to draw retracement levels.",
+    position: "Click the entry price, then the stop-loss price (target auto-calculates at 2:1 reward:risk).",
+    "volume-profile": "Click the start of the range, then the end, to show traded volume by price."
   };
 
   setDrawingToolHint(hints[mode] || "");
@@ -1877,7 +1881,7 @@ function scheduleDrawingReposition() {
 
 function drawingRepositionLoop() {
   repositionDrawingOverlays();
-  const hasOverlayDrawings = userChartDrawings.some((drawing) => drawing.type === "vertical" || drawing.type === "rectangle" || drawing.type === "trend" || drawing.type === "measure" || drawing.type === "fibonacci");
+  const hasOverlayDrawings = userChartDrawings.some((drawing) => drawing.type === "vertical" || drawing.type === "rectangle" || drawing.type === "trend" || drawing.type === "measure" || drawing.type === "fibonacci" || drawing.type === "position" || drawing.type === "volume-profile");
   drawingRepositionFrame = hasOverlayDrawings ? window.requestAnimationFrame(drawingRepositionLoop) : null;
 }
 
@@ -1977,6 +1981,131 @@ function repositionDrawingOverlays() {
       const py1 = liveCandleSeries.priceToCoordinate(drawing.p1);
       const py2 = liveCandleSeries.priceToCoordinate(drawing.p2);
       positionHandlePair(drawing, x1, py1, x2, py2);
+    } else if (drawing.type === "position" && drawing.riskRectEl) {
+      const timeScale = liveCandleChart.timeScale();
+      const x1 = timeScale.timeToCoordinate(drawing.t1);
+      const x2 = timeScale.timeToCoordinate(drawing.t2);
+      const entryY = liveCandleSeries.priceToCoordinate(drawing.p1);
+      const stopY = liveCandleSeries.priceToCoordinate(drawing.p2);
+      if (x1 === null || x2 === null || entryY === null || stopY === null) {
+        drawing.riskRectEl.setAttribute("opacity", "0");
+        drawing.rewardRectEl.setAttribute("opacity", "0");
+        drawing.entryLineEl.setAttribute("opacity", "0");
+        drawing.labelEl.setAttribute("opacity", "0");
+        positionHandlePair(drawing, null, null, null, null);
+        return;
+      }
+      const risk = drawing.p1 - drawing.p2;
+      const targetPrice = drawing.p1 + risk * 2;
+      const targetY = liveCandleSeries.priceToCoordinate(targetPrice);
+      const leftX = Math.min(x1, x2);
+      const rightX = Math.max(x1, x2);
+      const width = Math.max(1, rightX - leftX);
+
+      drawing.riskRectEl.setAttribute("opacity", "1");
+      drawing.riskRectEl.setAttribute("x", leftX);
+      drawing.riskRectEl.setAttribute("y", Math.min(entryY, stopY));
+      drawing.riskRectEl.setAttribute("width", width);
+      drawing.riskRectEl.setAttribute("height", Math.max(1, Math.abs(stopY - entryY)));
+
+      if (targetY !== null) {
+        drawing.rewardRectEl.setAttribute("opacity", "1");
+        drawing.rewardRectEl.setAttribute("x", leftX);
+        drawing.rewardRectEl.setAttribute("y", Math.min(entryY, targetY));
+        drawing.rewardRectEl.setAttribute("width", width);
+        drawing.rewardRectEl.setAttribute("height", Math.max(1, Math.abs(targetY - entryY)));
+      } else {
+        drawing.rewardRectEl.setAttribute("opacity", "0");
+      }
+
+      drawing.entryLineEl.setAttribute("opacity", "1");
+      drawing.entryLineEl.setAttribute("x1", leftX);
+      drawing.entryLineEl.setAttribute("x2", rightX);
+      drawing.entryLineEl.setAttribute("y1", entryY);
+      drawing.entryLineEl.setAttribute("y2", entryY);
+
+      const direction = risk > 0 ? "LONG" : "SHORT";
+      drawing.labelEl.setAttribute("opacity", "1");
+      drawing.labelEl.setAttribute("x", leftX + 6);
+      drawing.labelEl.setAttribute("y", Math.min(entryY, stopY, targetY ?? entryY) - 8);
+      drawing.labelEl.textContent = `${direction}  Entry $${drawing.p1.toFixed(2)}  •  Stop $${drawing.p2.toFixed(2)}  •  Target $${targetPrice.toFixed(2)}  •  R:R 1:2.00`;
+
+      positionHandlePair(drawing, x1, entryY, x2, stopY);
+    } else if (drawing.type === "volume-profile" && Array.isArray(drawing.barEls)) {
+      const timeScale = liveCandleChart.timeScale();
+      const rangeStart = Math.min(drawing.t1, drawing.t2);
+      const rangeEnd = Math.max(drawing.t1, drawing.t2);
+      const x1 = timeScale.timeToCoordinate(drawing.t1);
+      const x2 = timeScale.timeToCoordinate(drawing.t2);
+      const hide = () => {
+        drawing.barEls.forEach((bar) => bar.setAttribute("opacity", "0"));
+        drawing.boundsEl.setAttribute("opacity", "0");
+        drawing.labelEl.setAttribute("opacity", "0");
+        positionHandlePair(drawing, null, null, null, null);
+      };
+      if (x1 === null || x2 === null) {
+        hide();
+        return;
+      }
+      const candlesInRange = liveCandleRawData.filter((candle) => candle.time >= rangeStart && candle.time <= rangeEnd);
+      if (!candlesInRange.length) {
+        hide();
+        return;
+      }
+      const highestPrice = Math.max(...candlesInRange.map((candle) => candle.high));
+      const lowestPrice = Math.min(...candlesInRange.map((candle) => candle.low));
+      if (!(highestPrice > lowestPrice)) {
+        hide();
+        return;
+      }
+      const binSize = (highestPrice - lowestPrice) / VOLUME_PROFILE_BINS;
+      const bins = new Array(VOLUME_PROFILE_BINS).fill(0);
+      candlesInRange.forEach((candle) => {
+        const binIndex = Math.min(VOLUME_PROFILE_BINS - 1, Math.max(0, Math.floor((candle.close - lowestPrice) / binSize)));
+        bins[binIndex] += candle.volume;
+      });
+      const maxVolume = Math.max(...bins, 0.0000001);
+      const pocIndex = bins.indexOf(maxVolume);
+      const leftX = Math.min(x1, x2);
+      const rightX = Math.max(x1, x2);
+      const maxBarWidth = 90;
+
+      drawing.boundsEl.setAttribute("opacity", "1");
+      drawing.boundsEl.setAttribute("x", leftX);
+      drawing.boundsEl.setAttribute("width", Math.max(1, rightX - leftX));
+      const topY = liveCandleSeries.priceToCoordinate(highestPrice);
+      const bottomY = liveCandleSeries.priceToCoordinate(lowestPrice);
+      if (topY === null || bottomY === null) {
+        hide();
+        return;
+      }
+      drawing.boundsEl.setAttribute("y", topY);
+      drawing.boundsEl.setAttribute("height", Math.max(1, bottomY - topY));
+
+      drawing.barEls.forEach((bar, index) => {
+        const binLowPrice = lowestPrice + index * binSize;
+        const binHighPrice = binLowPrice + binSize;
+        const binTopY = liveCandleSeries.priceToCoordinate(binHighPrice);
+        const binBottomY = liveCandleSeries.priceToCoordinate(binLowPrice);
+        if (binTopY === null || binBottomY === null) {
+          bar.setAttribute("opacity", "0");
+          return;
+        }
+        const barWidth = Math.max(1, (bins[index] / maxVolume) * maxBarWidth);
+        bar.setAttribute("opacity", "1");
+        bar.setAttribute("fill", index === pocIndex ? "#fbbf2499" : `${drawing.color}66`);
+        bar.setAttribute("x", rightX);
+        bar.setAttribute("y", Math.min(binTopY, binBottomY) + 1);
+        bar.setAttribute("width", barWidth);
+        bar.setAttribute("height", Math.max(1, Math.abs(binBottomY - binTopY) - 2));
+      });
+
+      drawing.labelEl.setAttribute("opacity", "1");
+      drawing.labelEl.setAttribute("x", leftX + 4);
+      drawing.labelEl.setAttribute("y", topY - 8 < 12 ? topY + 14 : topY - 8);
+      drawing.labelEl.textContent = `Volume Profile  •  POC $${(lowestPrice + pocIndex * binSize + binSize / 2).toFixed(2)}`;
+
+      positionHandlePair(drawing, x1, topY, x2, bottomY);
     }
   });
 }
@@ -2129,6 +2258,68 @@ function addDrawing(type, points, color = DRAWING_COLOR, persist = true) {
       return { line, text, level };
     });
     drawing.handleEls = createDrawingHandlePair(color);
+  } else if (type === "position") {
+    if (points.t1 === points.t2 || points.p1 === points.p2) return null;
+    const svg = getDrawingOverlaySvg();
+    if (!svg) return null;
+    const riskRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    riskRect.setAttribute("fill", "#ef444433");
+    riskRect.setAttribute("stroke", "#ef4444");
+    riskRect.setAttribute("stroke-width", "1");
+    svg.appendChild(riskRect);
+    drawing.riskRectEl = riskRect;
+
+    const rewardRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rewardRect.setAttribute("fill", "#22c55e33");
+    rewardRect.setAttribute("stroke", "#22c55e");
+    rewardRect.setAttribute("stroke-width", "1");
+    svg.appendChild(rewardRect);
+    drawing.rewardRectEl = rewardRect;
+
+    const entryLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    entryLine.setAttribute("stroke", "#f8fafc");
+    entryLine.setAttribute("stroke-width", "1.5");
+    svg.appendChild(entryLine);
+    drawing.entryLineEl = entryLine;
+
+    const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    labelEl.setAttribute("fill", "#f8fafc");
+    labelEl.setAttribute("font-size", "11");
+    labelEl.setAttribute("font-weight", "700");
+    labelEl.setAttribute("class", "drawing-measure-label");
+    svg.appendChild(labelEl);
+    drawing.labelEl = labelEl;
+
+    drawing.handleEls = createDrawingHandlePair(color);
+  } else if (type === "volume-profile") {
+    if (points.t1 === points.t2) return null;
+    const svg = getDrawingOverlaySvg();
+    if (!svg) return null;
+    const boundsEl = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    boundsEl.setAttribute("fill", "none");
+    boundsEl.setAttribute("stroke", color);
+    boundsEl.setAttribute("stroke-width", "1");
+    boundsEl.setAttribute("stroke-dasharray", "3,3");
+    svg.appendChild(boundsEl);
+    drawing.boundsEl = boundsEl;
+
+    drawing.barEls = [];
+    for (let i = 0; i < VOLUME_PROFILE_BINS; i += 1) {
+      const bar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      bar.setAttribute("fill", `${color}99`);
+      svg.appendChild(bar);
+      drawing.barEls.push(bar);
+    }
+
+    const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    labelEl.setAttribute("fill", "#f8fafc");
+    labelEl.setAttribute("font-size", "11");
+    labelEl.setAttribute("font-weight", "700");
+    labelEl.setAttribute("class", "drawing-measure-label");
+    svg.appendChild(labelEl);
+    drawing.labelEl = labelEl;
+
+    drawing.handleEls = createDrawingHandlePair(color);
   } else {
     return null;
   }
@@ -2150,6 +2341,12 @@ function removeDrawingElements(drawing) {
   }
   if (drawing.el) drawing.el.remove();
   if (drawing.textEl) drawing.textEl.remove();
+  if (drawing.riskRectEl) drawing.riskRectEl.remove();
+  if (drawing.rewardRectEl) drawing.rewardRectEl.remove();
+  if (drawing.entryLineEl) drawing.entryLineEl.remove();
+  if (drawing.labelEl) drawing.labelEl.remove();
+  if (drawing.boundsEl) drawing.boundsEl.remove();
+  if (Array.isArray(drawing.barEls)) drawing.barEls.forEach((bar) => bar.remove());
   if (Array.isArray(drawing.levelEls)) drawing.levelEls.forEach(({ line, text }) => { line.remove(); text.remove(); });
   if (Array.isArray(drawing.handleEls)) drawing.handleEls.forEach((handle) => handle.remove());
 }
@@ -2206,7 +2403,7 @@ function handleChartDrawingClick(param) {
     return;
   }
 
-  if (chartDrawingMode === "trend" || chartDrawingMode === "rectangle" || chartDrawingMode === "measure" || chartDrawingMode === "fibonacci") {
+  if (chartDrawingMode === "trend" || chartDrawingMode === "rectangle" || chartDrawingMode === "measure" || chartDrawingMode === "fibonacci" || chartDrawingMode === "position" || chartDrawingMode === "volume-profile") {
     if (!chartDrawingPendingPoint) {
       chartDrawingPendingPoint = { time, price };
       setDrawingToolHint("Now click the second point.");
@@ -2277,7 +2474,7 @@ function findDrawingHandleAtPoint(x, y) {
     } else if (drawing.type === "vertical") {
       const lineX = timeScale.timeToCoordinate(drawing.time);
       if (lineX !== null && Math.abs(lineX - x) <= LINE_HIT_PX) return { drawing, handle: "move" };
-    } else if (drawing.type === "trend" || drawing.type === "rectangle" || drawing.type === "measure" || drawing.type === "fibonacci") {
+    } else if (drawing.type === "trend" || drawing.type === "rectangle" || drawing.type === "measure" || drawing.type === "fibonacci" || drawing.type === "position" || drawing.type === "volume-profile") {
       const x1 = timeScale.timeToCoordinate(drawing.t1);
       const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
       const x2 = timeScale.timeToCoordinate(drawing.t2);
@@ -2535,6 +2732,15 @@ async function loadLiveCandlestickChart() {
         close: Number(candle.close)
       }))
     );
+
+    liveCandleRawData = candles.map((candle) => ({
+      time: Number(candle.time),
+      open: Number(candle.open),
+      high: Number(candle.high),
+      low: Number(candle.low),
+      close: Number(candle.close),
+      volume: Number(candle.volume) || 0
+    }));
 
     const latest = candles[candles.length - 1];
 
