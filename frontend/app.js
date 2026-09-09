@@ -1852,7 +1852,7 @@ function setChartDrawingMode(mode) {
   });
 
   const hints = {
-    cursor: "Click a drawing to delete it. Drag it to move, or drag an endpoint dot to resize.",
+    cursor: "",
     horizontal: "Click the chart to place a horizontal line.",
     vertical: "Click the chart to place a vertical line.",
     trend: "Click the start point, then the end point.",
