@@ -3464,6 +3464,10 @@ body[data-accent="green"] .settings-choice.active {
   pointer-events: auto;
 }
 
+.drawing-context-menu[hidden] {
+  display: none !important;
+}
+
 .drawing-context-color {
   width: 30px;
   height: 26px;
