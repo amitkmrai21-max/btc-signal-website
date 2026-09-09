@@ -407,6 +407,12 @@
       <span id="drawingToolHint" class="drawing-tool-hint"></span>
       <span id="liveChartHoldBadge" class="live-chart-hold-badge" hidden>HOLD</span>
       <svg id="liveChartDrawingOverlay" class="live-chart-drawing-overlay"></svg>
+      <div id="drawingContextMenu" class="drawing-context-menu" hidden>
+  <input type="color" id="drawingContextColor" class="drawing-context-color" title="Change color" aria-label="Change drawing color" />
+  <button id="drawingContextDelete" class="drawing-context-delete" type="button" title="Delete this drawing">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5a1 1 0 011-1h4a1 1 0 011 1V7m2 0-.8 12.4a1.5 1.5 0 01-1.5 1.4H8.3a1.5 1.5 0 01-1.5-1.4L6 7"/></svg>
+  </button>
+</div>
     </div>
 
     <div class="live-chart-bottom-grid">
