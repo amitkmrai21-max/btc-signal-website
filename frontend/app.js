@@ -9,6 +9,7 @@ let liveAiLevelSeries = [];
 
 const CHART_DRAWINGS_STORAGE_KEY = "btcChartDrawingsV1";
 const DRAWING_COLOR = "#38bdf8";
+let currentDrawingColor = DRAWING_COLOR;
 const FIB_LEVELS = [
   { ratio: 0, label: "0%", color: "#787b86" },
   { ratio: 0.236, label: "23.6%", color: "#f23645" },
@@ -2392,13 +2393,13 @@ function handleChartDrawingClick(param) {
   const time = param.time;
 
   if (chartDrawingMode === "horizontal") {
-    addDrawing("horizontal", { price });
+    addDrawing("horizontal", { price }, currentDrawingColor);
     setChartDrawingMode("cursor");
     return;
   }
 
   if (chartDrawingMode === "vertical") {
-    addDrawing("vertical", { time });
+    addDrawing("vertical", { time }, currentDrawingColor);
     setChartDrawingMode("cursor");
     return;
   }
@@ -2410,7 +2411,7 @@ function handleChartDrawingClick(param) {
       return;
     }
     const first = chartDrawingPendingPoint;
-    addDrawing(chartDrawingMode, { t1: first.time, p1: first.price, t2: time, p2: price });
+    addDrawing(chartDrawingMode, { t1: first.time, p1: first.price, t2: time, p2: price }, currentDrawingColor);
     setChartDrawingMode("cursor");
   }
 }
@@ -2425,6 +2426,14 @@ function setupChartDrawingTools() {
       clearAllUserDrawings();
     }
   });
+
+  const colorPicker = document.getElementById("drawingColorPicker");
+  if (colorPicker) {
+    colorPicker.value = currentDrawingColor;
+    colorPicker.addEventListener("input", () => {
+      currentDrawingColor = colorPicker.value;
+    });
+  }
 
   setChartDrawingMode("cursor");
 }
@@ -2612,10 +2621,7 @@ function handleDrawingMouseUp() {
   if (container) container.style.cursor = "";
 
   if (!moved) {
-    // A plain click (no drag movement) on a drawing deletes it, after confirming.
-    if (window.confirm("Delete this drawing?")) {
-      deleteDrawing(drawing);
-    }
+    deleteDrawing(drawing);
     return;
   }
 
