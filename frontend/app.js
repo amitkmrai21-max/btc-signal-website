@@ -8,6 +8,15 @@ let liveAiLevelSeries = [];
 
 const CHART_DRAWINGS_STORAGE_KEY = "btcChartDrawingsV1";
 const DRAWING_COLOR = "#38bdf8";
+const FIB_LEVELS = [
+  { ratio: 0, label: "0%", color: "#787b86" },
+  { ratio: 0.236, label: "23.6%", color: "#f23645" },
+  { ratio: 0.382, label: "38.2%", color: "#ff9800" },
+  { ratio: 0.5, label: "50%", color: "#4caf50" },
+  { ratio: 0.618, label: "61.8%", color: "#2196f3" },
+  { ratio: 0.786, label: "78.6%", color: "#9c27b0" },
+  { ratio: 1, label: "100%", color: "#787b86" }
+];
 const DRAWING_CLICK_MOVE_THRESHOLD_PX = 4;
 let chartDrawingMode = "cursor";
 let chartDrawingPendingPoint = null;
@@ -1845,7 +1854,8 @@ function setChartDrawingMode(mode) {
     vertical: "Click the chart to place a vertical line.",
     trend: "Click the start point, then the end point.",
     rectangle: "Click one corner, then the opposite corner.",
-    measure: "Click the start point, then the end point to measure price, %, bars and time."
+    measure: "Click the start point, then the end point to measure price, %, bars and time.",
+    fibonacci: "Click the swing high, then the swing low (or reverse) to draw retracement levels."
   };
 
   setDrawingToolHint(hints[mode] || "");
@@ -1867,7 +1877,7 @@ function scheduleDrawingReposition() {
 
 function drawingRepositionLoop() {
   repositionDrawingOverlays();
-  const hasOverlayDrawings = userChartDrawings.some((drawing) => drawing.type === "vertical" || drawing.type === "rectangle" || drawing.type === "trend" || drawing.type === "measure");
+  const hasOverlayDrawings = userChartDrawings.some((drawing) => drawing.type === "vertical" || drawing.type === "rectangle" || drawing.type === "trend" || drawing.type === "measure" || drawing.type === "fibonacci");
   drawingRepositionFrame = hasOverlayDrawings ? window.requestAnimationFrame(drawingRepositionLoop) : null;
 }
 
@@ -1932,6 +1942,41 @@ function repositionDrawingOverlays() {
         drawing.textEl.setAttribute("y", Math.min(y1, y2) - 8 < 12 ? Math.min(y1, y2) + 16 : Math.min(y1, y2) - 8);
         renderMeasureLabel(drawing.textEl, drawing);
       }
+    } else if (drawing.type === "fibonacci" && Array.isArray(drawing.levelEls)) {
+      const timeScale = liveCandleChart.timeScale();
+      const x1 = timeScale.timeToCoordinate(drawing.t1);
+      const x2 = timeScale.timeToCoordinate(drawing.t2);
+      if (x1 === null || x2 === null) {
+        drawing.levelEls.forEach(({ line, text }) => {
+          line.setAttribute("opacity", "0");
+          text.setAttribute("opacity", "0");
+        });
+        positionHandlePair(drawing, null, null, null, null);
+        return;
+      }
+      const leftX = Math.min(x1, x2);
+      const rightX = Math.max(x1, x2);
+      drawing.levelEls.forEach(({ line, text, level }) => {
+        const levelPrice = drawing.p1 + (drawing.p2 - drawing.p1) * level.ratio;
+        const y = liveCandleSeries.priceToCoordinate(levelPrice);
+        if (y === null) {
+          line.setAttribute("opacity", "0");
+          text.setAttribute("opacity", "0");
+          return;
+        }
+        line.setAttribute("opacity", "1");
+        line.setAttribute("x1", leftX);
+        line.setAttribute("x2", rightX);
+        line.setAttribute("y1", y);
+        line.setAttribute("y2", y);
+        text.setAttribute("opacity", "1");
+        text.setAttribute("x", rightX + 6);
+        text.setAttribute("y", y + 4);
+        text.textContent = `${level.label}  $${levelPrice.toFixed(2)}`;
+      });
+      const py1 = liveCandleSeries.priceToCoordinate(drawing.p1);
+      const py2 = liveCandleSeries.priceToCoordinate(drawing.p2);
+      positionHandlePair(drawing, x1, py1, x2, py2);
     }
   });
 }
@@ -2066,6 +2111,24 @@ function addDrawing(type, points, color = DRAWING_COLOR, persist = true) {
     svg.appendChild(textEl);
     drawing.textEl = textEl;
     drawing.handleEls = createDrawingHandlePair(color);
+  } else if (type === "fibonacci") {
+    if (points.t1 === points.t2 || points.p1 === points.p2) return null;
+    const svg = getDrawingOverlaySvg();
+    if (!svg) return null;
+    drawing.levelEls = FIB_LEVELS.map((level) => {
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("stroke", level.color);
+      line.setAttribute("stroke-width", level.ratio === 0.5 || level.ratio === 0.618 ? "2" : "1.5");
+      svg.appendChild(line);
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.setAttribute("fill", level.color);
+      text.setAttribute("font-size", "11");
+      text.setAttribute("font-weight", "700");
+      text.setAttribute("class", "drawing-measure-label");
+      svg.appendChild(text);
+      return { line, text, level };
+    });
+    drawing.handleEls = createDrawingHandlePair(color);
   } else {
     return null;
   }
@@ -2087,6 +2150,7 @@ function removeDrawingElements(drawing) {
   }
   if (drawing.el) drawing.el.remove();
   if (drawing.textEl) drawing.textEl.remove();
+  if (Array.isArray(drawing.levelEls)) drawing.levelEls.forEach(({ line, text }) => { line.remove(); text.remove(); });
   if (Array.isArray(drawing.handleEls)) drawing.handleEls.forEach((handle) => handle.remove());
 }
 
@@ -2142,7 +2206,7 @@ function handleChartDrawingClick(param) {
     return;
   }
 
-  if (chartDrawingMode === "trend" || chartDrawingMode === "rectangle" || chartDrawingMode === "measure") {
+  if (chartDrawingMode === "trend" || chartDrawingMode === "rectangle" || chartDrawingMode === "measure" || chartDrawingMode === "fibonacci") {
     if (!chartDrawingPendingPoint) {
       chartDrawingPendingPoint = { time, price };
       setDrawingToolHint("Now click the second point.");
@@ -2213,7 +2277,7 @@ function findDrawingHandleAtPoint(x, y) {
     } else if (drawing.type === "vertical") {
       const lineX = timeScale.timeToCoordinate(drawing.time);
       if (lineX !== null && Math.abs(lineX - x) <= LINE_HIT_PX) return { drawing, handle: "move" };
-    } else if (drawing.type === "trend" || drawing.type === "rectangle" || drawing.type === "measure") {
+    } else if (drawing.type === "trend" || drawing.type === "rectangle" || drawing.type === "measure" || drawing.type === "fibonacci") {
       const x1 = timeScale.timeToCoordinate(drawing.t1);
       const y1 = liveCandleSeries.priceToCoordinate(drawing.p1);
       const x2 = timeScale.timeToCoordinate(drawing.t2);
