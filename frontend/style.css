@@ -3425,6 +3425,91 @@ body[data-accent="green"] .settings-choice.active {
   padding-top: 4px;
 }
 
+.drawing-color-picker {
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.drawing-color-picker::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.drawing-color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+.drawing-color-picker::-moz-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+.drawing-context-menu {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: rgba(7, 17, 31, 0.95);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+.drawing-context-color {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.drawing-context-color::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.drawing-context-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+.drawing-context-color::-moz-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+.drawing-context-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  cursor: pointer;
+}
+
+.drawing-context-delete svg {
+  width: 16px;
+  height: 16px;
+}
+
+.drawing-context-delete:hover {
+  background: rgba(239, 68, 68, 0.32);
+}
+
 .drawing-tool-hint {
   position: absolute;
   top: 14px;
