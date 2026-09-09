@@ -29,6 +29,7 @@ let activeDragDrawing = null;
 let activeDragHandle = null;
 let activeDragMoved = false;
 let activeDragStart = null;
+let selectedDrawingForMenu = null;
 
 const liveChartSettings = {
   "1m": { limit: 500 },
@@ -1846,6 +1847,7 @@ function setDrawingToolHint(text) {
 function setChartDrawingMode(mode) {
   chartDrawingMode = mode;
   chartDrawingPendingPoint = null;
+  hideDrawingContextMenu();
 
   document.querySelectorAll(".drawing-tool-btn[data-draw-tool]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.drawTool === mode);
@@ -2352,6 +2354,52 @@ function removeDrawingElements(drawing) {
   if (Array.isArray(drawing.handleEls)) drawing.handleEls.forEach((handle) => handle.remove());
 }
 
+function applyDrawingColor(drawing, newColor) {
+  drawing.color = newColor;
+  if (drawing.type === "horizontal" && drawing.ref) {
+    drawing.ref.applyOptions({ color: newColor });
+  } else if (drawing.type === "vertical" && drawing.el) {
+    drawing.el.setAttribute("stroke", newColor);
+  } else if (drawing.type === "trend" && drawing.ref) {
+    drawing.ref.applyOptions({ color: newColor });
+  } else if ((drawing.type === "rectangle" || drawing.type === "measure") && drawing.el) {
+    drawing.el.setAttribute("fill", `${newColor}26`);
+    drawing.el.setAttribute("stroke", newColor);
+  } else if (drawing.type === "volume-profile" && drawing.boundsEl) {
+    drawing.boundsEl.setAttribute("stroke", newColor);
+  }
+  // Fibonacci levels and Long/Short Position risk/reward zones keep their fixed,
+  // meaningful colors — only their endpoint handles follow the picked color.
+  if (Array.isArray(drawing.handleEls)) {
+    drawing.handleEls.forEach((handle) => handle.setAttribute("stroke", newColor));
+  }
+  saveUserDrawings();
+}
+
+function hideDrawingContextMenu() {
+  const menu = document.getElementById("drawingContextMenu");
+  if (menu) menu.hidden = true;
+  selectedDrawingForMenu = null;
+}
+
+function showDrawingContextMenu(drawing, clientX, clientY) {
+  const menu = document.getElementById("drawingContextMenu");
+  const container = document.getElementById("liveCandlestickChart");
+  if (!menu || !container) return;
+
+  selectedDrawingForMenu = drawing;
+
+  const rect = container.getBoundingClientRect();
+  const left = Math.max(4, Math.min(clientX - rect.left + 12, rect.width - 90));
+  const top = Math.max(4, Math.min(clientY - rect.top - 16, rect.height - 40));
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.hidden = false;
+
+  const colorInput = document.getElementById("drawingContextColor");
+  if (colorInput) colorInput.value = drawing.color || DRAWING_COLOR;
+}
+
 function deleteDrawing(drawing) {
   const index = userChartDrawings.indexOf(drawing);
   if (index === -1) return;
@@ -2424,6 +2472,7 @@ function setupChartDrawingTools() {
   document.getElementById("clearDrawingsBtn")?.addEventListener("click", () => {
     if (userChartDrawings.length && window.confirm("Clear all drawings from the chart?")) {
       clearAllUserDrawings();
+      hideDrawingContextMenu();
     }
   });
 
@@ -2434,6 +2483,15 @@ function setupChartDrawingTools() {
       currentDrawingColor = colorPicker.value;
     });
   }
+
+  document.getElementById("drawingContextColor")?.addEventListener("input", (event) => {
+    if (selectedDrawingForMenu) applyDrawingColor(selectedDrawingForMenu, event.target.value);
+  });
+
+  document.getElementById("drawingContextDelete")?.addEventListener("click", () => {
+    if (selectedDrawingForMenu) deleteDrawing(selectedDrawingForMenu);
+    hideDrawingContextMenu();
+  });
 
   setChartDrawingMode("cursor");
 }
@@ -2506,9 +2564,11 @@ function findDrawingHandleAtPoint(x, y) {
 }
 
 function handleDrawingMouseDown(event) {
+  if (event.target.closest && event.target.closest("#drawingContextMenu")) return;
   if (chartDrawingMode !== "cursor") return;
   const point = getContainerPoint(event);
   if (!point) return;
+  hideDrawingContextMenu();
   const hit = findDrawingHandleAtPoint(point.x, point.y);
   if (!hit) return;
 
@@ -2606,7 +2666,7 @@ function handleDrawingMouseMove(event) {
   applyTrendOrRectanglePoints(drawing);
 }
 
-function handleDrawingMouseUp() {
+function handleDrawingMouseUp(event) {
   if (!activeDragDrawing) return;
   const drawing = activeDragDrawing;
   const moved = activeDragMoved;
@@ -2621,7 +2681,10 @@ function handleDrawingMouseUp() {
   if (container) container.style.cursor = "";
 
   if (!moved) {
-    deleteDrawing(drawing);
+    const source = event && event.changedTouches && event.changedTouches[0] ? event.changedTouches[0] : event;
+    const clientX = source ? source.clientX : 0;
+    const clientY = source ? source.clientY : 0;
+    showDrawingContextMenu(drawing, clientX, clientY);
     return;
   }
 
