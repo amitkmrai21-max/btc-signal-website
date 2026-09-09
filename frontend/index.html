@@ -39,6 +39,7 @@
     <button class="app-tab" type="button" data-tab="technical">Technical</button>
     <button class="app-tab" type="button" data-tab="tools">Tools</button>
     <button class="app-tab" type="button" data-tab="news">News</button>
+    <button class="app-tab" type="button" data-tab="chart-analysis">Chart Analysis</button>
     <button
       id="settingsMenuButton"
       class="settings-menu-button"
@@ -1072,6 +1073,39 @@
       This section never produces BUY/SELL signals, Entry, Stop Loss, Target 1, or Target 2.
       News context is educational and not financial advice.
     </p>
+  </section>
+</section>
+
+    <section class="tab-panel" data-panel="chart-analysis">
+  <section class="card chart-analysis-card">
+    <div class="section-heading">
+      <div>
+        <h2>Chart Analysis</h2>
+        <p>Full TradingView chart with 100+ built-in indicators and 80+ drawing tools, for general technical analysis. Separate from this dashboard's own Engine/Gemini/Groq signals and AI overlay lines.</p>
+      </div>
+    </div>
+
+    <div class="tradingview-widget-container" style="height:680px;width:100%">
+      <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+      <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/BTCUSD/" rel="noopener nofollow" target="_blank"><span class="blue-text">BTCUSD chart</span></a><span class="trademark"> by TradingView</span></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+      {
+        "autosize": true,
+        "symbol": "BINANCE:BTCUSDT",
+        "interval": "15",
+        "timezone": "Asia/Kolkata",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "withdateranges": true,
+        "hide_side_toolbar": false,
+        "allow_symbol_change": true,
+        "details": true,
+        "studies": ["STD;SMA", "STD;RSI"],
+        "support_host": "https://www.tradingview.com"
+      }
+      </script>
+    </div>
   </section>
 </section>
 
