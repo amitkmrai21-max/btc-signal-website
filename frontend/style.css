@@ -3403,6 +3403,12 @@ body[data-accent="green"] .settings-choice.active {
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
+.drawing-tool-btn svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
 .drawing-tool-btn:hover {
   border-color: var(--blue);
 }
