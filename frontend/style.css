@@ -2183,8 +2183,7 @@ canvas {
 }
 
 .chart-analysis-widget {
-  height: 85vh;
-  min-height: 560px;
+  height: 800px;
 }
 
 .gemini-news-card {
