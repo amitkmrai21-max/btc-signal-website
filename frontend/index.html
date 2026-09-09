@@ -372,15 +372,34 @@
     </div>
 
     <div id="liveCandlestickChart" class="live-candlestick-chart">
-      <div class="drawing-toolbar" aria-label="Chart drawing tools">
-        <button class="drawing-tool-btn active" type="button" data-draw-tool="cursor" title="Cursor">↖</button>
-        <button class="drawing-tool-btn" type="button" data-draw-tool="horizontal" title="Horizontal Line">─</button>
-        <button class="drawing-tool-btn" type="button" data-draw-tool="vertical" title="Vertical Line">┃</button>
-        <button class="drawing-tool-btn" type="button" data-draw-tool="trend" title="Trend Line">╱</button>
-        <button class="drawing-tool-btn" type="button" data-draw-tool="rectangle" title="Rectangle">▭</button>
-        <button class="drawing-tool-btn" type="button" data-draw-tool="measure" title="Measure (price, % change, bars, time)">📏</button>
-        <button class="drawing-tool-btn" type="button" data-draw-tool="fibonacci" title="Fibonacci Retracement">𝗙</button>
-        <button id="clearDrawingsBtn" class="drawing-tool-btn drawing-clear-btn" type="button" title="Clear all drawings">🗑</button>
+           <div class="drawing-toolbar" aria-label="Chart drawing tools">
+        <button class="drawing-tool-btn active" type="button" data-draw-tool="cursor" title="Cursor">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l6.5 17 2.2-6.9L20.5 11z"/></svg>
+        </button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="horizontal" title="Horizontal Line">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="4.5" cy="12" r="1.6" fill="currentColor" stroke="none"/><line x1="4.5" y1="12" x2="19.5" y2="12"/><circle cx="19.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="vertical" title="Vertical Line">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="4.5" r="1.6" fill="currentColor" stroke="none"/><line x1="12" y1="4.5" x2="12" y2="19.5"/><circle cx="12" cy="19.5" r="1.6" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="trend" title="Trend Line">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="19" r="1.6" fill="currentColor" stroke="none"/><line x1="5" y1="19" x2="19" y2="5"/><circle cx="19" cy="5" r="1.6" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="rectangle" title="Rectangle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="1.5"/></svg>
+        </button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="measure" title="Measure (price, % change, bars, time)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 16.5l6-6"/><rect x="6" y="4" width="17" height="8" rx="1.5" transform="rotate(45 14.5 8)"/><path d="M10.5 8l1.5 1.5M13 5.5L14.5 7"/></svg>
+        </button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="fibonacci" title="Fibonacci Retracement">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="3" y1="5" x2="21" y2="5"/><line x1="3" y1="9.7" x2="17" y2="9.7"/><line x1="3" y1="14.3" x2="21" y2="14.3"/><line x1="3" y1="19" x2="13" y2="19"/></svg>
+        </button>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="position" title="Long/Short Position (click entry, then stop-loss)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="6.5" rx="1" fill="currentColor" fill-opacity="0.18"/><rect x="4" y="13.5" width="16" height="6.5" rx="1"/><line x1="4" y1="10.75" x2="20" y2="10.75" stroke-width="2.4"/></svg>
+        </button>
+        <button id="clearDrawingsBtn" class="drawing-tool-btn drawing-clear-btn" type="button" title="Clear all drawings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5a1 1 0 011-1h4a1 1 0 011 1V7m2 0-.8 12.4a1.5 1.5 0 01-1.5 1.4H8.3a1.5 1.5 0 01-1.5-1.4L6 7"/></svg>
+        </button>
       </div>
       <span id="drawingToolHint" class="drawing-tool-hint"></span>
       <span id="liveChartHoldBadge" class="live-chart-hold-badge" hidden>HOLD</span>
