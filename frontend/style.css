@@ -2176,6 +2176,12 @@ canvas {
   }
 }
 /* Phase 3: Gemini AI News Context */
+.chart-analysis-card .tradingview-widget-container {
+  margin-top: 16px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
 .gemini-news-card {
   background:
     radial-gradient(circle at 90% 0%, rgba(167, 139, 250, 0.15), transparent 22rem),
