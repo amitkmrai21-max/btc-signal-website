@@ -9,7 +9,7 @@ from email.utils import parsedate_to_datetime
 import requests
 from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from google import genai
 from google.genai import types
@@ -1613,3 +1613,24 @@ app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 @app.get("/")
 def home():
     return FileResponse("frontend/index.html")
+
+
+@app.get("/robots.txt")
+def robots_txt():
+    content = "User-agent: *\nAllow: /\n\nSitemap: https://btc-signal-website.onrender.com/sitemap.xml\n"
+    return Response(content=content, media_type="text/plain")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    content = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
+        "  <url>\n"
+        "    <loc>https://btc-signal-website.onrender.com/</loc>\n"
+        "    <changefreq>hourly</changefreq>\n"
+        "    <priority>1.0</priority>\n"
+        "  </url>\n"
+        "</urlset>\n"
+    )
+    return Response(content=content, media_type="application/xml")
