@@ -521,11 +521,17 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
         return build_filter_result(direction, watch_signal, "BREAK FAILED / BACK INSIDE", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{watch_signal} — break moved back inside the prior swing range. Do not enter; wait for a fresh break and retest.", "Price body-close accepted back inside the old swing structure.", "LOW", passed, waiting, failed, "Break failed; price returned inside")
     supporting_checks = [volume_ok, second_close_ok, trend_1h_ok, trend_4h_ok, momentum_ok]
     supporting_passed = sum(1 for check in supporting_checks if check)
-    mandatory_filters_ok = retest_seen and final_confirmation and supporting_passed >= 3
+    retest_path_ok = retest_seen and final_confirmation and supporting_passed >= 3
+    # Alternative: a strong breakout that continues (second directional close) without
+    # ever pulling back to retest can still confirm, if almost all supporting filters
+    # align — requiring a retest was blocking genuine breakout-and-run moves.
+    breakout_continuation_ok = second_close_ok and supporting_passed >= 4
+    mandatory_filters_ok = retest_path_ok or breakout_continuation_ok
     if mandatory_filters_ok:
         quality_label = "HIGH" if supporting_passed == len(supporting_checks) else "MEDIUM"
         supporting_summary = f"{supporting_passed}/{len(supporting_checks)} supporting filters aligned (volume, second close, 1h trend, 4h trend, momentum)"
-        return build_filter_result(direction, final_signal, f"{final_signal} CONFIRMED — {quality_label} QUALITY", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{final_signal} — confirmed 15m break, retest, and confirmation candle are present, with {supporting_summary}. Run Gemini AI Analysis now; proceed only if Gemini agrees.", f"Core price-action confirmed; {supporting_summary}.", quality_label, passed, waiting, failed, "Bullish break + support retest hold" if direction == "BULLISH" else "Bearish break + resistance retest rejection", confirmation_close_price)
+        path_summary = "retest and confirmation candle are present" if retest_path_ok else "breakout is continuing without a pullback yet"
+        return build_filter_result(direction, final_signal, f"{final_signal} CONFIRMED — {quality_label} QUALITY", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{final_signal} — confirmed 15m break, {path_summary}, with {supporting_summary}. Run Gemini AI Analysis now; proceed only if Gemini agrees.", f"Core price-action confirmed ({path_summary}); {supporting_summary}.", quality_label, passed, waiting, failed, "Bullish break + support retest hold" if direction == "BULLISH" else "Bearish break + resistance retest rejection", confirmation_close_price)
     status = f"{direction} BREAK / FILTERS PENDING" if not failed else f"{direction} BREAK / FILTER FAILED"
     return build_filter_result(direction, watch_signal, status, active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{watch_signal} — a structure break exists, but final {final_signal} is blocked until every fakeout filter passes. Review failed/pending filters below.", "Break is not yet high quality enough for a final signal.", "MEDIUM" if len(failed) <= 1 else "LOW", passed, waiting, failed, "Bullish break awaiting filters" if direction == "BULLISH" else "Bearish break awaiting filters")
 
