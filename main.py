@@ -1100,10 +1100,10 @@ def fetch_rss_news():
     return result
 
 
-def ensure_groq_configured():
-    api_key = os.getenv("GROQ_API_KEY")
+def ensure_groq_configured(user_api_key=None):
+    api_key = (str(user_api_key or "").strip()) or os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="Groq AI is not configured. Add GROQ_API_KEY on the server.")
+        raise HTTPException(status_code=503, detail="Groq AI is not configured. Add GROQ_API_KEY on the server, or enter your own key in Settings.")
     return Groq(api_key=api_key)
 
 
@@ -1279,10 +1279,11 @@ def get_saved_ai_signal():
 
 
 @app.post("/api/ai-signal/run")
-def run_ai_signal():
-    api_key = os.getenv("GEMINI_API_KEY")
+def run_ai_signal(payload: dict = Body(default={})):
+    user_api_key = str((payload or {}).get("api_key") or "").strip()
+    api_key = user_api_key or os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="Gemini AI is not configured. Add GEMINI_API_KEY on the server.")
+        raise HTTPException(status_code=503, detail="Gemini AI is not configured. Add GEMINI_API_KEY on the server, or enter your own key in Settings.")
     try:
         market_data, market_data_cached, _, _ = get_technical_market_data(force_refresh=True)
         technical_result = technical_main_signal(market_data)
@@ -1322,24 +1323,44 @@ def run_ai_signal():
 
 
 @app.post("/api/groq-live-analysis")
-def run_groq_live_analysis():
-    remaining = cooldown_remaining(groq_live_cache, GROQ_LIVE_COOLDOWN_SECONDS)
-    if remaining > 0:
-        raise HTTPException(status_code=429, detail=f"Groq live-chart cooldown active. Please wait {remaining} seconds.")
+def run_groq_live_analysis(payload: dict = Body(default={})):
+    user_api_key = str((payload or {}).get("api_key") or "").strip()
+    if not user_api_key:
+        remaining = cooldown_remaining(groq_live_cache, GROQ_LIVE_COOLDOWN_SECONDS)
+        if remaining > 0:
+            raise HTTPException(status_code=429, detail=f"Groq live-chart cooldown active. Please wait {remaining} seconds.")
     try:
-        client = ensure_groq_configured()
+        client = ensure_groq_configured(user_api_key)
         market_data, market_data_cached, _, _ = get_technical_market_data(force_refresh=True)
         technical_result = technical_main_signal(market_data)
-        completion = client.chat.completions.create(
-            model=GROQ_MODEL,
-            temperature=0.15,
-            max_tokens=1300,
-            response_format={"type": "json_object"},
-            messages=[
-            {"role": "system", "content": "Return valid JSON only. Do not include Markdown, code fences, or text outside the JSON object."},
-            {"role": "user", "content": groq_live_schema_prompt(market_data, technical_result)},
-        ],
-        )
+        completion = None
+        attempts = [0, 3, 6]
+        total_attempts = len(attempts)
+        for attempt, delay_seconds in enumerate(attempts, start=1):
+            if delay_seconds:
+                time.sleep(delay_seconds)
+            try:
+                completion = client.chat.completions.create(
+                    model=GROQ_MODEL,
+                    temperature=0.15,
+                    max_tokens=1300,
+                    response_format={"type": "json_object"},
+                    messages=[
+                    {"role": "system", "content": "Return valid JSON only. Do not include Markdown, code fences, or text outside the JSON object."},
+                    {"role": "user", "content": groq_live_schema_prompt(market_data, technical_result)},
+                ],
+                )
+                if not completion or not completion.choices:
+                    raise ValueError("Groq returned an empty response.")
+                break
+            except Exception as error:
+                error_text = str(error)
+                print(f"Groq live attempt {attempt}/{total_attempts} failed: {error_text}")
+                if ("503" in error_text or "UNAVAILABLE" in error_text or "high demand" in error_text.lower()) and attempt < total_attempts:
+                    continue
+                if "429" in error_text or "RATE_LIMIT" in error_text.upper():
+                    raise HTTPException(status_code=429, detail="Groq quota is temporarily exhausted. Please wait and try again later.") from error
+                raise HTTPException(status_code=503, detail="Groq is temporarily busy or unavailable. Please try again in a few seconds.") from error
         text = completion.choices[0].message.content if completion.choices else ""
         result = enforce_trade_levels(parse_json_from_model(text), market_data["current_price_usdt"], provider_label="Groq")
         now = time.time()
