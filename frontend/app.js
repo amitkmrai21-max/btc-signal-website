@@ -1,6 +1,64 @@
 let liveCandleChart = null;
 let liveCandleSeries = null;
 let liveCandleRawData = [];
+
+const USER_API_KEY_STORAGE = { gemini: "userGeminiApiKey", groq: "userGroqApiKey" };
+
+function getUserApiKey(provider) {
+  try {
+    return localStorage.getItem(USER_API_KEY_STORAGE[provider]) || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function setUserApiKey(provider, value) {
+  try {
+    if (value) localStorage.setItem(USER_API_KEY_STORAGE[provider], value);
+    else localStorage.removeItem(USER_API_KEY_STORAGE[provider]);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+const AI_GATE_BUTTON_IDS = { gemini: "geminiAiBtn", groq: "groqLiveBtn" };
+const AI_GATE_PROMPT_IDS = { gemini: "geminiKeyPrompt", groq: "groqKeyPrompt" };
+const AI_GATE_PROVIDER_LABEL = { gemini: "Gemini", groq: "Groq" };
+
+function updateApiKeyGate(provider, justSaved = false) {
+  const button = document.getElementById(AI_GATE_BUTTON_IDS[provider]);
+  const prompt = document.getElementById(AI_GATE_PROMPT_IDS[provider]);
+  if (!button || !prompt) return;
+
+  const hasKey = !!getUserApiKey(provider);
+
+  if (hasKey) {
+    button.classList.remove("key-gate-locked");
+    button.disabled = false;
+    if (justSaved) {
+      prompt.classList.add("congrats-message");
+      prompt.textContent = "Congratulations! Ab aap AI ka istemal kar sakte hain.";
+      window.setTimeout(() => {
+        prompt.textContent = "";
+        prompt.classList.remove("congrats-message");
+      }, 5000);
+    } else {
+      prompt.textContent = "";
+      prompt.classList.remove("congrats-message");
+    }
+  } else {
+    button.classList.add("key-gate-locked");
+    button.disabled = true;
+    prompt.classList.remove("congrats-message");
+    prompt.innerHTML = `Apni ${AI_GATE_PROVIDER_LABEL[provider]} API key daalo <button type="button" class="key-prompt-link" data-open-settings>Settings me jaake</button>`;
+  }
+}
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest && event.target.closest("[data-open-settings]")) {
+    document.getElementById("settingsMenuButton")?.click();
+  }
+});
 let liveChartTimeframe = "15m";
 let liveChartRefreshTimer = null;
 let liveAiPriceLines = [];
@@ -1511,7 +1569,9 @@ async function loadAiAnalysis() {
   try {
     const response = await fetch("/api/ai-signal/run", {
       method: "POST",
-      cache: "no-store"
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: getUserApiKey("gemini") })
     });
 
     const data = await response.json().catch(() => ({}));
@@ -1579,7 +1639,7 @@ function setupLayoutEditor(){const
   container=getElement("customizableSections"),edit=getElement("editLayoutBtn"),save=getElement("saveLayoutBtn"),reset=getElement("resetLayoutBtn");if(!container||!edit||!save||!reset)return;let editMode=false,dragged=null;const cards=()=>[...container.querySelectorAll(":scope > .layout-editable")];const height=(card,h)=>{card.classList.remove("layout-height-compact","layout-height-normal","layout-height-tall");card.classList.add(`layout-height-${h}`);};const toolbar=(card)=>{if(card.querySelector(".layout-editor-toolbar"))return;const bar=document.createElement("div");bar.className="layout-editor-toolbar";bar.innerHTML='<button class="layout-editor-btn layout-drag-handle" type="button">Move</button><button class="layout-editor-btn" type="button" data-height="compact">Compact</button><button class="layout-editor-btn" type="button" data-height="normal">Normal</button><button class="layout-editor-btn" type="button" data-height="tall">Tall</button>';card.prepend(bar);bar.querySelectorAll("[data-height]").forEach((b)=>b.addEventListener("click",(e)=>{e.preventDefault();e.stopPropagation();height(card,b.dataset.height);}));};const drag=(card)=>{if(card.dataset.layoutDragReady)return;card.dataset.layoutDragReady="true";card.addEventListener("dragstart",(e)=>{if(!editMode){e.preventDefault();return;}dragged=card;card.classList.add("is-dragging");e.dataTransfer.effectAllowed="move";});card.addEventListener("dragend",()=>{card.classList.remove("is-dragging");cards().forEach((c)=>c.classList.remove("drag-over"));dragged=null;});card.addEventListener("dragover",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();card.classList.add("drag-over");});card.addEventListener("dragleave",()=>card.classList.remove("drag-over"));card.addEventListener("drop",(e)=>{if(!editMode||!dragged||dragged===card)return;e.preventDefault();const box=card.getBoundingClientRect();container.insertBefore(dragged,e.clientY>box.top+box.height/2?card.nextSibling:card);card.classList.remove("drag-over");});};const mode=(on)=>{editMode=on;container.classList.toggle("layout-edit-mode",on);cards().forEach((card)=>{toolbar(card);drag(card);card.draggable=on;if(!on)card.classList.remove("is-dragging","drag-over");});edit.hidden=on;save.hidden=!on;reset.hidden=!on;};const restore=()=>{try{const stored=JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY)||"[]");if(!Array.isArray(stored))return;stored.forEach((item)=>{const card=container.querySelector(`:scope > .layout-editable[data-layout-id="${item.id}"]`);if(card){container.appendChild(card);height(card,["compact","normal","tall"].includes(item.height)?item.height:"normal");}});}catch(error){console.warn("Saved dashboard layout could not be restored.",error);}};edit.addEventListener("click",()=>mode(true));save.addEventListener("click",()=>{localStorage.setItem(LAYOUT_STORAGE_KEY,JSON.stringify(cards().map((card)=>({id:card.dataset.layoutId,height:["compact","normal","tall"].find((h)=>card.classList.contains(`layout-height-${h}`))||"normal"}))));mode(false);});reset.addEventListener("click",()=>{localStorage.removeItem(LAYOUT_STORAGE_KEY);window.location.reload();});restore();}
 
 renderGeminiNews();
-const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addEventListener("click",refreshAllData);setupGeminiAiButton();
+const refreshButton=getElement("refreshBtn");if(refreshButton)refreshButton.addEventListener("click",refreshAllData);setupGeminiAiButton();updateApiKeyGate("gemini");updateApiKeyGate("groq");
 setupTechnicalRetryButton();
 setupAlerts();
 setText("signal-date",formatDateForSignal());
@@ -1732,6 +1792,32 @@ setInterval(loadRrg, 300000);
         name: nameInput?.value.trim() || ""
       });
       saveSettings();
+    });
+
+    const geminiKeyInput = document.querySelector("#userGeminiKeyInput");
+    const saveGeminiKeyButton = document.querySelector("#saveGeminiKeyBtn");
+    const geminiKeyStatus = document.querySelector("#geminiKeyStatus");
+    const groqKeyInput = document.querySelector("#userGroqKeyInput");
+    const saveGroqKeyButton = document.querySelector("#saveGroqKeyBtn");
+    const groqKeyStatus = document.querySelector("#groqKeyStatus");
+
+    if (geminiKeyInput) geminiKeyInput.value = getUserApiKey("gemini");
+    if (groqKeyInput) groqKeyInput.value = getUserApiKey("groq");
+    if (geminiKeyStatus) geminiKeyStatus.textContent = getUserApiKey("gemini") ? "Using your own Gemini key." : "Using the site's shared Gemini key.";
+    if (groqKeyStatus) groqKeyStatus.textContent = getUserApiKey("groq") ? "Using your own Groq key." : "Using the site's shared Groq key.";
+
+    saveGeminiKeyButton?.addEventListener("click", () => {
+      const value = geminiKeyInput?.value.trim() || "";
+      setUserApiKey("gemini", value);
+      if (geminiKeyStatus) geminiKeyStatus.textContent = value ? "Saved — using your own Gemini key." : "Cleared — using the site's shared Gemini key.";
+      updateApiKeyGate("gemini", true);
+    });
+
+    saveGroqKeyButton?.addEventListener("click", () => {
+      const value = groqKeyInput?.value.trim() || "";
+      setUserApiKey("groq", value);
+      if (groqKeyStatus) groqKeyStatus.textContent = value ? "Saved — using your own Groq key." : "Cleared — using the site's shared Groq key.";
+      updateApiKeyGate("groq", true);
     });
 
     nameInput?.addEventListener("keydown", (event) => {
@@ -3340,7 +3426,9 @@ function clearLiveChartAiOverlay() {
         try {
           const response = await fetch("/api/groq-live-analysis", {
             method: "POST",
-            cache: "no-store"
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ api_key: getUserApiKey("groq") })
           });
 
           const data = await response.json().catch(() => ({}));
