@@ -466,7 +466,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
                 failed_break = True
             if lows[index] <= active_high + retest_tolerance:
                 retest_seen = True
-            if retest_seen and closes[index] > opens[index] and closes[index] > active_high and lows[index] <= active_high + retest_tolerance:
+            if retest_seen and closes[index] > opens[index] and closes[index] > active_high:
                 final_confirmation = True
                 confirmation_close_price = closes[index]
         momentum_ok, trend_1h_ok, trend_4h_ok = bullish_momentum_ok, bullish_1h_ok, not bullish_4h_blocked
@@ -482,7 +482,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
                 failed_break = True
             if highs[index] >= active_low - retest_tolerance:
                 retest_seen = True
-            if retest_seen and closes[index] < opens[index] and closes[index] < active_low and highs[index] >= active_low - retest_tolerance:
+            if retest_seen and closes[index] < opens[index] and closes[index] < active_low:
                 final_confirmation = True
                 confirmation_close_price = closes[index]
         momentum_ok, trend_1h_ok, trend_4h_ok = bearish_momentum_ok, bearish_1h_ok, not bearish_4h_blocked
@@ -519,9 +519,13 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
 
     if failed_break:
         return build_filter_result(direction, watch_signal, "BREAK FAILED / BACK INSIDE", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{watch_signal} — break moved back inside the prior swing range. Do not enter; wait for a fresh break and retest.", "Price body-close accepted back inside the old swing structure.", "LOW", passed, waiting, failed, "Break failed; price returned inside")
-    mandatory_filters_ok = volume_ok and second_close_ok and trend_1h_ok and trend_4h_ok and momentum_ok and retest_seen and final_confirmation
+    supporting_checks = [volume_ok, second_close_ok, trend_1h_ok, trend_4h_ok, momentum_ok]
+    supporting_passed = sum(1 for check in supporting_checks if check)
+    mandatory_filters_ok = retest_seen and final_confirmation and supporting_passed >= 3
     if mandatory_filters_ok:
-        return build_filter_result(direction, final_signal, f"{final_signal} CONFIRMED — HIGH QUALITY", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{final_signal} — high-quality 15m break, volume, second close, trend alignment, retest, and confirmation candle are all present. Run Gemini AI Analysis now; proceed only if Gemini agrees.", "All mandatory fakeout filters passed.", "HIGH", passed, waiting, failed, "Bullish break + support retest hold" if direction == "BULLISH" else "Bearish break + resistance retest rejection", confirmation_close_price)
+        quality_label = "HIGH" if supporting_passed == len(supporting_checks) else "MEDIUM"
+        supporting_summary = f"{supporting_passed}/{len(supporting_checks)} supporting filters aligned (volume, second close, 1h trend, 4h trend, momentum)"
+        return build_filter_result(direction, final_signal, f"{final_signal} CONFIRMED — {quality_label} QUALITY", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{final_signal} — confirmed 15m break, retest, and confirmation candle are present, with {supporting_summary}. Run Gemini AI Analysis now; proceed only if Gemini agrees.", f"Core price-action confirmed; {supporting_summary}.", quality_label, passed, waiting, failed, "Bullish break + support retest hold" if direction == "BULLISH" else "Bearish break + resistance retest rejection", confirmation_close_price)
     status = f"{direction} BREAK / FILTERS PENDING" if not failed else f"{direction} BREAK / FILTER FAILED"
     return build_filter_result(direction, watch_signal, status, active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{watch_signal} — a structure break exists, but final {final_signal} is blocked until every fakeout filter passes. Review failed/pending filters below.", "Break is not yet high quality enough for a final signal.", "MEDIUM" if len(failed) <= 1 else "LOW", passed, waiting, failed, "Bullish break awaiting filters" if direction == "BULLISH" else "Bearish break awaiting filters")
 
