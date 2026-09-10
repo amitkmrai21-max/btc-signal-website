@@ -147,6 +147,20 @@ button:disabled {
   border-color: rgba(167, 139, 250, 0.55) !important;
   background: linear-gradient(135deg, #7c3aed, #a78bfa) !important;
 }
+.gemini-ai-btn,
+.groq-live-btn {
+  font-size: 15px !important;
+}
+
+.btn-subtext {
+  display: block;
+  font-size: 0.5em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  opacity: 0.85;
+  margin-top: 2px;
+  white-space: nowrap;
+}
 
 .ai-btn-wrap {
   display: flex;
