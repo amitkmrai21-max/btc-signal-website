@@ -1189,13 +1189,33 @@
       </div>
     </div>
 
-    <div class="settings-group settings-preferences-note">
-      <h3>Preferences</h3>
-      <p>Theme, accent, text size and your last opened tab are saved on this device.</p>
-    </div>
+   <div class="settings-group settings-preferences-note">
+  <h3>Preferences</h3>
+  <p>Theme, accent, text size and your last opened tab are saved on this device.</p>
+</div>
 
-    <button id="resetSettingsBtn" class="reset-settings-btn" type="button">Reset Settings</button>
-  </aside>
+<div class="settings-group">
+  <label for="userGeminiKeyInput">Your own Gemini API key (optional)</label>
+  <p class="settings-help">If you add your own key, Gemini AI Analysis runs on your quota instead of the site's shared one. Get a free key at Google AI Studio. Saved only in this browser.</p>
+  <div class="settings-name-row">
+    <input id="userGeminiKeyInput" type="password" placeholder="Paste your Gemini API key" autocomplete="off" />
+    <button id="saveGeminiKeyBtn" type="button">Save</button>
+  </div>
+  <p id="geminiKeyStatus" class="settings-help"></p>
+</div>
+
+<div class="settings-group">
+  <label for="userGroqKeyInput">Your own Groq API key (optional)</label>
+  <p class="settings-help">If you add your own key, Groq requests run on your quota (and skip the shared cooldown). Get a free key at console.groq.com. Saved only in this browser.</p>
+  <div class="settings-name-row">
+    <input id="userGroqKeyInput" type="password" placeholder="Paste your Groq API key" autocomplete="off" />
+    <button id="saveGroqKeyBtn" type="button">Save</button>
+  </div>
+  <p id="groqKeyStatus" class="settings-help"></p>
+</div>
+
+<button id="resetSettingsBtn" class="reset-settings-btn" type="button">Reset Settings</button>
+</aside>
 
   <script src="/frontend/app.js"></script>
 </body>
