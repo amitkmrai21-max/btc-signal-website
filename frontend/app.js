@@ -37,7 +37,7 @@ function updateApiKeyGate(provider, justSaved = false) {
     button.disabled = false;
     if (justSaved) {
       prompt.classList.add("congrats-message");
-      prompt.textContent = "Congratulations! Ab aap AI ka istemal kar sakte hain.";
+      prompt.textContent = "Congratulations! You can now use AI.";
       window.setTimeout(() => {
         prompt.textContent = "";
         prompt.classList.remove("congrats-message");
@@ -50,7 +50,7 @@ function updateApiKeyGate(provider, justSaved = false) {
     button.classList.add("key-gate-locked");
     button.disabled = true;
     prompt.classList.remove("congrats-message");
-    prompt.innerHTML = `Apni ${AI_GATE_PROVIDER_LABEL[provider]} API key daalo <button type="button" class="key-prompt-link" data-open-settings>Settings me jaake</button>`;
+    prompt.innerHTML = `Put your ${AI_GATE_PROVIDER_LABEL[provider]} API key in <button type="button" class="key-prompt-link" data-open-settings>Settings</button>`;
   }
 }
 
