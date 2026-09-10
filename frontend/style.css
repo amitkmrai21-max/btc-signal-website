@@ -2182,10 +2182,6 @@ canvas {
   overflow: hidden;
 }
 
-.chart-analysis-widget {
-  height: 800px;
-}
-
 .gemini-news-card {
   background:
     radial-gradient(circle at 90% 0%, rgba(167, 139, 250, 0.15), transparent 22rem),
