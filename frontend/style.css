@@ -147,6 +147,7 @@ button:disabled {
   border-color: rgba(167, 139, 250, 0.55) !important;
   background: linear-gradient(135deg, #7c3aed, #a78bfa) !important;
 }
+
 .gemini-ai-btn,
 .groq-live-btn,
 #refreshBtn,
@@ -163,6 +164,22 @@ button:disabled {
   opacity: 0.95;
   margin-top: 3px;
   white-space: nowrap;
+}
+
+.retry-ai-btn {
+  margin-top: 4px;
+  padding: 4px 12px;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: 7px;
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.retry-ai-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
 }
 
 .ai-btn-wrap {
