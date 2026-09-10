@@ -36,13 +36,19 @@
     </div>
 
     <div class="topbar-actions">
-      <button id="refreshBtn" type="button">Refresh Technical</button>
-      <button id="geminiAiBtn" class="gemini-ai-btn" type="button">Run Gemini AI Analysis</button>
-      <button id="groqLiveBtn" class="groq-live-btn" type="button">Run Groq Live Chart Analysis</button>
-      <button id="editLayoutBtn" class="layout-control-btn" type="button">Edit Layout</button>
-      <button id="saveLayoutBtn" class="layout-control-btn" type="button" hidden>Save Layout</button>
-      <button id="resetLayoutBtn" class="layout-control-btn layout-reset-btn" type="button" hidden>Reset Layout</button>
-    </div>
+  <button id="refreshBtn" type="button">Refresh Technical</button>
+  <div class="ai-btn-wrap">
+    <button id="geminiAiBtn" class="gemini-ai-btn" type="button">Run Gemini AI Analysis</button>
+    <p id="geminiKeyPrompt" class="api-key-prompt"></p>
+  </div>
+  <div class="ai-btn-wrap">
+    <button id="groqLiveBtn" class="groq-live-btn" type="button">Run Groq Live Chart Analysis</button>
+    <p id="groqKeyPrompt" class="api-key-prompt"></p>
+  </div>
+  <button id="editLayoutBtn" class="layout-control-btn" type="button">Edit Layout</button>
+  <button id="saveLayoutBtn" class="layout-control-btn" type="button" hidden>Save Layout</button>
+  <button id="resetLayoutBtn" class="layout-control-btn layout-reset-btn" type="button" hidden>Reset Layout</button>
+</div>
   </header>
 
   <nav class="app-tabs" aria-label="Dashboard navigation">
