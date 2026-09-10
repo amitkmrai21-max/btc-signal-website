@@ -2758,7 +2758,7 @@ function createLiveCandlestickChart() {
 
     liveCandleChart.applyOptions({
       width: container.clientWidth,
-      height: window.innerWidth <= 720 ? 360 : 520
+      height: window.innerWidth <= 720 ? 480 : 520
     });
 
     scheduleDrawingReposition();
