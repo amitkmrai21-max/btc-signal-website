@@ -1589,11 +1589,13 @@ async function loadAiAnalysis() {
 
     renderGeminiCard(data);
     renderGeminiNews(data);
+    getElement("geminiRetryBtn")?.setAttribute("hidden", "");
   } catch (error) {
     console.error(error);
 
     const savedNews = getSavedAiNews();
     renderGeminiNews(savedNews);
+    getElement("geminiRetryBtn")?.removeAttribute("hidden");
 
     if (renderSavedProviderPlanIfAny("GEMINI")) {
       setText(
@@ -1632,7 +1634,7 @@ function setupZoomButtons(){const zin=getElement("zoomInBtn"),zout=getElement("z
 function setupRrgButtons(){const reset=getElement("rrgResetBtn");document.querySelectorAll(".rrg-timeframe-btn").forEach((button)=>button.addEventListener("click",async()=>{const frame=button.dataset.rrgTimeframe;if(!["1h","1d"].includes(frame))return;activeRrgTimeframe=frame;document.querySelectorAll(".rrg-timeframe-btn").forEach((item)=>item.classList.remove("active"));button.classList.add("active");await loadRrg();}));if(reset)reset.addEventListener("click",()=>rrgChart?.resetZoom());}
 function setUploadedChartText(id,value){const element=getElement(id);if(element)element.textContent=value||"--";}
 function setupChartAnalyser(){const input=getElement("chartImageInput"),preview=getElement("chartImagePreview"),button=getElement("analyseChartBtn"),status=getElement("chartAnalyseStatus"),box=getElement("chartAnalysisResult");if(!input||!preview||!button||!status||!box)return;input.addEventListener("change",()=>{const file=input.files[0];box.hidden=true;if(!file){preview.hidden=true;preview.removeAttribute("src");status.textContent="Upload PNG, JPG, or WEBP chart image. Maximum 8 MB.";return;}if(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>8*1024*1024){input.value="";preview.hidden=true;preview.removeAttribute("src");status.textContent="Select PNG, JPG, or WEBP only; maximum size is 8 MB.";return;}preview.src=URL.createObjectURL(file);preview.hidden=false;status.textContent=`Selected: ${file.name}. Click Analyse with Gemini AI.`;});button.addEventListener("click",async()=>{const file=input.files[0];if(!file){status.textContent="Please upload a chart image first.";return;}const form=new FormData();form.append("file",file);button.disabled=true;button.textContent="Analysing Chart...";status.textContent="Gemini is reading the uploaded chart screenshot...";box.hidden=true;try{const response=await fetch("/api/chart-analyser",{method:"POST",body:form}),data=await response.json();if(!response.ok)throw new Error(data.detail||"Chart analysis failed.");const signal=["BUY","SELL","HOLD"].includes(data.signal)?data.signal:"HOLD",element=getElement("uploadedChartSignal"),color=getSignalColor(signal);if(element){element.textContent=signal;element.style.color=color;element.style.borderColor=color;}setUploadedChartText("uploadedChartConfidence",`Confidence: ${Number(data.confidence||0)}%`);setUploadedChartText("uploadedChartRisk",data.risk);setUploadedChartText("uploadedChartTrend",data.trend);setUploadedChartText("uploadedChartPattern",data.pattern);setUploadedChartText("uploadedChartSupport",data.support);setUploadedChartText("uploadedChartResistance",data.resistance);setUploadedChartText("uploadedChartReason",data.reason);setUploadedChartText("uploadedChartEntry",data.entry_idea);setUploadedChartText("uploadedChartInvalidation",data.invalidation_idea);setUploadedChartText("uploadedChartWarning",data.warning);box.hidden=false;status.textContent="Chart analysis complete. Educational use only.";}catch(error){console.error(error);status.textContent=`Chart analysis error: ${error.message}`;}finally{button.disabled=false;button.textContent="Analyse with Gemini AI";}});}
-function setupGeminiAiButton(){const button=getElement("geminiAiBtn");if(!button)return;button.addEventListener("click",async()=>{if(aiRefreshInProgress)return;button.disabled=true;button.textContent="Running Gemini AI...";try{await loadAiAnalysis();}finally{button.disabled=false;button.textContent="Run Gemini AI Analysis";}});}
+function setupGeminiAiButton(){const button=getElement("geminiAiBtn");if(!button)return;button.addEventListener("click",async()=>{if(aiRefreshInProgress)return;button.disabled=true;button.textContent="Running Gemini AI...";try{await loadAiAnalysis();}finally{button.disabled=false;button.innerHTML="Run Gemini<span class=\"btn-subtext\">(Dashboard / Live Chart)</span>";}});getElement("geminiRetryBtn")?.addEventListener("click",()=>button.click());}
 function setupTechnicalRetryButton(){const button=getElement("retryTechnicalBtn");if(button)button.addEventListener("click",async()=>{button.disabled=true;await refreshTechnicalAnalysis("Retrying live technical analysis.");button.disabled=false;});}
 
 function setupLayoutEditor(){const
@@ -3409,6 +3411,7 @@ function clearLiveChartAiOverlay() {
     }
 
     button.dataset.chartStatusBound = "true";
+    document.getElementById("groqRetryBtn")?.addEventListener("click", () => button.click());
 
     button.addEventListener(
       "click",
@@ -3445,12 +3448,15 @@ function clearLiveChartAiOverlay() {
 
           savePlanLock(data, "GROQ");
           renderAiChartStatus(data, "GROQ");
+          getElement("groqRetryBtn")?.setAttribute("hidden", "");
         } catch (error) {
           console.error("Groq live chart error:", error);
 
           if (typeof clearLiveChartAiOverlay === "function") {
             clearLiveChartAiOverlay();
           }
+
+          getElement("groqRetryBtn")?.removeAttribute("hidden");
 
           setText("groqSignalAction", "Unavailable");
           setText(
@@ -3466,7 +3472,7 @@ function clearLiveChartAiOverlay() {
         } finally {
           if (!planLocked()) {
             button.disabled = false;
-            button.textContent = "Run Groq Live Chart Analysis";
+            button.innerHTML = "Run Groq<span class=\"btn-subtext\">(Dashboard / Live Chart)</span>";
           }
         }
       },
