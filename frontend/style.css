@@ -3321,7 +3321,7 @@ body[data-accent="green"] .settings-choice.active {
 .live-candlestick-chart {
   position: relative;
   width: 100%;
-  min-height: 520px;
+  min-height: 480px;
   margin-top: 16px;
   overflow: hidden;
   border: 1px solid rgba(56, 189, 248, 0.34);
