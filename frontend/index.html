@@ -36,21 +36,23 @@
     </div>
 
     <div class="topbar-actions">
-  <button id="refreshBtn" type="button">Refresh<span class="btn-subline">Technical</span></button>
-  <div class="ai-btn-wrap">
-  <button id="geminiAiBtn" class="gemini-ai-btn" type="button">Run Gemini<span class="btn-subtext">(Dashboard / Live Chart)</span></button>
-  <p id="geminiKeyPrompt" class="api-key-prompt"></p>
-  <button id="geminiRetryBtn" class="retry-ai-btn" type="button" hidden>Try Again</button>
-</div>
-<div class="ai-btn-wrap">
-  <button id="groqLiveBtn" class="groq-live-btn" type="button">Run Groq<span class="btn-subtext">(Dashboard / Live Chart)</span></button>
-  <p id="groqKeyPrompt" class="api-key-prompt"></p>
-  <button id="groqRetryBtn" class="retry-ai-btn" type="button" hidden>Try Again</button>
-</div>
- <button id="editLayoutBtn" class="layout-control-btn" type="button">Edit<span class="btn-subline">Layout</span></button>
-  <button id="saveLayoutBtn" class="layout-control-btn" type="button" hidden>Save Layout</button>
-  <button id="resetLayoutBtn" class="layout-control-btn layout-reset-btn" type="button" hidden>Reset Layout</button>
-</div>
+      <button id="refreshBtn" type="button">Refresh<span class="btn-subline">Technical</span></button>
+      <div class="topbar-row-break"></div>
+      <div class="ai-btn-wrap">
+        <button id="geminiAiBtn" class="gemini-ai-btn" type="button">Run Gemini<span class="btn-subtext">(Dashboard / Live Chart)</span></button>
+        <p id="geminiKeyPrompt" class="api-key-prompt"></p>
+        <button id="geminiRetryBtn" class="retry-ai-btn" type="button" hidden>Try Again</button>
+      </div>
+      <div class="ai-btn-wrap">
+        <button id="groqLiveBtn" class="groq-live-btn" type="button">Run Groq<span class="btn-subtext">(Dashboard / Live Chart)</span></button>
+        <p id="groqKeyPrompt" class="api-key-prompt"></p>
+        <button id="groqRetryBtn" class="retry-ai-btn" type="button" hidden>Try Again</button>
+      </div>
+      <div class="topbar-row-break"></div>
+      <button id="editLayoutBtn" class="layout-control-btn" type="button">Edit<span class="btn-subline">Layout</span></button>
+      <button id="saveLayoutBtn" class="layout-control-btn" type="button" hidden>Save Layout</button>
+      <button id="resetLayoutBtn" class="layout-control-btn layout-reset-btn" type="button" hidden>Reset Layout</button>
+    </div>
   </header>
 
   <nav class="app-tabs" aria-label="Dashboard navigation">
@@ -88,10 +90,10 @@
             <strong id="btcChange">--%</strong>
           </div>
 
-        <div class="metric-box">
-  <span id="signalBoxLabel">SIGNAL</span>
-  <strong id="signalBox">Loading...</strong>
-</div>
+          <div class="metric-box">
+            <span id="signalBoxLabel">SIGNAL</span>
+            <strong id="signalBox">Loading...</strong>
+          </div>
         </div>
 
         <p id="marketUpdatedAt" class="status-line">Updating live market price...</p>
@@ -394,7 +396,7 @@
     </div>
 
     <div id="liveCandlestickChart" class="live-candlestick-chart">
-           <div class="drawing-toolbar" aria-label="Chart drawing tools">
+      <div class="drawing-toolbar" aria-label="Chart drawing tools">
         <button class="drawing-tool-btn active" type="button" data-draw-tool="cursor" title="Cursor">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l6.5 17 2.2-6.9L20.5 11z"/></svg>
         </button>
@@ -419,9 +421,10 @@
         <button class="drawing-tool-btn" type="button" data-draw-tool="position" title="Long/Short Position (click entry, then stop-loss)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="6.5" rx="1" fill="currentColor" fill-opacity="0.18"/><rect x="4" y="13.5" width="16" height="6.5" rx="1"/><line x1="4" y1="10.75" x2="20" y2="10.75" stroke-width="2.4"/></svg>
         </button>
-             <button class="drawing-tool-btn" type="button" data-draw-tool="volume-profile" title="Fixed Range Volume Profile">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="5" x2="12" y2="5"/><line x1="3" y1="9.3" x2="18" y2="9.3"/><line x1="3" y1="13.6" x2="21" y2="13.6"/><line x1="3" y1="17.9" x2="15" y2="17.9"/></svg>
+        <button class="drawing-tool-btn" type="button" data-draw-tool="volume-profile" title="Fixed Range Volume Profile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="5" x2="12" y2="5"/><line x1="3" y1="9.3" x2="18" y2="9.3"/><line x1="3" y1="13.6" x2="21" y2="13.6"/><line x1="3" y1="17.9" x2="15" y2="17.9"/></svg>
         </button>
+        <input id="drawingColorPicker" class="drawing-color-picker" type="color" value="#38bdf8" title="Drawing color" aria-label="Drawing color" />
         <button id="clearDrawingsBtn" class="drawing-tool-btn drawing-clear-btn" type="button" title="Clear all drawings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5a1 1 0 011-1h4a1 1 0 011 1V7m2 0-.8 12.4a1.5 1.5 0 01-1.5 1.4H8.3a1.5 1.5 0 01-1.5-1.4L6 7"/></svg>
         </button>
@@ -430,11 +433,11 @@
       <span id="liveChartHoldBadge" class="live-chart-hold-badge" hidden>HOLD</span>
       <svg id="liveChartDrawingOverlay" class="live-chart-drawing-overlay"></svg>
       <div id="drawingContextMenu" class="drawing-context-menu" hidden>
-  <input type="color" id="drawingContextColor" class="drawing-context-color" title="Change color" aria-label="Change drawing color" />
-  <button id="drawingContextDelete" class="drawing-context-delete" type="button" title="Delete this drawing">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5a1 1 0 011-1h4a1 1 0 011 1V7m2 0-.8 12.4a1.5 1.5 0 01-1.5 1.4H8.3a1.5 1.5 0 01-1.5-1.4L6 7"/></svg>
-  </button>
-</div>
+        <input type="color" id="drawingContextColor" class="drawing-context-color" title="Change color" aria-label="Change drawing color" />
+        <button id="drawingContextDelete" class="drawing-context-delete" type="button" title="Delete this drawing">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5a1 1 0 011-1h4a1 1 0 011 1V7m2 0-.8 12.4a1.5 1.5 0 01-1.5 1.4H8.3a1.5 1.5 0 01-1.5-1.4L6 7"/></svg>
+        </button>
+      </div>
     </div>
 
     <div class="live-chart-bottom-grid">
@@ -452,7 +455,8 @@
     <p id="liveChartStatus" class="live-chart-status">Loading Binance candles…</p>
   </section>
 </section>
-    <section class="tab-panel" data-panel="technical">
+
+        <section class="tab-panel" data-panel="technical">
       <section class="card rrg-card">
         <div class="section-heading">
           <div>
@@ -977,7 +981,84 @@
         </p>
       </section>
 
-      <section class="tab-panel" data-panel="virtual-trading">
+    </section>
+        <section class="tab-panel" data-panel="news">
+  <section class="card gemini-news-card groq-news-card">
+    <div class="section-heading">
+      <div>
+        <h2>Groq AI News Context</h2>
+        <p id="geminiNewsUpdated">
+          News refreshes only when you manually run Groq News.
+        </p>
+      </div>
+
+      <div class="news-heading-actions">
+        <button id="groqNewsBtn" class="groq-news-btn" type="button">
+          Refresh News with Groq
+        </button>
+
+        <span id="geminiNewsBias" class="news-bias-badge news-impact-neutral">
+          News bias: UNCLEAR
+        </span>
+      </div>
+    </div>
+
+    <div class="gemini-news-intro">
+      <h3>Latest market context</h3>
+      <p id="geminiNewsOverview">
+        Click "Refresh News with Groq" to load RSS headlines, sentiment, and Hindi explanation.
+      </p>
+    </div>
+
+    <div id="geminiNewsList" class="gemini-news-list" aria-live="polite">
+      <p class="gemini-news-empty">
+        No Groq news snapshot yet. News is separate from Gemini technical analysis.
+      </p>
+    </div>
+
+    <p class="gemini-news-note">
+      Groq processes RSS news for summary, sentiment, and Hindi explanation only.
+      This section never produces BUY/SELL signals, Entry, Stop Loss, Target 1, or Target 2.
+      News context is educational and not financial advice.
+    </p>
+  </section>
+</section>
+
+<section class="tab-panel" data-panel="chart-analysis">
+  <section class="card chart-analysis-card">
+    <div class="section-heading">
+      <div>
+        <h2>Chart Analysis</h2>
+        <p>Full TradingView chart with 100+ built-in indicators and 80+ drawing tools, for general technical analysis. Separate from this dashboard's own Engine/Gemini/Groq signals and AI overlay lines.</p>
+      </div>
+    </div>
+
+    <div class="tradingview-widget-container" style="width:100%">
+      <div class="tradingview-widget-container__widget"></div>
+      <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/BTCUSD/" rel="noopener nofollow" target="_blank"><span class="blue-text">BTCUSD chart</span></a><span class="trademark"> by TradingView</span></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+      {
+        "width": "100%",
+        "height": 800,
+        "symbol": "BINANCE:BTCUSDT",
+        "interval": "15",
+        "timezone": "Asia/Kolkata",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "withdateranges": true,
+        "hide_side_toolbar": false,
+        "allow_symbol_change": true,
+        "details": true,
+        "studies": ["STD;SMA", "STD;RSI"],
+        "support_host": "https://www.tradingview.com"
+      }
+      </script>
+    </div>
+  </section>
+</section>
+
+<section class="tab-panel" data-panel="virtual-trading">
   <section class="card paper-trading-card">
     <div class="section-heading">
       <div>
@@ -1056,82 +1137,6 @@
   </section>
 </section>
 
-    <section class="tab-panel" data-panel="news">
-  <section class="card gemini-news-card groq-news-card">
-    <div class="section-heading">
-      <div>
-        <h2>Groq AI News Context</h2>
-        <p id="geminiNewsUpdated">
-          News refreshes only when you manually run Groq News.
-        </p>
-      </div>
-
-      <div class="news-heading-actions">
-        <button id="groqNewsBtn" class="groq-news-btn" type="button">
-          Refresh News with Groq
-        </button>
-
-        <span id="geminiNewsBias" class="news-bias-badge news-impact-neutral">
-          News bias: UNCLEAR
-        </span>
-      </div>
-    </div>
-
-    <div class="gemini-news-intro">
-      <h3>Latest market context</h3>
-      <p id="geminiNewsOverview">
-        Click "Refresh News with Groq" to load RSS headlines, sentiment, and Hindi explanation.
-      </p>
-    </div>
-
-    <div id="geminiNewsList" class="gemini-news-list" aria-live="polite">
-      <p class="gemini-news-empty">
-        No Groq news snapshot yet. News is separate from Gemini technical analysis.
-      </p>
-    </div>
-
-    <p class="gemini-news-note">
-      Groq processes RSS news for summary, sentiment, and Hindi explanation only.
-      This section never produces BUY/SELL signals, Entry, Stop Loss, Target 1, or Target 2.
-      News context is educational and not financial advice.
-    </p>
-  </section>
-</section>
-
-    <section class="tab-panel" data-panel="chart-analysis">
-  <section class="card chart-analysis-card">
-    <div class="section-heading">
-      <div>
-        <h2>Chart Analysis</h2>
-        <p>Full TradingView chart with 100+ built-in indicators and 80+ drawing tools, for general technical analysis. Separate from this dashboard's own Engine/Gemini/Groq signals and AI overlay lines.</p>
-      </div>
-    </div>
-
-   <div class="tradingview-widget-container" style="width:100%">
-  <div class="tradingview-widget-container__widget"></div>
-  <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/BTCUSD/" rel="noopener nofollow" target="_blank"><span class="blue-text">BTCUSD chart</span></a><span class="trademark"> by TradingView</span></div>
-  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-  {
-    "width": "100%",
-    "height": 800,
-    "symbol": "BINANCE:BTCUSDT",
-    "interval": "15",
-    "timezone": "Asia/Kolkata",
-    "theme": "dark",
-    "style": "1",
-    "locale": "en",
-    "withdateranges": true,
-    "hide_side_toolbar": false,
-    "allow_symbol_change": true,
-    "details": true,
-    "studies": ["STD;SMA", "STD;RSI"],
-    "support_host": "https://www.tradingview.com"
-  }
-  </script>
-</div>
-  </section>
-</section>
-
     <section class="disclaimer-card">
       <p id="disclaimerText">
         Educational market analysis only. Not financial advice or an automated trading instruction.
@@ -1193,33 +1198,33 @@
       </div>
     </div>
 
-   <div class="settings-group settings-preferences-note">
-  <h3>Preferences</h3>
-  <p>Theme, accent, text size and your last opened tab are saved on this device.</p>
-</div>
+    <div class="settings-group settings-preferences-note">
+      <h3>Preferences</h3>
+      <p>Theme, accent, text size and your last opened tab are saved on this device.</p>
+    </div>
 
-<div class="settings-group">
-  <label for="userGeminiKeyInput">Your own Gemini API key (optional)</label>
-  <p class="settings-help">If you add your own key, Gemini AI Analysis runs on your quota instead of the site's shared one. Get a free key at Google AI Studio. Saved only in this browser.</p>
-  <div class="settings-name-row">
-    <input id="userGeminiKeyInput" type="password" placeholder="Paste your Gemini API key" autocomplete="off" />
-    <button id="saveGeminiKeyBtn" type="button">Save</button>
-  </div>
-  <p id="geminiKeyStatus" class="settings-help"></p>
-</div>
+    <div class="settings-group">
+      <label for="userGeminiKeyInput">Your own Gemini API key (optional)</label>
+      <p class="settings-help">If you add your own key, Gemini AI Analysis runs on your quota instead of the site's shared one. Get a free key at Google AI Studio. Saved only in this browser.</p>
+      <div class="settings-name-row">
+        <input id="userGeminiKeyInput" type="password" placeholder="Paste your Gemini API key" autocomplete="off" />
+        <button id="saveGeminiKeyBtn" type="button">Save</button>
+      </div>
+      <p id="geminiKeyStatus" class="settings-help"></p>
+    </div>
 
-<div class="settings-group">
-  <label for="userGroqKeyInput">Your own Groq API key (optional)</label>
-  <p class="settings-help">If you add your own key, Groq requests run on your quota (and skip the shared cooldown). Get a free key at console.groq.com. Saved only in this browser.</p>
-  <div class="settings-name-row">
-    <input id="userGroqKeyInput" type="password" placeholder="Paste your Groq API key" autocomplete="off" />
-    <button id="saveGroqKeyBtn" type="button">Save</button>
-  </div>
-  <p id="groqKeyStatus" class="settings-help"></p>
-</div>
+    <div class="settings-group">
+      <label for="userGroqKeyInput">Your own Groq API key (optional)</label>
+      <p class="settings-help">If you add your own key, Groq requests run on your quota (and skip the shared cooldown). Get a free key at console.groq.com. Saved only in this browser.</p>
+      <div class="settings-name-row">
+        <input id="userGroqKeyInput" type="password" placeholder="Paste your Groq API key" autocomplete="off" />
+        <button id="saveGroqKeyBtn" type="button">Save</button>
+      </div>
+      <p id="groqKeyStatus" class="settings-help"></p>
+    </div>
 
-<button id="resetSettingsBtn" class="reset-settings-btn" type="button">Reset Settings</button>
-</aside>
+    <button id="resetSettingsBtn" class="reset-settings-btn" type="button">Reset Settings</button>
+  </aside>
 
   <script src="/frontend/app.js"></script>
 </body>
