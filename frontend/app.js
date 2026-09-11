@@ -659,7 +659,6 @@ function renderSwingFailureStructure(data) {
   const badge = getElement("swingSignalBadge");
 
   if (badge) {
-    badge.textContent = signal;
     badge.className = "swing-signal-badge";
 
    if (signal === "BUY") {
@@ -670,10 +669,13 @@ function renderSwingFailureStructure(data) {
       badge.textContent = "SELL — FINAL";
     } else if (direction === "BEARISH") {
       badge.classList.add("swing-bearish");
+      badge.textContent = "HOLD";
     } else if (direction === "BULLISH") {
       badge.classList.add("swing-bullish");
+      badge.textContent = "HOLD";
     } else {
       badge.classList.add("swing-neutral");
+      badge.textContent = "HOLD";
     }
   }
 }
