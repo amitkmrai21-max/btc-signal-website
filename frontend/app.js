@@ -2,6 +2,25 @@ let liveCandleChart = null;
 let liveCandleSeries = null;
 let liveCandleRawData = [];
 
+function msUntilNextPacificMidnight() {
+  const nowPacific = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+  const nextMidnightPacific = new Date(nowPacific);
+  nextMidnightPacific.setHours(24, 0, 0, 0);
+  return Math.max(60000, nextMidnightPacific.getTime() - nowPacific.getTime());
+}
+
+function showQuotaFinishedMessage(promptEl) {
+  if (!promptEl) return;
+  promptEl.classList.add("quota-finished-message");
+  promptEl.textContent = "Quota finished for today. Try again tomorrow, or add your own API key in Settings.";
+  window.setTimeout(() => {
+    if (promptEl.classList.contains("quota-finished-message")) {
+      promptEl.classList.remove("quota-finished-message");
+      promptEl.textContent = "";
+    }
+  }, msUntilNextPacificMidnight());
+}
+
 const USER_API_KEY_STORAGE = { gemini: "userGeminiApiKey", groq: "userGroqApiKey" };
 
 function getUserApiKey(provider) {
@@ -1603,6 +1622,11 @@ async function loadAiAnalysis() {
     renderGeminiCard(data);
     renderGeminiNews(data);
     getElement("geminiRetryBtn")?.setAttribute("hidden", "");
+    const geminiPromptOk = getElement("geminiKeyPrompt");
+    if (geminiPromptOk?.classList.contains("quota-finished-message")) {
+      geminiPromptOk.classList.remove("quota-finished-message");
+      geminiPromptOk.textContent = "";
+    }
   } catch (error) {
     console.error(error);
 
@@ -1621,6 +1645,11 @@ async function loadAiAnalysis() {
     setText("geminiSignalAction", "Unavailable");
     setText("geminiReason", error.message || "Gemini AI could not respond. Please try again.");
     setText("geminiUpdatedAt", "Gemini refresh failed. Please try again.");
+
+    const geminiPrompt = getElement("geminiKeyPrompt");
+    if (geminiPrompt && /quota/i.test(error.message || "")) {
+      showQuotaFinishedMessage(geminiPrompt);
+    }
   } finally {
     aiRefreshInProgress = false;
   }
@@ -3465,6 +3494,11 @@ function clearLiveChartAiOverlay() {
           savePlanLock(data, "GROQ");
           renderAiChartStatus(data, "GROQ");
           getElement("groqRetryBtn")?.setAttribute("hidden", "");
+          const groqPromptOk = getElement("groqKeyPrompt");
+          if (groqPromptOk?.classList.contains("quota-finished-message")) {
+            groqPromptOk.classList.remove("quota-finished-message");
+            groqPromptOk.textContent = "";
+          }
         } catch (error) {
           console.error("Groq live chart error:", error);
 
@@ -3485,6 +3519,11 @@ function clearLiveChartAiOverlay() {
               error.message || "Please try again later."
             }`
           );
+
+          const groqPrompt = getElement("groqKeyPrompt");
+          if (groqPrompt && /quota/i.test(error.message || "")) {
+            showQuotaFinishedMessage(groqPrompt);
+          }
         } finally {
           button.disabled = false;
           button.innerHTML = "Run Groq<span class=\"btn-subtext\">(Dashboard / Live Chart)</span>";
