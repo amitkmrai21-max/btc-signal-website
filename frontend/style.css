@@ -221,6 +221,10 @@ button:disabled {
   display: none;
 }
 
+.quota-finished-message {
+  color: #fb923c;
+}
+
 .api-key-prompt .key-prompt-link {
   color: #7dd3fc;
   text-decoration: underline;
