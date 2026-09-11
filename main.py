@@ -404,14 +404,14 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
     normalized_trend_4h = str(trend_4h or "").lower()
     bullish_momentum_ok = float(rsi_value) >= 50 and "bullish" in normalized_macd
     bearish_momentum_ok = float(rsi_value) <= 50 and "bearish" in normalized_macd
-    bullish_1h_ok = "bullish" in normalized_trend_1h
-    bearish_1h_ok = "bearish" in normalized_trend_1h
+    bullish_1h_ok = "bullish" in normalized_trend_1h or "mixed" in normalized_trend_1h
+    bearish_1h_ok = "bearish" in normalized_trend_1h or "mixed" in normalized_trend_1h
     bullish_4h_blocked = "strong bearish" in normalized_trend_4h
     bearish_4h_blocked = "strong bullish" in normalized_trend_4h
     average_break_volume = average(volumes[-21:-1])
     calculated_volume_ratio = volumes[-1] / average_break_volume if average_break_volume else 0
     effective_volume_ratio = max(float(volume_ratio or 0), calculated_volume_ratio)
-    volume_ok = effective_volume_ratio >= 1.20
+    volume_ok = effective_volume_ratio >= 0.40
 
     def rounded(value):
         return round_value(value) if value is not None else None
@@ -439,7 +439,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
             "quality": quality,
             "final_conclusion": conclusion,
             "reason": reason,
-            "confirmation_rule": "Final signal needs: 0.15 ATR body-close break, volume >= 1.20x, a second direction close, 1h alignment, no strong 4h conflict, retest, and a confirmation candle. Wick alone never counts.",
+            "confirmation_rule": "Final signal needs: 0.15 ATR body-close break, volume >= 0.40x, a second direction close, 1h alignment, no strong 4h conflict, retest, and a confirmation candle. Wick alone never counts.",
             "filter_checklist": {
                 "passed": passed_filters,
                 "waiting": waiting_filters,
@@ -483,7 +483,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
         except ValueError:
             adx_value_for_confidence = 0
         hold_confidence = calculate_multi_factor_confidence(adx_value_for_confidence, rsi_value, macd_state, effective_volume_ratio, current_price, break_level, protected_level)
-        return build_filter_result(direction, signal, "INSIDE STRUCTURE", active_high, active_low, protected_level, break_level, protected_level, active_low if direction == "BULLISH" else active_high, f"HOLD — price is inside the active 15m swing range. No final trade; wait for a confirmed break and retest.", "No current swing level has a body-close break beyond the 0.15 ATR buffer.", "LOW", [], ["0.15 ATR body-close break", "Break volume >= 1.20x", "Second 15m direction close", "Retest confirmation"], [], "No confirmed break yet", hold_confidence=hold_confidence)
+        return build_filter_result(direction, signal, "INSIDE STRUCTURE", active_high, active_low, protected_level, break_level, protected_level, active_low if direction == "BULLISH" else active_high, f"HOLD — price is inside the active 15m swing range. No final trade; wait for a confirmed break and retest.", "No current swing level has a body-close break beyond the 0.15 ATR buffer.", "LOW", [], ["0.15 ATR body-close break", "Break volume >= 0.40x", "Second 15m direction close", "Retest confirmation"], [], "No confirmed break yet", hold_confidence=hold_confidence)
 
     newest_is_bullish = bullish_break_index is not None and (bearish_break_index is None or bullish_break_index > bearish_break_index)
     if newest_is_bullish:
@@ -521,9 +521,9 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
 
     passed, waiting, failed = ["0.15 ATR body-close break"], [], []
     if volume_ok:
-        passed.append(f"Break volume x{effective_volume_ratio:.2f} >= 1.20x")
+        passed.append(f"Break volume x{effective_volume_ratio:.2f} >= 0.40x")
     else:
-        failed.append(f"Break volume x{effective_volume_ratio:.2f} below 1.20x")
+        failed.append(f"Break volume x{effective_volume_ratio:.2f} below 0.40x")
     if second_close_ok:
         passed.append("Second 15m candle close confirmed")
     else:
