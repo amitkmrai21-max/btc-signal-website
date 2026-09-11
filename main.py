@@ -791,6 +791,47 @@ def compute_engine_candidate_levels(sfs, current_price):
     }
 
 
+def calculate_macro_trend_signal(candles):
+    """Looks at a longer window (up to ~48h of 15m candles) for a sustained directional
+    move — the kind of slow, lower-volume multi-day drift the short-term swing-structure
+    filters are designed to ignore (since they require a sharp, high-volume break). This
+    is a separate, independent check so a genuine multi-day trend can still be surfaced
+    even when no single 15m candle ever satisfies the structure-break requirements."""
+    if len(candles) < 40:
+        return {"signal": "HOLD", "percent_change": 0, "consistency": 0, "reason": "Not enough candle history for a macro trend read."}
+    closes = [float(candle[4]) for candle in candles]
+    opens = [float(candle[1]) for candle in candles]
+    window = min(192, len(closes) - 1)
+    start_price = closes[-window - 1]
+    end_price = closes[-1]
+    percent_change = ((end_price - start_price) / start_price) * 100 if start_price else 0
+    recent_opens, recent_closes = opens[-window:], closes[-window:]
+    up_count = sum(1 for o, c in zip(recent_opens, recent_closes) if c > o)
+    down_count = len(recent_closes) - up_count
+    consistency = (max(up_count, down_count) / len(recent_closes)) * 100 if recent_closes else 0
+    hours = round(window * 15 / 60)
+    if percent_change >= 1.5 and consistency >= 55:
+        return {"signal": "BUY", "percent_change": round_value(percent_change), "consistency": round_value(consistency), "reason": f"Sustained {round_value(percent_change)}% rise over the last ~{hours}h, with {round_value(consistency)}% of candles bullish."}
+    if percent_change <= -1.5 and consistency >= 55:
+        return {"signal": "SELL", "percent_change": round_value(percent_change), "consistency": round_value(consistency), "reason": f"Sustained {round_value(abs(percent_change))}% decline over the last ~{hours}h, with {round_value(consistency)}% of candles bearish."}
+    return {"signal": "HOLD", "percent_change": round_value(percent_change), "consistency": round_value(consistency), "reason": "No sustained directional macro move detected."}
+
+
+def compute_macro_trade_levels(direction, current_price, atr_value):
+    """Risk-based candidate Entry/Stop/Target1/2 for a macro-trend signal — since there's
+    no structure-break confirmation candle to anchor to, entry is simply the current
+    price, and stop/targets use an ATR-based (or 0.5% minimum) risk distance at 1R/2R."""
+    current_price, atr_value = float(current_price or 0), float(atr_value or 0)
+    if current_price <= 0:
+        return None
+    risk_distance = max(atr_value * 1.5, current_price * 0.005)
+    if direction == "BUY":
+        stop, target_1, target_2 = current_price - risk_distance, current_price + risk_distance, current_price + (2 * risk_distance)
+    else:
+        stop, target_1, target_2 = current_price + risk_distance, current_price - risk_distance, current_price - (2 * risk_distance)
+    return {"entry_price": round_value(current_price), "stop_loss_price": round_value(stop), "target_1_price": round_value(target_1), "target_2_price": round_value(target_2)}
+
+
 def technical_main_signal(market_data):
     timeframes = market_data["timeframes"]
     analysis_15m, analysis_1h, analysis_4h = timeframes["15m"], timeframes["1h"], timeframes["4h"]
@@ -846,7 +887,27 @@ def technical_main_signal(market_data):
     setup_status = sfs.get("break_status") or "Mixed technical setup — wait"
     reason = sfs.get("final_conclusion") or sfs.get("reason") or "Technical fallback: waiting for a clearer confirmed structure."
 
-    levels = compute_engine_candidate_levels(sfs, current_price) if final_signal in ("BUY", "SELL") else None
+    # Macro-trend fallback: if the strict short-term structure-break filters never
+    # trigger (e.g. a slow, lower-volume multi-day drift with no single sharp 15m
+    # break), a sustained longer-window move can still surface a signal here.
+    signal_source = "structure"
+    macro_trend = analysis_15m.get("macro_trend") or {}
+    if final_signal == "HOLD" and macro_trend.get("signal") in ("BUY", "SELL"):
+        final_signal = macro_trend["signal"]
+        direction = "BULLISH" if final_signal == "BUY" else "BEARISH"
+        signal_source = "macro"
+        confidence = max(45, min(65, round(45 + abs(float(macro_trend.get("percent_change", 0))) * 4)))
+        risk = "MEDIUM"
+        market_bias = "Bullish technical bias" if direction == "BULLISH" else "Bearish technical bias"
+        setup_status = f"MACRO TREND {final_signal} — sustained move over recent hours"
+        reason = macro_trend.get("reason", reason)
+
+    levels = None
+    if final_signal in ("BUY", "SELL"):
+        if signal_source == "macro":
+            levels = compute_macro_trade_levels(final_signal, current_price, float(sfs.get("atr_14") or analysis_15m.get("atr_14") or 0))
+        else:
+            levels = compute_engine_candidate_levels(sfs, current_price)
     if levels:
         buy_ok = final_signal == "BUY" and levels["stop_loss_price"] < levels["entry_price"] < levels["target_1_price"] < levels["target_2_price"]
         sell_ok = final_signal == "SELL" and levels["target_2_price"] < levels["target_1_price"] < levels["entry_price"] < levels["stop_loss_price"]
@@ -981,11 +1042,12 @@ def build_setup_quality(market_data, technical_result):
 
 def build_market_data():
     ticker = get_btc_ticker()
-    analysis_15m = calculate_market_indicators(get_btc_klines(interval="15m", limit=250), "15m")
+    candles_15m = get_btc_klines(interval="15m", limit=250)
+    analysis_15m = calculate_market_indicators(candles_15m, "15m")
     analysis_1h = calculate_market_indicators(get_btc_klines(interval="1h", limit=250), "1h")
     analysis_4h = calculate_market_indicators(get_btc_klines(interval="4h", limit=250), "4h")
     analysis_15m["swing_failure_structure"] = calculate_swing_failure_structure(
-        get_btc_klines(interval="15m", limit=250),
+        candles_15m,
         analysis_15m["atr_14"],
         volume_ratio=analysis_15m["volume"]["volume_ratio"],
         rsi_value=analysis_15m["rsi_14"],
@@ -993,6 +1055,7 @@ def build_market_data():
         trend_1h=analysis_1h["trend"],
         trend_4h=analysis_4h["trend"],
     )
+    analysis_15m["macro_trend"] = calculate_macro_trend_signal(candles_15m)
     return {"symbol": "BTCUSDT", "current_price_usdt": round_value(ticker["lastPrice"]), "price_change_24h_percent": round_value(ticker["priceChangePercent"]), "high_24h_usdt": round_value(ticker["highPrice"]), "low_24h_usdt": round_value(ticker["lowPrice"]), "quote_volume_24h_usdt": round_value(ticker["quoteVolume"]), "timeframes": {"15m": analysis_15m, "1h": analysis_1h, "4h": analysis_4h}}
 
 
