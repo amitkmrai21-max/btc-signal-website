@@ -197,6 +197,14 @@ function renderProviderSignalCard(provider, opts) {
   return normalized;
 }
 
+function updateHeroSignalBox(signal, labelText) {
+  const heroBox = getElement("signalBox");
+  const heroLabel = getElement("signalBoxLabel");
+  const normalized = String(signal || "HOLD").toUpperCase();
+  if (heroBox) { heroBox.textContent = normalized; heroBox.style.color = getSignalColor(normalized); }
+  if (heroLabel) heroLabel.textContent = labelText;
+}
+
 function renderEngineCard(data = {}) {
   const normalized = renderProviderSignalCard("ENGINE", {
     signal: data.signal,
@@ -209,10 +217,11 @@ function renderEngineCard(data = {}) {
     target1Text: data.target_1,
     target2Text: data.target_2,
   });
-  // Quick-glance duplicate in the "Live Market" hero metric box only — the Engine card
-  // above is the source of truth. Engine never draws lines on the live chart.
-  const heroBox = getElement("signalBox");
-  if (heroBox) { heroBox.textContent = normalized; heroBox.style.color = getSignalColor(normalized); }
+  // Quick-glance duplicate in the "Live Market" hero metric box — shows the Engine's
+  // own signal, labeled plain "SIGNAL", whenever Technical refreshes. Running Gemini or
+  // Groq afterward switches this same box to that AI's signal, labeled "AI Signal",
+  // until Technical refreshes again.
+  updateHeroSignalBox(normalized, "SIGNAL");
 }
 
 function renderGeminiCard(data = {}, fromSavedPlan = false) {
@@ -227,6 +236,7 @@ function renderGeminiCard(data = {}, fromSavedPlan = false) {
     target1Text: data.target_1,
     target2Text: data.target_2,
   });
+  updateHeroSignalBox(data.signal, "AI Signal");
   setText("disclaimerText", data.disclaimer);
   saveLastAiSignal(data);
 }
@@ -243,6 +253,7 @@ function renderGroqCard(data = {}, fromSavedPlan = false) {
     target1Text: data.target_1,
     target2Text: data.target_2,
   });
+  updateHeroSignalBox(data.signal, "AI Signal");
   saveLastAiSignal(data);
 }
 
