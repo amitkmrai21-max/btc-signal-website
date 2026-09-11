@@ -765,7 +765,20 @@ def technical_main_signal(market_data):
     failed_filters = checklist.get("failed", [])
     total_checks = len(passed_filters) + len(waiting_filters) + len(failed_filters)
     base_confidence = round((len(passed_filters) / total_checks) * 100) if total_checks else 50
-    confidence = max(65, base_confidence) if final_signal in ("BUY", "SELL") else min(58, base_confidence)
+
+    if final_signal in ("BUY", "SELL"):
+        confidence = max(65, base_confidence)
+    elif passed_filters:
+        # A break was attempted (some structural filters passed) but not fully confirmed.
+        confidence = min(58, base_confidence)
+    else:
+        # No breakout has even been attempted yet (price is inside its range), so the
+        # structural-break checklist is always empty here and would always read 0% —
+        # that's not a market reading, just an artifact of nothing having happened yet.
+        # Base this HOLD confidence on actual trend strength (ADX) instead, so it moves
+        # with real market conditions rather than being permanently stuck at 0.
+        adx_value = float((analysis_15m.get("adx") or {}).get("adx_14", 0) or 0)
+        confidence = max(15, min(55, round(15 + adx_value * 1.2)))
 
     risk = "MEDIUM" if final_signal in ("BUY", "SELL") or sfs.get("quality") == "MEDIUM" else "HIGH"
     market_bias = (
