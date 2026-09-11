@@ -360,6 +360,32 @@ def find_pivot_lows(lows, left_right=3):
     return pivots
 
 
+def calculate_multi_factor_confidence(adx_value, rsi_value, macd_state, volume_ratio, current_price, break_level, protected_level):
+    """Combines trend strength (ADX), momentum (RSI distance from neutral), MACD state,
+    volume, and how close price currently is to the breakout level into one 15-55 HOLD
+    confidence score, so it reflects the whole technical picture rather than any single
+    indicator, and genuinely moves as market conditions change."""
+    trend_score = min(100, float(adx_value or 0) * 2)
+    momentum_score = min(100, abs(float(rsi_value or 50) - 50) * 2)
+    normalized_macd = str(macd_state or "").lower()
+    if "bullish" in normalized_macd or "bearish" in normalized_macd:
+        macd_score = 70 if "strengthening" in normalized_macd else 40
+    else:
+        macd_score = 15
+    volume_score = min(100, float(volume_ratio or 0) * 60)
+    range_size = abs(break_level - protected_level) or 1
+    distance_to_break = abs(break_level - current_price)
+    proximity_score = max(0, 100 - (distance_to_break / range_size) * 100)
+    combined = (
+        trend_score * 0.25
+        + momentum_score * 0.20
+        + macd_score * 0.20
+        + volume_score * 0.15
+        + proximity_score * 0.20
+    )
+    return max(15, min(55, round(combined)))
+
+
 def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, volume_ratio=0, rsi_value=50, macd_state="", trend_1h="", trend_4h=""):
     if len(candles) < 60:
         raise ValueError("Need at least 60 candles for 15m swing structure analysis.")
@@ -371,7 +397,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
     pivot_highs = find_pivot_highs(highs, swing_left_right)
     pivot_lows = find_pivot_lows(lows, swing_left_right)
     current_price = closes[-1]
-    atr_buffer = max(float(atr_value) * 0.30, 0.01)
+    atr_buffer = max(float(atr_value) * 0.15, 0.01)
     retest_tolerance = max(float(atr_value) * 0.25, 0.01)
     normalized_macd = str(macd_state or "").lower()
     normalized_trend_1h = str(trend_1h or "").lower()
@@ -390,7 +416,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
     def rounded(value):
         return round_value(value) if value is not None else None
 
-    def build_filter_result(direction, signal, status, prior_high, prior_low, protected_level, break_level, retest_level, invalidation_level, conclusion, reason, quality, passed_filters, waiting_filters, failed_filters, break_event, confirmation_close=None):
+    def build_filter_result(direction, signal, status, prior_high, prior_low, protected_level, break_level, retest_level, invalidation_level, conclusion, reason, quality, passed_filters, waiting_filters, failed_filters, break_event, confirmation_close=None, hold_confidence=None):
         return {
             "timeframe": "15m",
             "current_price": rounded(current_price),
@@ -413,7 +439,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
             "quality": quality,
             "final_conclusion": conclusion,
             "reason": reason,
-            "confirmation_rule": "Final signal needs: 0.30 ATR body-close break, volume >= 1.20x, a second direction close, 1h alignment, no strong 4h conflict, retest, and a confirmation candle. Wick alone never counts.",
+            "confirmation_rule": "Final signal needs: 0.15 ATR body-close break, volume >= 1.20x, a second direction close, 1h alignment, no strong 4h conflict, retest, and a confirmation candle. Wick alone never counts.",
             "filter_checklist": {
                 "passed": passed_filters,
                 "waiting": waiting_filters,
@@ -424,6 +450,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
                 "macd_15m": macd_state,
                 "trend_1h": trend_1h,
                 "trend_4h": trend_4h,
+                "hold_confidence": hold_confidence,
             },
         }
 
@@ -451,7 +478,12 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
         direction = "BULLISH" if signal == "BUY WATCH" else "BEARISH"
         break_level = bullish_break_level if direction == "BULLISH" else bearish_break_level
         protected_level = active_high if direction == "BULLISH" else active_low
-        return build_filter_result(direction, signal, "INSIDE STRUCTURE", active_high, active_low, protected_level, break_level, protected_level, active_low if direction == "BULLISH" else active_high, f"{signal} — price is inside the active 15m swing range. No final trade; wait for a confirmed break and retest.", "No current swing level has a body-close break beyond the 0.30 ATR buffer.", "LOW", [], ["0.30 ATR body-close break", "Break volume >= 1.20x", "Second 15m direction close", "Retest confirmation"], [], "No confirmed break yet")
+        try:
+            adx_value_for_confidence = adx(highs, lows, closes).get("adx_14", 0)
+        except ValueError:
+            adx_value_for_confidence = 0
+        hold_confidence = calculate_multi_factor_confidence(adx_value_for_confidence, rsi_value, macd_state, effective_volume_ratio, current_price, break_level, protected_level)
+        return build_filter_result(direction, signal, "INSIDE STRUCTURE", active_high, active_low, protected_level, break_level, protected_level, active_low if direction == "BULLISH" else active_high, f"{signal} — price is inside the active 15m swing range. No final trade; wait for a confirmed break and retest.", "No current swing level has a body-close break beyond the 0.15 ATR buffer.", "LOW", [], ["0.15 ATR body-close break", "Break volume >= 1.20x", "Second 15m direction close", "Retest confirmation"], [], "No confirmed break yet", hold_confidence=hold_confidence)
 
     newest_is_bullish = bullish_break_index is not None and (bearish_break_index is None or bullish_break_index > bearish_break_index)
     if newest_is_bullish:
@@ -487,7 +519,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
                 confirmation_close_price = closes[index]
         momentum_ok, trend_1h_ok, trend_4h_ok = bearish_momentum_ok, bearish_1h_ok, not bearish_4h_blocked
 
-    passed, waiting, failed = ["0.30 ATR body-close break"], [], []
+    passed, waiting, failed = ["0.15 ATR body-close break"], [], []
     if volume_ok:
         passed.append(f"Break volume x{effective_volume_ratio:.2f} >= 1.20x")
     else:
@@ -591,6 +623,10 @@ def timeframe_signal_from_indicators(indicators):
     macd_state = str(indicators.get("macd", {}).get("state", "")).lower()
     rsi_value = float(indicators.get("rsi_14", 50))
     momentum = float(indicators.get("momentum_percent", 0))
+    volume_ratio = float((indicators.get("volume") or {}).get("volume_ratio", 0) or 0)
+    price = float(indicators.get("price", 0) or 0)
+    support = float((indicators.get("support_resistance") or {}).get("support_20", 0) or 0)
+    resistance = float((indicators.get("support_resistance") or {}).get("resistance_20", 0) or 0)
     bullish_score = 0
     bearish_score = 0
     if "bull" in trend:
@@ -609,6 +645,22 @@ def timeframe_signal_from_indicators(indicators):
         bullish_score += 1
     elif momentum < 0:
         bearish_score += 1
+    # Volume confirmation: above-average volume adds weight to whichever side the other
+    # indicators already lean toward, since real conviction behind a move needs volume.
+    if volume_ratio >= 1.2:
+        if bullish_score > bearish_score:
+            bullish_score += 1
+        elif bearish_score > bullish_score:
+            bearish_score += 1
+    # Support/resistance breakout proximity: price sitting close to resistance suggests
+    # a possible bullish breakout attempt forming; close to support suggests a possible
+    # bearish breakdown attempt forming.
+    range_size = (resistance - support) or 1
+    if price and resistance and support:
+        if abs(resistance - price) / range_size <= 0.15:
+            bullish_score += 1
+        elif abs(price - support) / range_size <= 0.15:
+            bearish_score += 1
     if bullish_score >= 3 and bullish_score > bearish_score:
         return "BUY"
     if bearish_score >= 3 and bearish_score > bullish_score:
@@ -775,10 +827,15 @@ def technical_main_signal(market_data):
         # No breakout has even been attempted yet (price is inside its range), so the
         # structural-break checklist is always empty here and would always read 0% —
         # that's not a market reading, just an artifact of nothing having happened yet.
-        # Base this HOLD confidence on actual trend strength (ADX) instead, so it moves
-        # with real market conditions rather than being permanently stuck at 0.
-        adx_value = float((analysis_15m.get("adx") or {}).get("adx_14", 0) or 0)
-        confidence = max(15, min(55, round(15 + adx_value * 1.2)))
+        # Use the multi-factor confidence (trend, RSI momentum, MACD, volume, and how
+        # close price is to the breakout level) computed alongside the structure, so it
+        # reflects the whole technical picture and genuinely moves with the market.
+        multi_factor_confidence = checklist.get("hold_confidence")
+        if multi_factor_confidence is not None:
+            confidence = int(multi_factor_confidence)
+        else:
+            adx_value = float((analysis_15m.get("adx") or {}).get("adx_14", 0) or 0)
+            confidence = max(15, min(55, round(15 + adx_value * 1.2)))
 
     risk = "MEDIUM" if final_signal in ("BUY", "SELL") or sfs.get("quality") == "MEDIUM" else "HIGH"
     market_bias = (
@@ -994,7 +1051,7 @@ PRIMARY DECISION RULES:
 - For BUY: stop_loss_price must be below entry_price, target_1_price and target_2_price above entry_price (stop_loss_price < entry_price < target_1_price < target_2_price).
 - For SELL: stop_loss_price must be above entry_price, target_1_price and target_2_price below entry_price (target_2_price < target_1_price < entry_price < stop_loss_price).
 - For HOLD: set all four price fields to 0.
-- confidence must reflect how clearly the supplied data supports your signal classification, not "confidence to trade". A HOLD from genuinely mixed or conflicting data can still be a meaningful confidence (for example 40-60); only use a low number like 0-20 when the data is truly sparse or contradictory.
+- confidence must reflect how clearly the supplied data supports your signal classification, not "confidence to trade". Base it on the whole technical picture together: trend strength (ADX), momentum (RSI distance from 50), MACD state, volume relative to average, and how close price currently is to the relevant breakout/invalidation level — not any single indicator alone. A HOLD from genuinely mixed or conflicting data can still be a meaningful confidence (for example 40-60); only use a low number like 0-20 when the data is truly sparse or contradictory.
 """
 
 
@@ -1189,7 +1246,7 @@ DETERMINISTIC TECHNICAL CLASSIFICATION:
 
 Return ONLY one valid JSON object with these keys: signal, confidence, risk, market_bias, setup_status, reason, confirmation_needed, entry_idea, stop_loss_idea, target_1, target_2, entry_price, stop_loss_price, target_1_price, target_2_price, timeframes.
 The signal must be exactly BUY, SELL, or HOLD. If the deterministic classification is not confirmed BUY or SELL, return HOLD. For HOLD all numeric price fields must be 0. BUY requires stop_loss_price < entry_price < target_1_price < target_2_price. SELL requires target_2_price < target_1_price < entry_price < stop_loss_price. Never promise profit or imply an order will be placed.
-confidence must reflect how clearly the supplied data supports your signal classification, not "confidence to trade". A HOLD from genuinely mixed or conflicting data can still be a meaningful confidence (for example 40-60); only use a low number like 0-20 when the data is truly sparse or contradictory.
+confidence must reflect how clearly the supplied data supports your signal classification, not "confidence to trade". Base it on the whole technical picture together: trend strength (ADX), momentum (RSI distance from 50), MACD state, volume relative to average, and how close price currently is to the relevant breakout/invalidation level — not any single indicator alone. A HOLD from genuinely mixed or conflicting data can still be a meaningful confidence (for example 40-60); only use a low number like 0-20 when the data is truly sparse or contradictory.
 """
 
 def cooldown_remaining(cache, cooldown_seconds):
