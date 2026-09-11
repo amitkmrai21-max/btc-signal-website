@@ -221,8 +221,15 @@ button:disabled {
   display: none;
 }
 
-.quota-finished-message {
-  color: #fb923c;
+.retry-ai-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.retry-ai-btn.quota-finished-message {
+  border-color: rgba(239, 68, 68, 0.8);
+  background: rgba(239, 68, 68, 0.28);
+  color: #f87171;
 }
 
 .api-key-prompt .key-prompt-link {
