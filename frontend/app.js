@@ -1634,6 +1634,11 @@ async function loadAiAnalysis() {
     renderGeminiNews(savedNews);
     getElement("geminiRetryBtn")?.removeAttribute("hidden");
 
+    const geminiPrompt = getElement("geminiKeyPrompt");
+    if (geminiPrompt && /quota/i.test(error.message || "")) {
+      showQuotaFinishedMessage(geminiPrompt);
+    }
+
     if (renderSavedProviderPlanIfAny("GEMINI")) {
       setText(
         "geminiUpdatedAt",
@@ -1645,11 +1650,6 @@ async function loadAiAnalysis() {
     setText("geminiSignalAction", "Unavailable");
     setText("geminiReason", error.message || "Gemini AI could not respond. Please try again.");
     setText("geminiUpdatedAt", "Gemini refresh failed. Please try again.");
-
-    const geminiPrompt = getElement("geminiKeyPrompt");
-    if (geminiPrompt && /quota/i.test(error.message || "")) {
-      showQuotaFinishedMessage(geminiPrompt);
-    }
   } finally {
     aiRefreshInProgress = false;
   }
