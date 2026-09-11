@@ -340,7 +340,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = TECHNICAL_TIMEOUT
 function setTechnicalRefreshState(state = "idle", message = "") {
   const retry = getElement("retryTechnicalBtn"), refresh = getElement("refreshBtn");
   if (retry) { retry.hidden = state !== "error"; retry.disabled = state === "loading"; }
-  if (refresh) { refresh.disabled = state === "loading"; refresh.innerHTML = state === "loading" ? "Refreshing..." : "Refresh<span class=\"btn-subtext\">Technical</span>"; }
+  if (refresh) { refresh.disabled = state === "loading"; refresh.innerHTML = state === "loading" ? "Refreshing..." : "Refresh<span class=\"btn-subline\">Technical</span>"; }
   if (message) setText("technicalRefreshStatus", message);
 }
 function setDataHealthBadge(health = {}) {
@@ -720,7 +720,7 @@ async function loadTechnicalFallback(prefix = "Live technical analysis refreshed
     renderSetupQuality(null);
     setTechnicalRefreshState("error", `Technical refresh failed: ${error.message || "Please retry."}`);
     return null;
-  } finally { technicalRefreshInProgress = false; const refresh = getElement("refreshBtn"); if (refresh) { refresh.disabled = false; refresh.innerHTML = "Refresh<span class=\"btn-subtext\">Technical</span>"; } }
+  } finally { technicalRefreshInProgress = false; const refresh = getElement("refreshBtn"); if (refresh) { refresh.disabled = false; refresh.innerHTML = "Refresh<span class=\"btn-subline\">Technical</span>"; } }
 }
 
 function renderTechnicalFallback(prefix = "Live technical signal API is temporarily unavailable.") {
@@ -3367,7 +3367,7 @@ function clearLiveChartAiOverlay() {
     if (!planLocked()) {
       if (refreshButton?.dataset.aiPlanLocked === "true") {
         refreshButton.disabled = false;
-        refreshButton.innerHTML = "Refresh<span class=\"btn-subtext\">Technical</span>";
+        refreshButton.innerHTML = "Refresh<span class=\"btn-subline\">Technical</span>";
         delete refreshButton.dataset.aiPlanLocked;
       }
       return;
