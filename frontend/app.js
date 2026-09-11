@@ -9,14 +9,16 @@ function msUntilNextPacificMidnight() {
   return Math.max(60000, nextMidnightPacific.getTime() - nowPacific.getTime());
 }
 
-function showQuotaFinishedMessage(promptEl) {
-  if (!promptEl) return;
-  promptEl.classList.add("quota-finished-message");
-  promptEl.textContent = "Quota finished for today. Try again tomorrow, or add your own API key in Settings.";
+function showQuotaFinishedMessage(retryBtn) {
+  if (!retryBtn) return;
+  retryBtn.textContent = "Quota Finished";
+  retryBtn.classList.add("quota-finished-message");
+  retryBtn.disabled = true;
   window.setTimeout(() => {
-    if (promptEl.classList.contains("quota-finished-message")) {
-      promptEl.classList.remove("quota-finished-message");
-      promptEl.textContent = "";
+    if (retryBtn.classList.contains("quota-finished-message")) {
+      retryBtn.classList.remove("quota-finished-message");
+      retryBtn.textContent = "Try Again";
+      retryBtn.disabled = false;
     }
   }, msUntilNextPacificMidnight());
 }
@@ -1621,22 +1623,23 @@ async function loadAiAnalysis() {
 
     renderGeminiCard(data);
     renderGeminiNews(data);
-    getElement("geminiRetryBtn")?.setAttribute("hidden", "");
-    const geminiPromptOk = getElement("geminiKeyPrompt");
-    if (geminiPromptOk?.classList.contains("quota-finished-message")) {
-      geminiPromptOk.classList.remove("quota-finished-message");
-      geminiPromptOk.textContent = "";
+    const geminiRetryOk = getElement("geminiRetryBtn");
+    geminiRetryOk?.setAttribute("hidden", "");
+    if (geminiRetryOk?.classList.contains("quota-finished-message")) {
+      geminiRetryOk.classList.remove("quota-finished-message");
+      geminiRetryOk.textContent = "Try Again";
+      geminiRetryOk.disabled = false;
     }
   } catch (error) {
     console.error(error);
 
     const savedNews = getSavedAiNews();
     renderGeminiNews(savedNews);
-    getElement("geminiRetryBtn")?.removeAttribute("hidden");
+    const geminiRetry = getElement("geminiRetryBtn");
+    geminiRetry?.removeAttribute("hidden");
 
-    const geminiPrompt = getElement("geminiKeyPrompt");
-    if (geminiPrompt && /quota/i.test(error.message || "")) {
-      showQuotaFinishedMessage(geminiPrompt);
+    if (/quota/i.test(error.message || "")) {
+      showQuotaFinishedMessage(geminiRetry);
     }
 
     if (renderSavedProviderPlanIfAny("GEMINI")) {
@@ -3493,11 +3496,12 @@ function clearLiveChartAiOverlay() {
 
           savePlanLock(data, "GROQ");
           renderAiChartStatus(data, "GROQ");
-          getElement("groqRetryBtn")?.setAttribute("hidden", "");
-          const groqPromptOk = getElement("groqKeyPrompt");
-          if (groqPromptOk?.classList.contains("quota-finished-message")) {
-            groqPromptOk.classList.remove("quota-finished-message");
-            groqPromptOk.textContent = "";
+          const groqRetryOk = getElement("groqRetryBtn");
+          groqRetryOk?.setAttribute("hidden", "");
+          if (groqRetryOk?.classList.contains("quota-finished-message")) {
+            groqRetryOk.classList.remove("quota-finished-message");
+            groqRetryOk.textContent = "Try Again";
+            groqRetryOk.disabled = false;
           }
         } catch (error) {
           console.error("Groq live chart error:", error);
@@ -3506,7 +3510,8 @@ function clearLiveChartAiOverlay() {
             clearLiveChartAiOverlay();
           }
 
-          getElement("groqRetryBtn")?.removeAttribute("hidden");
+          const groqRetry = getElement("groqRetryBtn");
+          groqRetry?.removeAttribute("hidden");
 
           setText("groqSignalAction", "Unavailable");
           setText(
@@ -3520,9 +3525,8 @@ function clearLiveChartAiOverlay() {
             }`
           );
 
-          const groqPrompt = getElement("groqKeyPrompt");
-          if (groqPrompt && /quota/i.test(error.message || "")) {
-            showQuotaFinishedMessage(groqPrompt);
+          if (/quota/i.test(error.message || "")) {
+            showQuotaFinishedMessage(groqRetry);
           }
         } finally {
           button.disabled = false;
