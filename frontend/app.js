@@ -1675,6 +1675,7 @@ setInterval(loadPrice, 30000);
 setInterval(loadChart, 60000);
 
 setInterval(() => {
+  if (typeof window.isAiPlanLocked === "function" && window.isAiPlanLocked()) return;
   refreshTechnicalAnalysis("Automatic technical refresh.");
 }, 60000);
 
@@ -3372,6 +3373,8 @@ function clearLiveChartAiOverlay() {
   function planLocked() {
     return lockRemainingSeconds() > 0;
   }
+
+  window.isAiPlanLocked = planLocked;
 
   function refreshLockUi() {
     const refreshButton = document.getElementById("refreshBtn");
