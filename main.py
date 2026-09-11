@@ -455,7 +455,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
         }
 
     if not pivot_highs or not pivot_lows:
-        return build_filter_result("NEUTRAL", "NO TRADE", "STRUCTURE TRACKING", None, None, None, current_price, None, None, "NO TRADE — waiting for confirmed 15m swing pivots.", "No confirmed local swing high and low are available yet.", "LOW", [], ["Confirmed local swing high/low"], [], "No confirmed swing structure yet")
+        return build_filter_result("NEUTRAL", "NO TRADE", "STRUCTURE TRACKING", None, None, None, current_price, None, None, "HOLD — waiting for confirmed 15m swing pivots.", "No confirmed local swing high and low are available yet.", "LOW", [], ["Confirmed local swing high/low"], [], "No confirmed swing structure yet")
 
     active_high_index = pivot_highs[-1]
     active_low_index = pivot_lows[-1]
@@ -483,7 +483,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
         except ValueError:
             adx_value_for_confidence = 0
         hold_confidence = calculate_multi_factor_confidence(adx_value_for_confidence, rsi_value, macd_state, effective_volume_ratio, current_price, break_level, protected_level)
-        return build_filter_result(direction, signal, "INSIDE STRUCTURE", active_high, active_low, protected_level, break_level, protected_level, active_low if direction == "BULLISH" else active_high, f"{signal} — price is inside the active 15m swing range. No final trade; wait for a confirmed break and retest.", "No current swing level has a body-close break beyond the 0.15 ATR buffer.", "LOW", [], ["0.15 ATR body-close break", "Break volume >= 1.20x", "Second 15m direction close", "Retest confirmation"], [], "No confirmed break yet", hold_confidence=hold_confidence)
+        return build_filter_result(direction, signal, "INSIDE STRUCTURE", active_high, active_low, protected_level, break_level, protected_level, active_low if direction == "BULLISH" else active_high, f"HOLD — price is inside the active 15m swing range. No final trade; wait for a confirmed break and retest.", "No current swing level has a body-close break beyond the 0.15 ATR buffer.", "LOW", [], ["0.15 ATR body-close break", "Break volume >= 1.20x", "Second 15m direction close", "Retest confirmation"], [], "No confirmed break yet", hold_confidence=hold_confidence)
 
     newest_is_bullish = bullish_break_index is not None and (bearish_break_index is None or bullish_break_index > bearish_break_index)
     if newest_is_bullish:
@@ -565,7 +565,7 @@ def calculate_swing_failure_structure(candles, atr_value, swing_left_right=3, vo
         path_summary = "retest and confirmation candle are present" if retest_path_ok else "breakout is continuing without a pullback yet"
         return build_filter_result(direction, final_signal, f"{final_signal} CONFIRMED — {quality_label} QUALITY", active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{final_signal} — confirmed 15m break, {path_summary}, with {supporting_summary}. Run Gemini AI Analysis now; proceed only if Gemini agrees.", f"Core price-action confirmed ({path_summary}); {supporting_summary}.", quality_label, passed, waiting, failed, "Bullish break + support retest hold" if direction == "BULLISH" else "Bearish break + resistance retest rejection", confirmation_close_price)
     status = f"{direction} BREAK / FILTERS PENDING" if not failed else f"{direction} BREAK / FILTER FAILED"
-    return build_filter_result(direction, watch_signal, status, active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"{watch_signal} — a structure break exists, but final {final_signal} is blocked until every fakeout filter passes. Review failed/pending filters below.", "Break is not yet high quality enough for a final signal.", "MEDIUM" if len(failed) <= 1 else "LOW", passed, waiting, failed, "Bullish break awaiting filters" if direction == "BULLISH" else "Bearish break awaiting filters")
+    return build_filter_result(direction, watch_signal, status, active_high, active_low, protected_level, break_level, protected_level, invalidation_level, f"HOLD — a structure break exists, but final {final_signal} is blocked until every fakeout filter passes. Review failed/pending filters below.", "Break is not yet high quality enough for a final signal.", "MEDIUM" if len(failed) <= 1 else "LOW", passed, waiting, failed, "Bullish break awaiting filters" if direction == "BULLISH" else "Bearish break awaiting filters")
 
 
 def calculate_market_indicators(candles, interval):
