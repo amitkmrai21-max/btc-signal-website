@@ -3483,10 +3483,8 @@ function clearLiveChartAiOverlay() {
             }`
           );
         } finally {
-          if (!planLocked()) {
-            button.disabled = false;
-            button.innerHTML = "Run Groq<span class=\"btn-subtext\">(Dashboard / Live Chart)</span>";
-          }
+          button.disabled = false;
+          button.innerHTML = "Run Groq<span class=\"btn-subtext\">(Dashboard / Live Chart)</span>";
         }
       },
       true
