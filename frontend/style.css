@@ -112,11 +112,6 @@ button:disabled {
   gap: 10px;
 }
 
-.topbar-row-break {
-  flex-basis: 100%;
-  height: 0;
-}
-
 .topbar-actions button,
 .chart-control-btn,
 .timeframe-btn,
