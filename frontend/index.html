@@ -34,23 +34,7 @@
         <p>Live market analysis, virtual paper trading and Gemini/Groq AI signals</p>
       </div>
     </div>
-
-    <div class="topbar-actions">
-      <button id="refreshBtn" type="button">Refresh<span class="btn-subline">Technical</span></button>
-      <div class="ai-btn-wrap">
-        <button id="geminiAiBtn" class="gemini-ai-btn" type="button">Run Gemini<span class="btn-subtext">(Dashboard / Live Chart)</span></button>
-        <p id="geminiKeyPrompt" class="api-key-prompt"></p>
-        <button id="geminiRetryBtn" class="retry-ai-btn" type="button" hidden>Try Again</button>
-      </div>
-      <div class="ai-btn-wrap">
-        <button id="groqLiveBtn" class="groq-live-btn" type="button">Run Groq<span class="btn-subtext">(Dashboard / Live Chart)</span></button>
-        <p id="groqKeyPrompt" class="api-key-prompt"></p>
-        <button id="groqRetryBtn" class="retry-ai-btn" type="button" hidden>Try Again</button>
-      </div>
-      <button id="editLayoutBtn" class="layout-control-btn" type="button">Edit<span class="btn-subline">Layout</span></button>
-      <button id="saveLayoutBtn" class="layout-control-btn" type="button" hidden>Save Layout</button>
-      <button id="resetLayoutBtn" class="layout-control-btn layout-reset-btn" type="button" hidden>Reset Layout</button>
-    </div>
+    
   </header>
 
   <button id="modeSliderToggle" class="mode-slider" type="button" data-mode="btc" aria-label="Switch between BTC and Indian Market">
@@ -68,6 +52,19 @@
     <button class="app-tab" type="button" data-tab="news">News</button>
     <button class="app-tab" type="button" data-tab="chart-analysis">Chart Analysis</button>
     <button class="app-tab" type="button" data-tab="virtual-trading">Virtual Trading</button>
+    <div class="nav-action-group">
+      <button id="refreshBtn" class="nav-action-btn" type="button">Refresh<span class="btn-subline">Technical</span></button>
+      <div class="ai-btn-wrap nav-ai-wrap">
+        <button id="geminiAiBtn" class="gemini-ai-btn nav-action-btn" type="button">Run Gemini<span class="btn-subtext">(Dashboard / Live Chart)</span></button>
+        <p id="geminiKeyPrompt" class="api-key-prompt"></p>
+        <button id="geminiRetryBtn" class="retry-ai-btn" type="button" hidden>Try Again</button>
+      </div>
+      <div class="ai-btn-wrap nav-ai-wrap">
+        <button id="groqLiveBtn" class="groq-live-btn nav-action-btn" type="button">Run Groq<span class="btn-subtext">(Dashboard / Live Chart)</span></button>
+        <p id="groqKeyPrompt" class="api-key-prompt"></p>
+        <button id="groqRetryBtn" class="retry-ai-btn" type="button" hidden>Try Again</button>
+      </div>
+    </div>
     <button
       id="settingsMenuButton"
       class="settings-menu-button"
