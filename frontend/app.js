@@ -3954,6 +3954,20 @@ function clearLiveChartAiOverlay() {
     const changeClass = data.change_percent >= 0 ? "positive" : "negative";
     const changeText = `${changeArrow} ${data.change_percent >= 0 ? "+" : ""}${data.change_percent}% ${isLiveData ? "" : "\u00B7 Demo"}`.trim();
 
+    const tickerPrice = document.getElementById(`im-ticker-${marketKey}-price`);
+    const tickerChange = document.getElementById(`im-ticker-${marketKey}-change`);
+    if (tickerPrice) tickerPrice.textContent = formatNumber(data.price);
+    if (tickerChange) {
+      tickerChange.textContent = `${changeArrow} ${data.change_percent >= 0 ? "+" : ""}${data.change_percent}%`;
+      tickerChange.className = `im-ticker-change ${changeClass}`;
+    }
+    const tickerDot = document.getElementById("im-ticker-dot");
+    const tickerStatusText = document.getElementById("im-ticker-status-text");
+    if (tickerDot && tickerStatusText) {
+      tickerDot.classList.toggle("im-ticker-live", isLiveData);
+      tickerStatusText.textContent = isLiveData ? "Live" : "Demo";
+    }
+
     const dashPrice = document.getElementById(`im-dash-${marketKey}-price`);
     const dashChange = document.getElementById(`im-dash-${marketKey}-change`);
     if (dashPrice) dashPrice.textContent = formatNumber(data.price);
