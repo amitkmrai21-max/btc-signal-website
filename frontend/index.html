@@ -1167,7 +1167,6 @@
 
   <div class="app-shell">
     <aside class="sidebar">
-
       <nav class="nav" aria-label="Indian market navigation">
         <p class="nav-label">Workspace</p>
 
@@ -1230,13 +1229,13 @@
         <div class="stats-grid">
           <article class="card stat-card">
             <div class="stat-label">NIFTY 50</div>
-           <div class="stat-value" id="im-dash-nifty-price">24,680.55</div>
+            <div class="stat-value" id="im-dash-nifty-price">24,680.55</div>
             <div class="stat-change positive" id="im-dash-nifty-change">Loading…</div>
           </article>
 
           <article class="card stat-card">
             <div class="stat-label">Bank Nifty</div>
-           <div class="stat-value" id="im-dash-banknifty-price">55,112.40</div>
+            <div class="stat-value" id="im-dash-banknifty-price">55,112.40</div>
             <div class="stat-change positive" id="im-dash-banknifty-change">Loading…</div>
           </article>
 
@@ -1322,7 +1321,7 @@
       <section class="page" id="im-nifty">
         <article class="card index-hero">
           <div>
-           <p class="eyebrow" id="im-nifty-eyebrow">NSE Index &middot; Live data</p>
+            <p class="eyebrow" id="im-nifty-eyebrow">NSE Index &middot; Live data</p>
             <h2 class="index-title">NIFTY 50 Research</h2>
             <p class="index-value">
               <span id="im-nifty-hero-price">24,680.55</span>
@@ -1457,7 +1456,7 @@
       <section class="page" id="im-banknifty">
         <article class="card index-hero">
           <div>
-           <p class="eyebrow" id="im-banknifty-eyebrow">NSE Index &middot; Live data</p>
+            <p class="eyebrow" id="im-banknifty-eyebrow">NSE Index &middot; Live data</p>
             <h2 class="index-title">Bank Nifty Research</h2>
             <p class="index-value">
               <span id="im-banknifty-hero-price">55,112.40</span>
@@ -1589,7 +1588,7 @@
         </section>
       </section>
 
-<section class="page" id="im-watchlist">
+      <section class="page" id="im-watchlist">
         <article class="card index-hero">
           <div>
             <p class="eyebrow">NSE Equity &middot; Live prices</p>
@@ -1624,6 +1623,264 @@
           </div>
         </article>
       </section>
+      
+      <section class="page" id="im-live-chart">
+        <article class="card index-hero">
+          <div>
+            <p class="eyebrow">Chart Workspace &middot; Demo until live data is connected</p>
+            <h2 class="index-title">Live Market Chart</h2>
+            <p class="subtitle">
+              Custom chart workspace for NIFTY 50 and Bank Nifty. Real-time candles will connect after Upstox market data setup.
+            </p>
+          </div>
+
+          <div class="setup-badge">Paper research only</div>
+        </article>
+
+        <div class="card section-card">
+          <div class="section-heading">
+            <div>
+              <h2>Chart Controls</h2>
+              <p>Select index and timeframe. Data is currently demonstration-only.</p>
+            </div>
+
+            <span class="tag">Custom chart</span>
+          </div>
+
+          <div class="chart-controls">
+            <div class="chart-control-group">
+              <span class="chart-control-label">Index</span>
+
+              <button class="chart-control-button active" type="button" data-chart-market="nifty">
+                NIFTY 50
+              </button>
+
+              <button class="chart-control-button" type="button" data-chart-market="banknifty">
+                Bank Nifty
+              </button>
+            </div>
+
+            <div class="chart-control-group">
+              <span class="chart-control-label">Timeframe</span>
+
+              <button class="chart-control-button active" type="button" data-chart-timeframe="5m">
+                5m
+              </button>
+
+              <button class="chart-control-button" type="button" data-chart-timeframe="15m">
+                15m
+              </button>
+
+              <button class="chart-control-button" type="button" data-chart-timeframe="1h">
+                1h
+              </button>
+
+              <button class="chart-control-button" type="button" data-chart-timeframe="1d">
+                1D
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="live-chart-layout">
+          <article class="card section-card">
+            <div class="section-heading">
+              <div>
+                <h2 id="im-chart-market-title">NIFTY 50 &middot; 5m</h2>
+                <p id="im-chart-market-subtitle">Demo chart. Real-time candle connection pending.</p>
+              </div>
+
+              <span class="tag" id="im-chart-data-status">Demo feed</span>
+            </div>
+
+            <div class="chart-price-row">
+              <div>
+                <span class="chart-price-label">Last price</span>
+                <strong class="chart-price-value" id="im-chart-last-price">24,680.55</strong>
+              </div>
+
+              <div>
+                <span class="chart-price-label">Chart decision</span>
+                <strong class="chart-decision decision-wait" id="im-chart-decision">WAIT</strong>
+              </div>
+            </div>
+
+            <div id="im-lightweight-chart" class="im-lightweight-chart"></div>
+            <p id="im-chart-status" class="im-chart-status">Loading Upstox candles…</p>
+
+            <div class="chart-legend">
+              <span><i class="legend-dot legend-price"></i>Price candles</span>
+              <span><i class="legend-dot legend-support"></i>Support / resistance</span>
+              <span><i class="legend-dot legend-entry"></i>Entry zone</span>
+              <span><i class="legend-dot legend-stop"></i>Stop-loss</span>
+            </div>
+          </article>
+
+          <aside class="chart-side-panel">
+            <article class="card section-card">
+              <div class="section-heading">
+                <div>
+                  <h2>AI Chart Review</h2>
+                  <p>Manual AI review will be connected with Gemini.</p>
+                </div>
+              </div>
+
+              <div class="signal-box">
+                <h3 class="signal-title" id="im-chart-ai-title">Waiting for manual review</h3>
+                <p id="im-chart-ai-text">
+                  The technical confirmation engine will provide the chart context. Gemini review will run only when you press the refresh button.
+                </p>
+              </div>
+
+              <button class="primary-button" id="im-chart-ai-button" type="button">
+                Refresh Gemini AI Review
+              </button>
+            </article>
+
+            <article class="card section-card">
+              <div class="section-heading">
+                <div>
+                  <h2>Chart Trade Plan</h2>
+                  <p>Will use the connected technical engine.</p>
+                </div>
+              </div>
+
+              <div class="trade-plan-list">
+                <div class="trade-plan-row">
+                  <span>Entry</span>
+                  <strong id="im-chart-entry-value">--</strong>
+                </div>
+
+                <div class="trade-plan-row">
+                  <span>Stop-loss</span>
+                  <strong id="im-chart-stop-value">--</strong>
+                </div>
+
+                <div class="trade-plan-row">
+                  <span>Target 1</span>
+                  <strong id="im-chart-target-1-value">--</strong>
+                </div>
+
+                <div class="trade-plan-row">
+                  <span>Target 2</span>
+                  <strong id="im-chart-target-2-value">--</strong>
+                </div>
+
+                <div class="trade-plan-row">
+                  <span>Exit trigger</span>
+                  <strong id="im-chart-exit-value">Waiting for technical data</strong>
+                </div>
+              </div>
+            </article>
+          </aside>
+        </div>
+      </section>
+
+      <section class="page" id="im-paper-trading">
+        <div class="paper-grid">
+          <article class="card section-card">
+            <div class="section-heading">
+              <div>
+                <h2>Add Paper Trade</h2>
+                <p>Saved only in this browser.</p>
+              </div>
+            </div>
+
+            <form class="form-grid" id="im-paper-trade-form">
+              <label>
+                Index
+                <select id="im-trade-index" required>
+                  <option value="NIFTY 50">NIFTY 50</option>
+                  <option value="Bank Nifty">Bank Nifty</option>
+                </select>
+              </label>
+
+              <label>
+                Direction
+                <select id="im-trade-direction" required>
+                  <option value="Buy">Buy</option>
+                  <option value="Sell">Sell</option>
+                </select>
+              </label>
+
+              <label>
+                Entry Price
+                <input
+                  id="im-trade-entry"
+                  type="number"
+                  min="0"
+                  step="0.05"
+                  placeholder="Example: 24680.55"
+                  required
+                />
+              </label>
+
+              <label>
+                Stop-Loss
+                <input
+                  id="im-trade-stop"
+                  type="number"
+                  min="0"
+                  step="0.05"
+                  placeholder="Example: 24580"
+                  required
+                />
+              </label>
+
+              <label>
+                Target
+                <input
+                  id="im-trade-target"
+                  type="number"
+                  min="0"
+                  step="0.05"
+                  placeholder="Example: 24820"
+                  required
+                />
+              </label>
+
+              <button class="primary-button" type="submit">
+                Save Paper Trade
+              </button>
+            </form>
+          </article>
+
+          <article class="card section-card">
+            <div class="section-heading">
+              <div>
+                <h2>Paper Trade Journal</h2>
+                <p>Research log; no broker order is created.</p>
+              </div>
+              <span class="tag" id="im-journal-count">0 trades</span>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Index</th>
+                    <th>Side</th>
+                    <th>Entry</th>
+                    <th>Stop</th>
+                    <th>Target</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="im-trade-table-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty-note" id="im-empty-trades">
+              No paper trades saved yet. Add a research setup from the form.
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+  </div>
       
       <section class="page" id="im-live-chart">
         <article class="card index-hero">
