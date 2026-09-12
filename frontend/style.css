@@ -4741,6 +4741,23 @@ body[data-accent="green"] .settings-choice.active {
   font-variant-numeric: tabular-nums;
 }
 
+.indian-market-mode .im-lightweight-chart {
+  position: relative;
+  width: 100%;
+  min-height: 460px;
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(69, 182, 255, 0.28);
+  border-radius: 12px;
+  background: #081728;
+}
+
+.indian-market-mode .im-chart-status {
+  margin-top: 10px;
+  color: var(--im-muted);
+  font-size: 12px;
+}
+
 .indian-market-mode .custom-chart-shell {
   display: grid;
   grid-template-columns: 68px minmax(0, 1fr);
