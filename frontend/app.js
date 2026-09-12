@@ -3583,16 +3583,14 @@ function clearLiveChartAiOverlay() {
 (function setupModeToggle() {
   const btcRoot = document.getElementById("btcModeRoot");
   const indianRoot = document.getElementById("indianModeRoot");
-  const btcBtn = document.getElementById("modeBtcBtn");
-  const indianBtn = document.getElementById("modeIndianBtn");
-  if (!btcRoot || !indianRoot || !btcBtn || !indianBtn) return;
+  const slider = document.getElementById("modeSliderToggle");
+  if (!btcRoot || !indianRoot || !slider) return;
 
   function setMode(mode) {
     const isIndian = mode === "indian";
     btcRoot.hidden = isIndian;
     indianRoot.hidden = !isIndian;
-    btcBtn.classList.toggle("active", !isIndian);
-    indianBtn.classList.toggle("active", isIndian);
+    slider.dataset.mode = mode;
     try { localStorage.setItem("btcAiSignalActiveMode", mode); } catch (error) { /* ignore */ }
     if (window.IndianMarketMode) {
       if (isIndian) window.IndianMarketMode.start();
@@ -3600,8 +3598,9 @@ function clearLiveChartAiOverlay() {
     }
   }
 
-  btcBtn.addEventListener("click", () => setMode("btc"));
-  indianBtn.addEventListener("click", () => setMode("indian"));
+  slider.addEventListener("click", () => {
+    setMode(slider.dataset.mode === "indian" ? "btc" : "indian");
+  });
 
   let savedMode = "btc";
   try { savedMode = localStorage.getItem("btcAiSignalActiveMode") || "btc"; } catch (error) { /* ignore */ }
