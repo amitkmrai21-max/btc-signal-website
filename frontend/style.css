@@ -2866,6 +2866,32 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+.mode-toggle-bar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 10px 20px 0;
+}
+
+.mode-toggle-btn {
+  padding: 8px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.6);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.mode-toggle-btn.active {
+  color: #f8fafc;
+  border-color: rgba(56, 189, 248, 0.6);
+  background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+}
+
 .app-tabs {
   display: flex;
   align-items: center;
@@ -3716,4 +3742,1145 @@ body[data-accent="green"] .settings-choice.active {
   .live-chart-connection {
     width: 100%;
   }
+}
+
+/* ===== Indian Market mode (scoped under .indian-market-mode) ===== */
+.indian-market-mode {
+  --im-bg: #07111f;
+  --im-panel: #0c1b2e;
+  --im-panel-2: #10243d;
+  --im-border: #1d3655;
+  --im-text: #edf5ff;
+  --im-muted: #93a9c3;
+  --im-blue: #45b6ff;
+  --im-green: #36cf83;
+  --im-red: #ff6f7d;
+  --im-yellow: #f7c948;
+  --im-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+}
+
+.indian-market-mode,
+.indian-market-mode * {
+  box-sizing: border-box;
+}
+
+.indian-market-mode {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--im-text);
+  background:
+    radial-gradient(circle at top right, rgba(36, 126, 190, 0.18), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(38, 190, 136, 0.1), transparent 28%),
+    var(--im-bg);
+}
+
+.indian-market-mode button,
+.indian-market-mode input,
+.indian-market-mode select {
+  font: inherit;
+}
+
+.indian-market-mode .app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+}
+
+.indian-market-mode .sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 24px 16px;
+  border-right: 1px solid var(--im-border);
+  background: rgba(7, 17, 31, 0.92);
+}
+
+.indian-market-mode .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 28px;
+}
+
+.indian-market-mode .brand-mark {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #17a2ff, #30d690);
+  font-weight: 800;
+  box-shadow: 0 10px 25px rgba(23, 162, 255, 0.22);
+}
+
+.indian-market-mode .brand-text strong,
+.indian-market-mode .brand-text span {
+  display: block;
+}
+
+.indian-market-mode .brand-text strong {
+  font-size: 15px;
+}
+
+.indian-market-mode .brand-text span {
+  margin-top: 3px;
+  color: var(--im-muted);
+  font-size: 12px;
+}
+
+.indian-market-mode .nav-label {
+  margin: 18px 10px 8px;
+  color: var(--im-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.indian-market-mode .nav-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin: 4px 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--im-muted);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: 0.2s ease;
+}
+
+.indian-market-mode .nav-button:hover,
+.indian-market-mode .nav-button.active {
+  color: var(--im-text);
+  border-color: rgba(69, 182, 255, 0.24);
+  background: rgba(69, 182, 255, 0.1);
+}
+
+.indian-market-mode .nav-icon {
+  width: 20px;
+  color: var(--im-blue);
+  text-align: center;
+  font-weight: 800;
+}
+
+.indian-market-mode .sidebar-note {
+  position: absolute;
+  right: 16px;
+  bottom: 20px;
+  left: 16px;
+  padding: 14px;
+  border: 1px solid rgba(247, 201, 72, 0.22);
+  border-radius: 12px;
+  color: #ecd690;
+  background: rgba(247, 201, 72, 0.07);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.indian-market-mode .content {
+  min-width: 0;
+  padding: 28px;
+}
+
+.indian-market-mode .topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 26px;
+}
+
+.indian-market-mode .eyebrow {
+  margin: 0 0 8px;
+  color: var(--im-blue);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+}
+
+.indian-market-mode h1 {
+  margin: 0;
+  font-size: clamp(25px, 3vw, 36px);
+  line-height: 1.15;
+}
+
+.indian-market-mode .subtitle {
+  margin: 9px 0 0;
+  color: var(--im-muted);
+  line-height: 1.55;
+}
+
+.indian-market-mode .market-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: max-content;
+  padding: 10px 13px;
+  border: 1px solid rgba(54, 207, 131, 0.24);
+  border-radius: 999px;
+  color: #a9f0c8;
+  background: rgba(54, 207, 131, 0.08);
+  font-size: 13px;
+}
+
+.indian-market-mode .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--im-green);
+  box-shadow: 0 0 0 5px rgba(54, 207, 131, 0.1);
+}
+
+.indian-market-mode .page {
+  display: none;
+}
+
+.indian-market-mode .page.active {
+  display: block;
+}
+
+.indian-market-mode .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.indian-market-mode .card {
+  border: 1px solid var(--im-border);
+  border-radius: 14px;
+  background: rgba(12, 27, 46, 0.88);
+  box-shadow: var(--im-shadow);
+}
+
+.indian-market-mode .stat-card {
+  min-height: 138px;
+  padding: 18px;
+}
+
+.indian-market-mode .stat-label {
+  color: var(--im-muted);
+  font-size: 13px;
+}
+
+.indian-market-mode .stat-value {
+  margin-top: 14px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+
+.indian-market-mode .stat-change {
+  display: inline-flex;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.indian-market-mode .positive {
+  color: var(--im-green);
+}
+
+.indian-market-mode .negative {
+  color: var(--im-red);
+}
+
+.indian-market-mode .neutral {
+  color: var(--im-yellow);
+}
+
+.indian-market-mode .dashboard-grid,
+.indian-market-mode .paper-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.8fr);
+  gap: 18px;
+}
+
+.indian-market-mode .section-card {
+  padding: 20px;
+}
+
+.indian-market-mode .section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 18px;
+}
+
+.indian-market-mode .section-heading h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.indian-market-mode .section-heading p {
+  margin: 5px 0 0;
+  color: var(--im-muted);
+  font-size: 13px;
+}
+
+.indian-market-mode .tag,
+.indian-market-mode .setup-badge {
+  padding: 6px 9px;
+  border: 1px solid rgba(69, 182, 255, 0.22);
+  border-radius: 999px;
+  color: #9bd6ff;
+  background: rgba(69, 182, 255, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.indian-market-mode .chart-placeholder {
+  position: relative;
+  display: grid;
+  min-height: 285px;
+  padding: 22px;
+  overflow: hidden;
+  align-items: end;
+  border: 1px dashed rgba(69, 182, 255, 0.26);
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(29, 54, 85, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(29, 54, 85, 0.35) 1px, transparent 1px),
+    rgba(16, 36, 61, 0.42);
+  background-size: 42px 42px;
+}
+
+.indian-market-mode .line-chart {
+  height: 176px;
+  border-bottom: 2px solid rgba(69, 182, 255, 0.8);
+  border-radius: 0 0 50% 0;
+  transform: skewY(-9deg);
+  box-shadow: 0 12px 0 -9px rgba(54, 207, 131, 0.82);
+}
+
+.indian-market-mode .chart-note {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  max-width: 290px;
+  color: var(--im-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.indian-market-mode .market-list {
+  display: grid;
+  gap: 12px;
+}
+
+.indian-market-mode .market-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(29, 54, 85, 0.8);
+  border-radius: 11px;
+  background: rgba(16, 36, 61, 0.48);
+}
+
+.indian-market-mode .market-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.indian-market-mode .market-meta {
+  margin-top: 4px;
+  color: var(--im-muted);
+  font-size: 12px;
+}
+
+.indian-market-mode .market-price {
+  text-align: right;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.indian-market-mode .signal-box {
+  padding: 16px;
+  border: 1px solid rgba(54, 207, 131, 0.18);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(54, 207, 131, 0.1), rgba(69, 182, 255, 0.06));
+}
+
+.indian-market-mode .signal-title {
+  margin: 0 0 8px;
+  color: #b9f5d1;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.indian-market-mode .signal-box p {
+  margin: 0;
+  color: var(--im-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.indian-market-mode .index-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 22px;
+  margin-bottom: 18px;
+}
+
+.indian-market-mode .index-title {
+  margin: 0;
+  font-size: 25px;
+}
+
+.indian-market-mode .index-value {
+  margin: 10px 0 0;
+  font-size: 35px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.indian-market-mode .setup-badge {
+  padding: 10px 12px;
+  border-color: rgba(54, 207, 131, 0.22);
+  color: #bdf7d5;
+  background: rgba(54, 207, 131, 0.12);
+  font-size: 13px;
+}
+
+.indian-market-mode .research-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.indian-market-mode .research-metric {
+  padding: 12px;
+  border: 1px solid rgba(29, 54, 85, 0.85);
+  border-radius: 10px;
+  background: rgba(16, 36, 61, 0.45);
+}
+
+.indian-market-mode .research-metric span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--im-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.indian-market-mode .research-metric strong {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.indian-market-mode .research-rule {
+  margin-top: 10px;
+  padding: 11px 12px;
+  border-radius: 9px;
+  color: var(--im-muted);
+  background: rgba(69, 182, 255, 0.07);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.indian-market-mode .research-rule strong {
+  color: var(--im-text);
+}
+
+.indian-market-mode .research-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--im-muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.indian-market-mode .form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.indian-market-mode label {
+  color: var(--im-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.indian-market-mode input,
+.indian-market-mode select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 11px 12px;
+  border: 1px solid var(--im-border);
+  border-radius: 9px;
+  outline: none;
+  color: var(--im-text);
+  background: rgba(16, 36, 61, 0.8);
+}
+
+.indian-market-mode input:focus,
+.indian-market-mode select:focus {
+  border-color: var(--im-blue);
+  box-shadow: 0 0 0 3px rgba(69, 182, 255, 0.12);
+}
+
+.indian-market-mode .primary-button {
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 9px;
+  color: #052033;
+  background: var(--im-blue);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.indian-market-mode .primary-button:hover {
+  filter: brightness(1.08);
+}
+
+.indian-market-mode .table-wrap {
+  overflow-x: auto;
+}
+
+.indian-market-mode table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.indian-market-mode th,
+.indian-market-mode td {
+  padding: 13px 10px;
+  border-bottom: 1px solid rgba(29, 54, 85, 0.8);
+  text-align: left;
+}
+
+.indian-market-mode th {
+  color: var(--im-muted);
+  font-size: 11px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.indian-market-mode td {
+  font-variant-numeric: tabular-nums;
+}
+
+.indian-market-mode .delete-trade-button {
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 111, 125, 0.35);
+  border-radius: 8px;
+  color: #ffc0c7;
+  background: rgba(255, 111, 125, 0.1);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.indian-market-mode .delete-trade-button:hover {
+  color: #ffffff;
+  background: rgba(255, 111, 125, 0.22);
+}
+
+.indian-market-mode .empty-note {
+  padding: 16px;
+  border: 1px dashed rgba(147, 169, 195, 0.28);
+  border-radius: 10px;
+  color: var(--im-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@media (max-width: 1050px) {
+.indian-market-mode .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+.indian-market-mode .dashboard-grid,
+.indian-market-mode .paper-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+.indian-market-mode .app-shell {
+    display: block;
+  }
+
+.indian-market-mode .sidebar {
+    position: static;
+    height: auto;
+    padding: 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--im-border);
+  }
+
+.indian-market-mode .brand {
+    padding-bottom: 12px;
+  }
+
+.indian-market-mode .nav-label,
+.indian-market-mode .sidebar-note {
+    display: none;
+  }
+
+.indian-market-mode .nav {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+  }
+
+.indian-market-mode .nav-button {
+    width: auto;
+    min-width: max-content;
+    margin: 0;
+  }
+
+.indian-market-mode .content {
+    padding: 18px 14px 28px;
+  }
+
+.indian-market-mode .topbar,
+.indian-market-mode .index-hero {
+    display: block;
+  }
+
+.indian-market-mode .market-status,
+.indian-market-mode .setup-badge {
+    display: inline-flex;
+    margin-top: 14px;
+  }
+
+.indian-market-mode .stats-grid,
+.indian-market-mode .research-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+.indian-market-mode .live-engine-section {
+  margin-top: 18px;
+}
+
+.indian-market-mode .live-engine-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
+  gap: 18px;
+}
+
+.indian-market-mode .decision-card {
+  padding: 20px;
+  border: 1px solid rgba(69, 182, 255, 0.28);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(69, 182, 255, 0.12), rgba(54, 207, 131, 0.06)),
+    rgba(12, 27, 46, 0.88);
+  box-shadow: var(--im-shadow);
+}
+
+.indian-market-mode .decision-label {
+  margin: 8px 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.indian-market-mode .decision-meta {
+  color: var(--im-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.indian-market-mode .decision-buy {
+  color: var(--im-green);
+}
+
+.indian-market-mode .decision-sell {
+  color: var(--im-red);
+}
+
+.indian-market-mode .decision-wait {
+  color: var(--im-yellow);
+}
+
+.indian-market-mode .technical-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.indian-market-mode .technical-item {
+  padding: 12px;
+  border: 1px solid rgba(29, 54, 85, 0.85);
+  border-radius: 10px;
+  background: rgba(16, 36, 61, 0.45);
+}
+
+.indian-market-mode .technical-item span {
+  display: block;
+  color: var(--im-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.indian-market-mode .technical-item strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.indian-market-mode .confirmation-list {
+  display: grid;
+  gap: 9px;
+}
+
+.indian-market-mode .confirmation-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid rgba(29, 54, 85, 0.72);
+}
+
+.indian-market-mode .confirmation-row:last-child {
+  border-bottom: 0;
+}
+
+.indian-market-mode .confirmation-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.indian-market-mode .confirmation-reason {
+  margin-top: 4px;
+  color: var(--im-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.indian-market-mode .confirmation-state {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.indian-market-mode .state-bullish {
+  color: #bdf7d5;
+  background: rgba(54, 207, 131, 0.13);
+}
+
+.indian-market-mode .state-bearish {
+  color: #ffc0c7;
+  background: rgba(255, 111, 125, 0.13);
+}
+
+.indian-market-mode .state-neutral {
+  color: #f7de8a;
+  background: rgba(247, 201, 72, 0.13);
+}
+
+.indian-market-mode .trade-plan-list {
+  display: grid;
+  gap: 10px;
+}
+
+.indian-market-mode .trade-plan-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid rgba(29, 54, 85, 0.72);
+}
+
+.indian-market-mode .trade-plan-row:last-child {
+  border-bottom: 0;
+}
+
+.indian-market-mode .trade-plan-row span {
+  color: var(--im-muted);
+  font-size: 12px;
+}
+
+.indian-market-mode .trade-plan-row strong {
+  max-width: 62%;
+  text-align: right;
+  font-size: 13px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.indian-market-mode .api-status {
+  margin-top: 10px;
+  color: var(--im-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+.indian-market-mode .live-engine-grid,
+.indian-market-mode .technical-grid {
+    grid-template-columns: 1fr;
+  }
+
+.indian-market-mode .trade-plan-row strong {
+    max-width: 58%;
+  }
+}
+.indian-market-mode .chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.indian-market-mode .chart-control-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.indian-market-mode .chart-control-label {
+  margin-right: 2px;
+  color: var(--im-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.indian-market-mode .chart-control-button {
+  padding: 8px 10px;
+  border: 1px solid rgba(69, 182, 255, 0.2);
+  border-radius: 8px;
+  color: var(--im-muted);
+  background: rgba(16, 36, 61, 0.55);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  transition: 0.2s ease;
+}
+
+.indian-market-mode .chart-control-button:hover,
+.indian-market-mode .chart-control-button.active {
+  border-color: rgba(69, 182, 255, 0.65);
+  color: var(--im-text);
+  background: rgba(69, 182, 255, 0.16);
+}
+
+.indian-market-mode .live-chart-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(290px, 0.8fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.indian-market-mode .chart-side-panel {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.indian-market-mode .chart-price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid rgba(29, 54, 85, 0.85);
+  border-radius: 11px;
+  background: rgba(16, 36, 61, 0.42);
+}
+
+.indian-market-mode .chart-price-label {
+  display: block;
+  color: var(--im-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.45px;
+  text-transform: uppercase;
+}
+
+.indian-market-mode .chart-price-value,
+.indian-market-mode .chart-decision {
+  display: block;
+  margin-top: 5px;
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.indian-market-mode .custom-chart-shell {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  min-height: 430px;
+  border: 1px solid rgba(29, 54, 85, 0.86);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #081728;
+}
+
+.indian-market-mode .chart-scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 8px;
+  border-right: 1px solid rgba(29, 54, 85, 0.72);
+  color: var(--im-muted);
+  background: rgba(7, 17, 31, 0.52);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.indian-market-mode .custom-chart-canvas {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(29, 54, 85, 0.32) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(29, 54, 85, 0.32) 1px, transparent 1px),
+    #081728;
+  background-size: 48px 48px;
+}
+
+.indian-market-mode .chart-grid-line {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: rgba(69, 182, 255, 0.1);
+}
+
+.indian-market-mode .grid-line-1 {
+  top: 25%;
+}
+
+.indian-market-mode .grid-line-2 {
+  top: 50%;
+}
+
+.indian-market-mode .grid-line-3 {
+  top: 75%;
+}
+
+.indian-market-mode .chart-candles {
+  position: absolute;
+  top: 26px;
+  right: 26px;
+  bottom: 26px;
+  left: 26px;
+  height: calc(100% - 52px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.indian-market-mode .candle {
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: block;
+  width: 8px;
+  border-radius: 2px;
+}
+
+.indian-market-mode .candle::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: var(--wick-top);
+  width: 1px;
+  height: var(--wick-height);
+  transform: translateX(-50%);
+  background: currentColor;
+  z-index: -1;
+}
+
+.indian-market-mode .candle-bullish {
+  color: var(--im-green);
+  background: var(--im-green);
+}
+
+.indian-market-mode .candle-bearish {
+  color: var(--im-red);
+  background: var(--im-red);
+}
+
+.indian-market-mode .chart-level {
+  position: absolute;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  height: 1px;
+  border-top: 1px dashed;
+  pointer-events: none;
+}
+
+.indian-market-mode .chart-level span {
+  position: absolute;
+  right: 9px;
+  top: -10px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.indian-market-mode .level-resistance {
+  top: 20%;
+  border-color: rgba(255, 111, 125, 0.82);
+}
+
+.indian-market-mode .level-resistance span {
+  background: rgba(255, 111, 125, 0.74);
+}
+
+.indian-market-mode .level-entry {
+  top: 48%;
+  border-color: rgba(69, 182, 255, 0.9);
+}
+
+.indian-market-mode .level-entry span {
+  background: rgba(69, 182, 255, 0.78);
+}
+
+.indian-market-mode .level-stop {
+  top: 72%;
+  border-color: rgba(247, 201, 72, 0.85);
+}
+
+.indian-market-mode .level-stop span {
+  background: rgba(191, 141, 18, 0.8);
+}
+
+.indian-market-mode .chart-marker {
+  position: absolute;
+  z-index: 3;
+  display: none;
+  padding: 5px 7px;
+  border-radius: 7px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+.indian-market-mode .chart-marker-buy {
+  right: 27%;
+  bottom: 42%;
+  background: var(--im-green);
+}
+
+.indian-market-mode .chart-marker-sell {
+  right: 27%;
+  top: 24%;
+  background: var(--im-red);
+}
+
+.indian-market-mode .chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--im-muted);
+  font-size: 11px;
+}
+
+.indian-market-mode .chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.indian-market-mode .legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.indian-market-mode .legend-price {
+  background: var(--im-blue);
+}
+
+.indian-market-mode .legend-support {
+  background: var(--im-red);
+}
+
+.indian-market-mode .legend-entry {
+  background: var(--im-blue);
+}
+
+.indian-market-mode .legend-stop {
+  background: var(--im-yellow);
+}
+
+@media (max-width: 1050px) {
+.indian-market-mode .live-chart-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+.indian-market-mode .chart-price-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+.indian-market-mode .custom-chart-shell {
+    grid-template-columns: 55px minmax(0, 1fr);
+    min-height: 350px;
+  }
+
+.indian-market-mode .chart-candles {
+    right: 14px;
+    left: 14px;
+    gap: 4px;
+  }
+
+.indian-market-mode .candle {
+    width: 8px;
+  }
+}
+.indian-market-mode .gemini-review-heading {
+  display: block;
+  margin-top: 14px;
+  color: var(--im-text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.indian-market-mode .gemini-review-heading:first-child {
+  margin-top: 0;
+}
+
+.indian-market-mode .gemini-review-paragraph {
+  margin: 5px 0 0;
+  color: var(--im-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.indian-market-mode .gemini-review-bullet {
+  margin: 5px 0 0;
+  color: var(--im-muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
