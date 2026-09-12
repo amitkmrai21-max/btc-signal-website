@@ -3663,6 +3663,14 @@ function clearLiveChartAiOverlay() {
       pageTitle.textContent = info.title;
       pageSubtitle.textContent = info.subtitle;
     }
+
+    if (pageId === "im-live-chart") {
+      if (typeof createImLiveChart === "function") createImLiveChart();
+      window.setTimeout(() => {
+        if (imLiveChart) imLiveChart.applyOptions({ width: document.getElementById("im-lightweight-chart")?.clientWidth || 0 });
+        if (typeof refreshLiveChartCandles === "function") refreshLiveChartCandles();
+      }, 50);
+    }
   }
 
   navButtons.forEach((button) => {
@@ -4030,6 +4038,8 @@ function clearLiveChartAiOverlay() {
   }
 
   let selectedChartMarket = "nifty";
+  let imLiveChart = null;
+  let imLiveSeries = null;
   let selectedChartTimeframe = "5m";
 
   function getDemoMarketProfile(marketKey) {
@@ -4115,74 +4125,66 @@ function clearLiveChartAiOverlay() {
     });
   }
 
-  function getChartCandleMetrics(candles) {
-    const highs = candles.map((candle) => Number(candle.high));
-    const lows = candles.map((candle) => Number(candle.low));
-    const highest = Math.max(...highs);
-    const lowest = Math.min(...lows);
-    const range = Math.max(highest - lowest, 1);
+  function createImLiveChart() {
+    const container = document.getElementById("im-lightweight-chart");
+    if (!container || imLiveChart || !window.LightweightCharts) return;
 
-    return {
-      highest,
-      lowest,
-      range
-    };
+    imLiveChart = LightweightCharts.createChart(container, {
+      width: container.clientWidth,
+      height: 460,
+      layout: {
+        background: { color: "#081728" },
+        textColor: "#93a9c3"
+      },
+      grid: {
+        vertLines: { color: "rgba(29, 54, 85, 0.6)" },
+        horzLines: { color: "rgba(29, 54, 85, 0.6)" }
+      },
+      rightPriceScale: {
+        borderColor: "rgba(69, 182, 255, 0.3)"
+      },
+      timeScale: {
+        borderColor: "rgba(69, 182, 255, 0.3)",
+        timeVisible: true,
+        secondsVisible: false
+      },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal
+      }
+    });
+
+    imLiveSeries = imLiveChart.addCandlestickSeries({
+      upColor: "#36cf83",
+      downColor: "#ff6f7d",
+      borderUpColor: "#36cf83",
+      borderDownColor: "#ff6f7d",
+      wickUpColor: "#7be3ad",
+      wickDownColor: "#ffa3ab"
+    });
+
+    new ResizeObserver(() => {
+      if (!imLiveChart || !container.clientWidth) return;
+      imLiveChart.applyOptions({ width: container.clientWidth });
+    }).observe(container);
   }
 
   function renderLiveChartCandles(candles) {
-    const candleContainer = document.getElementById("im-chart-candles");
-
-    if (!candleContainer || !Array.isArray(candles) || !candles.length) {
+    if (!imLiveSeries || !Array.isArray(candles) || !candles.length) {
       return;
     }
 
-    const visibleCandles = candles.slice(-42);
-    const { highest, lowest, range } = getChartCandleMetrics(visibleCandles);
+    const chartPoints = candles
+      .map((candle) => ({
+        time: Math.floor(new Date(candle.time).getTime() / 1000),
+        open: Number(candle.open),
+        high: Number(candle.high),
+        low: Number(candle.low),
+        close: Number(candle.close)
+      }))
+      .filter((point) => Number.isFinite(point.time))
+      .sort((a, b) => a.time - b.time);
 
-    candleContainer.innerHTML = visibleCandles
-      .map((candle) => {
-        const open = Number(candle.open);
-        const high = Number(candle.high);
-        const low = Number(candle.low);
-        const close = Number(candle.close);
-        const bullish = close >= open;
-
-        const bodyHeight = Math.max(
-          5,
-          ((Math.abs(close - open) / range) * 100)
-        );
-
-        const wickTop = -Math.max(
-          2,
-          ((high - Math.max(open, close)) / range) * 100
-        );
-
-        const wickBottom = -Math.max(
-          2,
-          ((Math.min(open, close) - low) / range) * 100
-        );
-
-        return `
-          <span
-            class="candle ${bullish ? "candle-bullish" : "candle-bearish"}"
-            style="
-              height: ${bodyHeight}%;
-              --wick-top: ${wickTop}%;
-              --wick-bottom: ${wickBottom}%;
-            "
-            title="${formatChartTime(candle.time)} - O ${formatNumber(open)} - H ${formatNumber(high)} - L ${formatNumber(low)} - C ${formatNumber(close)}"
-          ></span>
-        `;
-      })
-      .join("");
-
-    const top = document.getElementById("im-chart-scale-top");
-    const mid = document.getElementById("im-chart-scale-mid");
-    const bottom = document.getElementById("im-chart-scale-bottom");
-
-    if (top) top.textContent = formatNumber(highest);
-    if (mid) mid.textContent = formatNumber((highest + lowest) / 2);
-    if (bottom) bottom.textContent = formatNumber(lowest);
+    imLiveSeries.setData(chartPoints);
   }
 
   async function refreshLiveChartCandles() {
