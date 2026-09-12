@@ -3932,6 +3932,15 @@ function clearLiveChartAiOverlay() {
       status.textContent = `Technical API connected - Last refresh: ${time}`;
     }
 
+    const statusBadge = document.getElementById("im-market-status");
+    const statusText = document.getElementById("im-market-status-text");
+    if (statusBadge && statusText) {
+      const isLive = data.data_source === "upstox_live";
+      statusText.textContent = isLive ? "Live market data" : "Demo data mode";
+      statusBadge.classList.toggle("market-status-live", isLive);
+      statusBadge.classList.toggle("market-status-demo", !isLive);
+    }
+
     renderTechnicalMetrics(marketKey, data);
     renderConfirmations(marketKey, data);
     renderTradePlan(marketKey, data);
