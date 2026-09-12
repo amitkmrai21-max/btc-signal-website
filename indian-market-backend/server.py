@@ -749,6 +749,114 @@ def all_markets_analysis():
     )
 
 
+DEFAULT_WATCHLIST_SYMBOLS = [
+    "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK",
+    "SBIN", "BHARTIARTL", "ITC", "KOTAKBANK", "LT",
+]
+
+_instrument_key_cache = {}
+_watchlist_cache = {}
+WATCHLIST_CACHE_SECONDS = 20
+
+
+def resolve_instrument_key(trading_symbol, exchange="NSE", segment="EQ"):
+    """Looks up a stock's real Upstox instrument_key by trading symbol, using
+    Upstox's own instrument search — never a guessed/hardcoded ISIN, since a
+    wrong ISIN would silently point at the wrong company."""
+    cache_key = f"{exchange}:{segment}:{trading_symbol.upper()}"
+    if cache_key in _instrument_key_cache:
+        return _instrument_key_cache[cache_key]
+
+    url = "https://api.upstox.com/v2/instruments/search"
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+    }
+    params = {"query": trading_symbol, "exchanges": exchange, "segments": segment}
+
+    response = requests.get(url, headers=headers, params=params, timeout=15)
+    if not response.ok:
+        raise RuntimeError(f"Instrument search failed for {trading_symbol}: status={response.status_code}")
+
+    results = (response.json().get("data") or [])
+    exact = next(
+        (item for item in results if str(item.get("trading_symbol", "")).upper() == trading_symbol.upper()),
+        None,
+    )
+    match = exact or (results[0] if results else None)
+    if not match or not match.get("instrument_key"):
+        raise RuntimeError(f"No instrument found for {trading_symbol}")
+
+    instrument_key = match["instrument_key"]
+    _instrument_key_cache[cache_key] = instrument_key
+    return instrument_key
+
+
+@app.get("/api/watchlist")
+def watchlist():
+    if not UPSTOX_ACCESS_TOKEN:
+        return jsonify(
+            {"ok": False, "error": "Upstox access token is not configured on the server."}
+        ), 503
+
+    symbols_param = request.args.get("symbols", "")
+    symbols = [s.strip().upper() for s in symbols_param.split(",") if s.strip()] or DEFAULT_WATCHLIST_SYMBOLS
+    cache_key = ",".join(symbols)
+
+    cached = _watchlist_cache.get(cache_key)
+    if cached and time.time() - cached["fetched_at"] < WATCHLIST_CACHE_SECONDS:
+        return jsonify({"ok": True, "updated_at": cached["updated_at"], "data": cached["data"]})
+
+    try:
+        key_map = {}
+        for symbol in symbols:
+            try:
+                key_map[symbol] = resolve_instrument_key(symbol)
+            except Exception as error:
+                app.logger.warning("Could not resolve watchlist symbol %s: %s", symbol, error)
+
+        if not key_map:
+            return jsonify({"ok": False, "error": "Could not resolve any of the requested symbols."}), 502
+
+        instrument_keys = ",".join(key_map.values())
+        url = f"https://api.upstox.com/v3/market-quote/ltp?instrument_key={quote(instrument_keys, safe=',')}"
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        }
+
+        response = requests.get(url, headers=headers, timeout=20)
+        if not response.ok:
+            raise RuntimeError(f"LTP quote request failed: status={response.status_code}")
+
+        quote_data = (response.json().get("data") or {})
+        reverse_map = {v: k for k, v in key_map.items()}
+
+        results = []
+        for info in quote_data.values():
+            instrument_key = info.get("instrument_token", "")
+            symbol = reverse_map.get(instrument_key)
+            if not symbol:
+                continue
+            results.append(
+                {
+                    "symbol": symbol,
+                    "instrument_key": instrument_key,
+                    "last_price": info.get("last_price"),
+                }
+            )
+
+        results.sort(key=lambda item: symbols.index(item["symbol"]) if item["symbol"] in symbols else 999)
+
+        updated_at = now_utc()
+        _watchlist_cache[cache_key] = {"data": results, "fetched_at": time.time(), "updated_at": updated_at}
+        return jsonify({"ok": True, "updated_at": updated_at, "data": results})
+
+    except Exception as error:
+        app.logger.warning("Watchlist fetch failed: %s", error)
+        return jsonify({"ok": False, "error": "Could not fetch watchlist data right now."}), 502
+
+
 @app.get("/api/live/status")
 def live_status():
     return jsonify(
