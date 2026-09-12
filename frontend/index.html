@@ -53,10 +53,11 @@
     </div>
   </header>
 
-  <div class="mode-toggle-bar">
-    <button id="modeBtcBtn" class="mode-toggle-btn active" type="button" data-mode="btc">₿ BTC</button>
-    <button id="modeIndianBtn" class="mode-toggle-btn" type="button" data-mode="indian">🇮🇳 Indian Market</button>
-  </div>
+  <button id="modeSliderToggle" class="mode-slider" type="button" data-mode="btc" aria-label="Switch between BTC and Indian Market">
+    <span class="mode-slider-label mode-slider-label-left">B</span>
+    <span class="mode-slider-label mode-slider-label-right">IN</span>
+    <span class="mode-slider-thumb"></span>
+  </button>
 
   <div id="btcModeRoot">
   <nav class="app-tabs" aria-label="Dashboard navigation">
