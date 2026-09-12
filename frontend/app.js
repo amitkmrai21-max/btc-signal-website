@@ -1630,6 +1630,7 @@ async function loadAiAnalysis() {
       geminiRetryOk.textContent = "Try Again";
       geminiRetryOk.disabled = false;
     }
+    return true;
   } catch (error) {
     console.error(error);
 
@@ -1647,12 +1648,13 @@ async function loadAiAnalysis() {
         "geminiUpdatedAt",
         "Gemini refresh failed; showing the last successful Gemini plan."
       );
-      return;
+      return false;
     }
 
     setText("geminiSignalAction", "Unavailable");
     setText("geminiReason", error.message || "Gemini AI could not respond. Please try again.");
     setText("geminiUpdatedAt", "Gemini refresh failed. Please try again.");
+    return false;
   } finally {
     aiRefreshInProgress = false;
   }
@@ -3440,14 +3442,14 @@ function clearLiveChartAiOverlay() {
 
   if (originalLoadAiAnalysis) {
     window.loadAiAnalysis = async function () {
-      const result = await originalLoadAiAnalysis();
+      const succeeded = await originalLoadAiAnalysis();
 
-      if (latestAiPlan?.data) {
+      if (succeeded && latestAiPlan?.data) {
         savePlanLock(latestAiPlan.data, "GEMINI");
         renderAiChartStatus(latestAiPlan.data, "GEMINI");
       }
 
-      return result;
+      return succeeded;
     };
   }
 
