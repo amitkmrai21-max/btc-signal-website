@@ -3941,6 +3941,29 @@ function clearLiveChartAiOverlay() {
       statusBadge.classList.toggle("market-status-demo", !isLive);
     }
 
+    const isLiveData = data.data_source === "upstox_live";
+    const changeArrow = data.change_percent >= 0 ? "\u25B2" : "\u25BC";
+    const changeClass = data.change_percent >= 0 ? "positive" : "negative";
+    const changeText = `${changeArrow} ${data.change_percent >= 0 ? "+" : ""}${data.change_percent}% ${isLiveData ? "" : "\u00B7 Demo"}`.trim();
+
+    const dashPrice = document.getElementById(`im-dash-${marketKey}-price`);
+    const dashChange = document.getElementById(`im-dash-${marketKey}-change`);
+    if (dashPrice) dashPrice.textContent = formatNumber(data.price);
+    if (dashChange) {
+      dashChange.textContent = changeText;
+      dashChange.className = `stat-change ${changeClass}`;
+    }
+
+    const heroPrice = document.getElementById(`im-${marketKey}-hero-price`);
+    const heroChange = document.getElementById(`im-${marketKey}-hero-change`);
+    const heroEyebrow = document.getElementById(`im-${marketKey}-eyebrow`);
+    if (heroPrice) heroPrice.textContent = formatNumber(data.price);
+    if (heroChange) {
+      heroChange.textContent = `${changeArrow} ${data.change_percent >= 0 ? "+" : ""}${data.change_percent}%`;
+      heroChange.className = changeClass;
+    }
+    if (heroEyebrow) heroEyebrow.textContent = `NSE Index \u00B7 ${isLiveData ? "Live data" : "Demo values"}`;
+
     renderTechnicalMetrics(marketKey, data);
     renderConfirmations(marketKey, data);
     renderTradePlan(marketKey, data);
