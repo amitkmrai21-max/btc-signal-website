@@ -90,22 +90,78 @@ def now_utc():
 
 # ===================== Upstox live data + indicators =====================
 
-def fetch_upstox_candles(instrument_key, unit, interval):
-    """Fetches intraday candles from Upstox V3 and returns them in
-    chronological order as a list of dicts. If today has no data yet (market
-    closed today, e.g. weekend/holiday), falls back to the most recent
-    trading day's candles via the historical endpoint. Raises on any failure
-    so callers can decide how to fall back further (e.g. to demo data)."""
+CHART_HISTORY_DAYS = {
+    "5m": 20,
+    "15m": 40,
+    "1h": 90,
+    "1d": 500,
+}
+
+
+def fetch_upstox_candles(instrument_key, unit, interval, chart_history_days=None):
+    """Fetches a multi-day candle history (for proper chart depth/scroll) plus
+    today's intraday candles, merged into one chronological series. Falls
+    back gracefully if either piece is unavailable. Raises only if BOTH the
+    historical and intraday fetches fail."""
     if not UPSTOX_ACCESS_TOKEN:
         raise RuntimeError("Upstox access token is not configured on the server.")
 
-    candles = _fetch_upstox_intraday(instrument_key, unit, interval)
-    if candles:
-        return candles
+    history_candles = []
+    intraday_candles = []
+    history_error = None
+    intraday_error = None
 
-    # No candles for "today" (likely a non-trading day) — fetch the last
-    # available trading day's candles from the historical endpoint instead.
+    try:
+        history_candles = _fetch_upstox_history_window(
+            instrument_key, unit, interval, chart_history_days or 30
+        )
+    except Exception as error:
+        history_error = error
+
+    try:
+        intraday_candles = _fetch_upstox_intraday(instrument_key, unit, interval)
+    except Exception as error:
+        intraday_error = error
+
+    if not history_candles and not intraday_candles:
+        raise history_error or intraday_error or RuntimeError("No candle data available.")
+
+    merged = {candle["time"]: candle for candle in history_candles}
+    for candle in intraday_candles:
+        merged[candle["time"]] = candle
+
+    combined = sorted(merged.values(), key=lambda c: c["time"])
+    if combined:
+        return combined
+
+    # Neither historical nor today's intraday had data (e.g. a long holiday
+    # stretch) — fall back to the most recent single trading day available.
     return _fetch_upstox_last_trading_day(instrument_key, unit, interval)
+
+
+def _fetch_upstox_history_window(instrument_key, unit, interval, days_back):
+    from datetime import timedelta
+
+    encoded_instrument_key = quote(instrument_key, safe="")
+    to_date = datetime.now(timezone.utc).date()
+    from_date = to_date - timedelta(days=days_back)
+    url = (
+        f"https://api.upstox.com/v3/historical-candle/{encoded_instrument_key}/{unit}/{interval}"
+        f"/{to_date.isoformat()}/{from_date.isoformat()}"
+    )
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+    }
+
+    response = requests.get(url, headers=headers, timeout=25)
+    if not response.ok:
+        raise RuntimeError(f"Upstox historical window request failed: status={response.status_code}")
+
+    payload = response.json()
+    raw_candles = (payload.get("data") or {}).get("candles") or []
+    return _parse_upstox_candles(raw_candles)
 
 
 def _fetch_upstox_intraday(instrument_key, unit, interval):
@@ -299,7 +355,7 @@ def get_real_market_snapshot(market_key):
     if cached and time.time() - cached["fetched_at"] < LIVE_SNAPSHOT_CACHE_SECONDS:
         return cached["data"]
 
-    candles_5m = fetch_upstox_candles(market["instrument_key"], "minutes", 5)
+    candles_5m = fetch_upstox_candles(market["instrument_key"], "minutes", 5, chart_history_days=5)
     if len(candles_5m) < 30:
         raise RuntimeError("Not enough live candle history yet for a reliable snapshot.")
 
@@ -745,7 +801,10 @@ def live_candles(market_key):
     unit, interval = UPSTOX_TIMEFRAMES[timeframe]
 
     try:
-        candles = fetch_upstox_candles(market["instrument_key"], unit, interval)
+        candles = fetch_upstox_candles(
+            market["instrument_key"], unit, interval,
+            chart_history_days=CHART_HISTORY_DAYS.get(timeframe, 30),
+        )
 
         if not candles:
             return jsonify(
