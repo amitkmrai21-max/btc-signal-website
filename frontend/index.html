@@ -1186,6 +1186,11 @@
           Bank Nifty
         </button>
 
+        <button class="nav-button" data-page="im-watchlist" type="button">
+          <span class="nav-icon">&#9733;</span>
+          Watchlist
+        </button>
+
         <p class="nav-label">Journal</p>
 
         <button class="nav-button" data-page="im-live-chart" type="button">
@@ -1584,6 +1589,42 @@
         </section>
       </section>
 
+<section class="page" id="im-watchlist">
+        <article class="card index-hero">
+          <div>
+            <p class="eyebrow">NSE Equity &middot; Live prices</p>
+            <h2 class="index-title">Watchlist</h2>
+            <p class="subtitle">
+              Live last-traded price for popular NSE stocks. Research view only — no order placement.
+            </p>
+          </div>
+          <div class="setup-badge" id="im-watchlist-status">Loading…</div>
+        </article>
+
+        <article class="card section-card">
+          <div class="section-heading">
+            <div>
+              <h2>Stocks</h2>
+              <p>Auto-refreshes every 20 seconds</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Last Price</th>
+                </tr>
+              </thead>
+              <tbody id="im-watchlist-body">
+                <tr><td colspan="2">Loading watchlist…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+      
       <section class="page" id="im-live-chart">
         <article class="card index-hero">
           <div>
