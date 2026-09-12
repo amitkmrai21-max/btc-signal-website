@@ -4031,6 +4031,20 @@ body[data-accent="green"] .settings-choice.active {
   font-size: 13px;
 }
 
+.indian-market-mode .market-status.market-status-demo {
+  border-color: rgba(247, 201, 72, 0.32);
+  color: #f7de8a;
+  background: rgba(247, 201, 72, 0.1);
+}
+
+.indian-market-mode .market-status.market-status-live .status-dot {
+  background: #36cf83;
+}
+
+.indian-market-mode .market-status.market-status-demo .status-dot {
+  background: #f7c948;
+}
+
 .indian-market-mode .status-dot {
   width: 8px;
   height: 8px;
