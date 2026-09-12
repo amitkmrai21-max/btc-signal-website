@@ -3579,3 +3579,1023 @@ function clearLiveChartAiOverlay() {
     window.setTimeout(restoreChartState, 1500);
   }
 })();
+
+(function setupModeToggle() {
+  const btcRoot = document.getElementById("btcModeRoot");
+  const indianRoot = document.getElementById("indianModeRoot");
+  const btcBtn = document.getElementById("modeBtcBtn");
+  const indianBtn = document.getElementById("modeIndianBtn");
+  if (!btcRoot || !indianRoot || !btcBtn || !indianBtn) return;
+
+  function setMode(mode) {
+    const isIndian = mode === "indian";
+    btcRoot.hidden = isIndian;
+    indianRoot.hidden = !isIndian;
+    btcBtn.classList.toggle("active", !isIndian);
+    indianBtn.classList.toggle("active", isIndian);
+    try { localStorage.setItem("btcAiSignalActiveMode", mode); } catch (error) { /* ignore */ }
+    if (window.IndianMarketMode) {
+      if (isIndian) window.IndianMarketMode.start();
+      else window.IndianMarketMode.stop();
+    }
+  }
+
+  btcBtn.addEventListener("click", () => setMode("btc"));
+  indianBtn.addEventListener("click", () => setMode("indian"));
+
+  let savedMode = "btc";
+  try { savedMode = localStorage.getItem("btcAiSignalActiveMode") || "btc"; } catch (error) { /* ignore */ }
+  setMode(savedMode);
+})();
+
+/* ===== Indian Market mode (namespaced, isolated from BTC site logic) ===== */
+(function IndianMarketModule() {
+  const pageInfo = {
+    "im-dashboard": {
+      title: "Indian Market Overview",
+      subtitle: "NIFTY 50 and Bank Nifty research dashboard with paper-trading workflow."
+    },
+    "im-nifty": {
+      title: "NIFTY 50 Research",
+      subtitle: "Technical research, market structure, and paper-trading preparation."
+    },
+    "im-banknifty": {
+      title: "Bank Nifty Research",
+      subtitle: "Volatility-aware research and disciplined paper-trading preparation."
+    },
+    "im-live-chart": {
+      title: "Live Market Chart",
+      subtitle: "Custom chart workspace for NIFTY 50 and Bank Nifty."
+    },
+    "im-paper-trading": {
+      title: "Paper Trading Journal",
+      subtitle: "Record research setups only. No real-money order execution."
+    }
+  };
+
+  const root = document.querySelector(".indian-market-mode");
+  if (!root) return;
+
+  const navButtons = root.querySelectorAll(".nav-button");
+  const pages = root.querySelectorAll(".page");
+  const pageTitle = document.getElementById("im-page-title");
+  const pageSubtitle = document.getElementById("im-page-subtitle");
+
+  function showPage(pageId) {
+    navButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.page === pageId);
+    });
+
+    pages.forEach((page) => {
+      page.classList.toggle("active", page.id === pageId);
+    });
+
+    const info = pageInfo[pageId];
+
+    if (info && pageTitle && pageSubtitle) {
+      pageTitle.textContent = info.title;
+      pageSubtitle.textContent = info.subtitle;
+    }
+  }
+
+  navButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      showPage(button.dataset.page);
+    });
+  });
+
+  const storageKey = "indianMarketPaperTrades";
+  const form = document.getElementById("im-paper-trade-form");
+  const tradeTableBody = document.getElementById("im-trade-table-body");
+  const emptyTrades = document.getElementById("im-empty-trades");
+  const tradeCount = document.getElementById("im-trade-count");
+  const journalCount = document.getElementById("im-journal-count");
+
+  function loadTrades() {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey)) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveTrades(trades) {
+    localStorage.setItem(storageKey, JSON.stringify(trades));
+  }
+
+  function escapeText(value) {
+    const div = document.createElement("div");
+    div.textContent = value;
+    return div.innerHTML;
+  }
+
+  function renderTrades() {
+    const trades = loadTrades();
+
+    if (tradeTableBody) {
+      tradeTableBody.innerHTML = trades
+        .map((trade, index) => {
+          const directionClass = trade.direction === "Buy" ? "positive" : "negative";
+
+          return `
+            <tr>
+              <td>${escapeText(trade.index)}</td>
+              <td class="${directionClass}">${escapeText(trade.direction)}</td>
+              <td>${Number(trade.entry).toFixed(2)}</td>
+              <td>${Number(trade.stop).toFixed(2)}</td>
+              <td>${Number(trade.target).toFixed(2)}</td>
+              <td>
+                <button
+                  class="delete-trade-button"
+                  type="button"
+                  data-delete-index="${index}"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          `;
+        })
+        .join("");
+    }
+
+    if (emptyTrades) emptyTrades.style.display = trades.length ? "none" : "block";
+    if (tradeCount) tradeCount.textContent = String(trades.length);
+    if (journalCount) {
+      journalCount.textContent = `${trades.length} ${
+        trades.length === 1 ? "trade" : "trades"
+      }`;
+    }
+  }
+
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const entry = Number(document.getElementById("im-trade-entry").value);
+      const stop = Number(document.getElementById("im-trade-stop").value);
+      const target = Number(document.getElementById("im-trade-target").value);
+
+      if (![entry, stop, target].every((value) => Number.isFinite(value) && value > 0)) {
+        alert("Please enter valid positive prices.");
+        return;
+      }
+
+      const trades = loadTrades();
+
+      trades.unshift({
+        index: document.getElementById("im-trade-index").value,
+        direction: document.getElementById("im-trade-direction").value,
+        entry,
+        stop,
+        target
+      });
+
+      saveTrades(trades);
+      form.reset();
+      renderTrades();
+    });
+  }
+
+  if (tradeTableBody) {
+    tradeTableBody.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-delete-index]");
+
+      if (!button) {
+        return;
+      }
+
+      const trades = loadTrades();
+      trades.splice(Number(button.dataset.deleteIndex), 1);
+      saveTrades(trades);
+      renderTrades();
+    });
+  }
+
+  renderTrades();
+
+  const API_BASE_URL = "https://indian-market-ai-api.onrender.com";
+
+  function formatNumber(value) {
+    if (value === null || value === undefined) {
+      return "--";
+    }
+
+    return Number(value).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+
+  function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = String(value);
+    return div.innerHTML;
+  }
+
+  function decisionClass(label) {
+    if (label.includes("BUY")) {
+      return "decision-buy";
+    }
+
+    if (label.includes("SELL")) {
+      return "decision-sell";
+    }
+
+    return "decision-wait";
+  }
+
+  function renderTechnicalMetrics(marketKey, data) {
+    const grid = document.getElementById(`im-${marketKey}-technical-grid`);
+
+    if (!grid) {
+      return;
+    }
+
+    const metrics = [
+      ["Price", formatNumber(data.price)],
+      ["Change", `${data.change_percent >= 0 ? "+" : ""}${data.change_percent}%`],
+      ["Open", formatNumber(data.open)],
+      ["High", formatNumber(data.high)],
+      ["Low", formatNumber(data.low)],
+      ["RSI 14", data.indicators.rsi_14],
+      ["EMA 9 / 21", `${formatNumber(data.indicators.ema_9)} / ${formatNumber(data.indicators.ema_21)}`],
+      ["VWAP", formatNumber(data.indicators.vwap)],
+      ["Volume Ratio", `${data.indicators.volume_ratio}x`],
+      ["ATR 14", formatNumber(data.indicators.atr_14)]
+    ];
+
+    grid.innerHTML = metrics
+      .map(
+        ([label, value]) => `
+          <div class="technical-item">
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(value)}</strong>
+          </div>
+        `
+      )
+      .join("");
+  }
+
+  function renderConfirmations(marketKey, data) {
+    const list = document.getElementById(`im-${marketKey}-confirmation-list`);
+    const count = document.getElementById(`im-${marketKey}-confirmation-count`);
+
+    if (!list || !count) {
+      return;
+    }
+
+    count.textContent = `${data.decision.bullish_count} bullish / ${data.decision.bearish_count} bearish`;
+
+    list.innerHTML = data.confirmations
+      .map(
+        (item) => `
+          <div class="confirmation-row">
+            <div>
+              <div class="confirmation-name">${escapeHtml(item.name)}</div>
+              <div class="confirmation-reason">${escapeHtml(item.reason)}</div>
+            </div>
+            <span class="confirmation-state state-${escapeHtml(item.state)}">
+              ${escapeHtml(item.state)}
+            </span>
+          </div>
+        `
+      )
+      .join("");
+  }
+
+  function renderTradePlan(marketKey, data) {
+    const plan = document.getElementById(`im-${marketKey}-trade-plan`);
+
+    if (!plan) {
+      return;
+    }
+
+    const entry = data.trade_plan.entry_zone;
+    const entryText =
+      entry.from === null || entry.to === null
+        ? "No entry"
+        : `${formatNumber(entry.from)} - ${formatNumber(entry.to)}`;
+
+    const rows = [
+      ["Decision", data.decision.label],
+      ["Entry zone", entryText],
+      ["Entry condition", entry.condition],
+      ["Stop-loss", formatNumber(data.trade_plan.stop_loss)],
+      ["Target 1", formatNumber(data.trade_plan.target_1)],
+      ["Target 2", formatNumber(data.trade_plan.target_2)],
+      ["Support", formatNumber(data.levels.support)],
+      ["Resistance", formatNumber(data.levels.resistance)],
+      ["Exit rule", data.trade_plan.exit_rule]
+    ];
+
+    plan.innerHTML = rows
+      .map(
+        ([label, value]) => `
+          <div class="trade-plan-row">
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(value)}</strong>
+          </div>
+        `
+      )
+      .join("");
+  }
+
+  function renderMarketEngine(marketKey, data) {
+    const label = document.getElementById(`im-${marketKey}-decision-label`);
+    const reason = document.getElementById(`im-${marketKey}-decision-reason`);
+    const status = document.getElementById(`im-${marketKey}-api-status`);
+
+    if (label) {
+      label.textContent = data.decision.label;
+      label.className = `decision-label ${decisionClass(data.decision.label)}`;
+    }
+
+    if (reason) {
+      reason.textContent = `${data.decision.reason} Score: ${data.decision.weighted_score}/${data.decision.max_score}.`;
+    }
+
+    if (status) {
+      const time = new Date(data.updated_at).toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+
+      status.textContent = `Technical API connected - Last refresh: ${time}`;
+    }
+
+    renderTechnicalMetrics(marketKey, data);
+    renderConfirmations(marketKey, data);
+    renderTradePlan(marketKey, data);
+  }
+
+  function renderApiError(marketKey) {
+    const label = document.getElementById(`im-${marketKey}-decision-label`);
+    const reason = document.getElementById(`im-${marketKey}-decision-reason`);
+    const status = document.getElementById(`im-${marketKey}-api-status`);
+
+    if (label) {
+      label.textContent = "TECHNICAL DATA UNAVAILABLE";
+      label.className = "decision-label decision-wait";
+    }
+
+    if (reason) {
+      reason.textContent = "The research API could not be reached. The backend may be starting or temporarily unavailable.";
+    }
+
+    if (status) {
+      status.textContent = "Refresh will retry automatically in 60 seconds.";
+    }
+  }
+
+  async function loadMarketEngine(marketKey) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/market/${marketKey}`);
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const payload = await response.json();
+
+      if (!payload.ok || !payload.data) {
+        throw new Error("Invalid API response");
+      }
+
+      renderMarketEngine(marketKey, payload.data);
+    } catch (error) {
+      console.error(`Could not load ${marketKey} technical engine`, error);
+      renderApiError(marketKey);
+    }
+  }
+
+  function refreshTechnicalEngine() {
+    loadMarketEngine("nifty");
+    loadMarketEngine("banknifty");
+  }
+
+  let technicalEngineTimer = null;
+
+  function startTechnicalEnginePolling() {
+    if (technicalEngineTimer) return;
+    refreshTechnicalEngine();
+    technicalEngineTimer = window.setInterval(refreshTechnicalEngine, 60000);
+  }
+
+  function stopTechnicalEnginePolling() {
+    if (technicalEngineTimer) {
+      window.clearInterval(technicalEngineTimer);
+      technicalEngineTimer = null;
+    }
+  }
+
+  let selectedChartMarket = "nifty";
+  let selectedChartTimeframe = "5m";
+
+  function getDemoMarketProfile(marketKey) {
+    if (marketKey === "banknifty") {
+      return {
+        name: "Bank Nifty",
+        price: 55112.4,
+        support: 54920,
+        resistance: 55250,
+        decision: "BUY SETUP",
+        entry: "55,112.40 - 55,149.60",
+        stop: "54,833.20",
+        target1: "55,391.60",
+        target2: "55,670.80",
+        exit: "Exit if stop-loss is hit, price loses VWAP and EMA 21, or an opposite confirmed signal appears."
+      };
+    }
+
+    return {
+      name: "NIFTY 50",
+      price: 24680.55,
+      support: 24580,
+      resistance: 24760,
+      decision: "BUY SETUP",
+      entry: "24,680.55 - 24,698.25",
+      stop: "24,538.70",
+      target1: "24,822.40",
+      target2: "24,964.25",
+      exit: "Exit if stop-loss is hit, price loses VWAP and EMA 21, or an opposite confirmed signal appears."
+    };
+  }
+
+  function createDemoCandles(marketKey, timeframe) {
+    const candleCount = timeframe === "1d" ? 24 : 34;
+    const seedBase = marketKey === "banknifty" ? 13 : 7;
+    const timeMultiplier = {
+      "5m": 1,
+      "15m": 1.4,
+      "1h": 1.9,
+      "1d": 2.5
+    }[timeframe] || 1;
+
+    const candles = [];
+
+    for (let index = 0; index < candleCount; index += 1) {
+      const wave = Math.sin((index + seedBase) * 1.73) * 22;
+      const trend = index * 2.1 * timeMultiplier;
+      const noise = Math.cos((index + seedBase) * 2.31) * 17;
+      const move = wave + trend + noise;
+      const bodyHeight = Math.max(24, Math.min(105, Math.abs(move) + 26));
+      const bullish = move >= 0;
+      const wickTop = -Math.max(10, Math.min(48, 12 + Math.abs(noise)));
+      const wickBottom = -Math.max(10, Math.min(48, 13 + Math.abs(wave) * 0.45));
+
+      candles.push({
+        bullish,
+        height: bodyHeight,
+        wickTop,
+        wickBottom
+      });
+    }
+
+    return candles;
+  }
+
+  const LIVE_CANDLE_API_BASE = "https://indian-market-ai-api.onrender.com";
+  let chartRefreshTimer = null;
+  let latestLiveCandleData = null;
+
+  function formatChartTime(value) {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Unknown time";
+    }
+
+    return date.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
+  }
+
+  function getChartCandleMetrics(candles) {
+    const highs = candles.map((candle) => Number(candle.high));
+    const lows = candles.map((candle) => Number(candle.low));
+    const highest = Math.max(...highs);
+    const lowest = Math.min(...lows);
+    const range = Math.max(highest - lowest, 1);
+
+    return {
+      highest,
+      lowest,
+      range
+    };
+  }
+
+  function renderLiveChartCandles(candles) {
+    const candleContainer = document.getElementById("im-chart-candles");
+
+    if (!candleContainer || !Array.isArray(candles) || !candles.length) {
+      return;
+    }
+
+    const visibleCandles = candles.slice(-42);
+    const { highest, lowest, range } = getChartCandleMetrics(visibleCandles);
+
+    candleContainer.innerHTML = visibleCandles
+      .map((candle) => {
+        const open = Number(candle.open);
+        const high = Number(candle.high);
+        const low = Number(candle.low);
+        const close = Number(candle.close);
+        const bullish = close >= open;
+
+        const bodyHeight = Math.max(
+          5,
+          ((Math.abs(close - open) / range) * 100)
+        );
+
+        const wickTop = -Math.max(
+          2,
+          ((high - Math.max(open, close)) / range) * 100
+        );
+
+        const wickBottom = -Math.max(
+          2,
+          ((Math.min(open, close) - low) / range) * 100
+        );
+
+        return `
+          <span
+            class="candle ${bullish ? "candle-bullish" : "candle-bearish"}"
+            style="
+              height: ${bodyHeight}%;
+              --wick-top: ${wickTop}%;
+              --wick-bottom: ${wickBottom}%;
+            "
+            title="${formatChartTime(candle.time)} - O ${formatNumber(open)} - H ${formatNumber(high)} - L ${formatNumber(low)} - C ${formatNumber(close)}"
+          ></span>
+        `;
+      })
+      .join("");
+
+    const top = document.getElementById("im-chart-scale-top");
+    const mid = document.getElementById("im-chart-scale-mid");
+    const bottom = document.getElementById("im-chart-scale-bottom");
+
+    if (top) top.textContent = formatNumber(highest);
+    if (mid) mid.textContent = formatNumber((highest + lowest) / 2);
+    if (bottom) bottom.textContent = formatNumber(lowest);
+  }
+
+  async function refreshLiveChartCandles() {
+    const requestedMarket = selectedChartMarket;
+    const requestedTimeframe = selectedChartTimeframe;
+    const status = document.getElementById("im-chart-data-status");
+    const subtitle = document.getElementById("im-chart-market-subtitle");
+
+    if (status) {
+      status.textContent = "Loading Upstox candles...";
+    }
+
+    try {
+      const response = await fetch(
+        `${LIVE_CANDLE_API_BASE}/api/live/candles/${requestedMarket}?timeframe=${requestedTimeframe}`
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok || !Array.isArray(result.candles)) {
+        throw new Error(result.error || "Live candle data is unavailable.");
+      }
+
+      if (
+        requestedMarket !== selectedChartMarket ||
+        requestedTimeframe !== selectedChartTimeframe
+      ) {
+        return;
+      }
+
+      latestLiveCandleData = result;
+      renderLiveChartCandles(result.candles);
+      const chartDecision = document.getElementById("im-chart-decision");
+
+      if (chartDecision) {
+        chartDecision.textContent = "LIVE OHLC";
+      }
+
+      const latest = result.latest || result.candles[result.candles.length - 1];
+      const price = document.getElementById("im-chart-last-price");
+
+      if (price && latest) {
+        price.textContent = formatNumber(latest.close);
+      }
+
+      if (status) {
+        status.textContent = "Upstox candle feed";
+      }
+
+      if (subtitle && latest) {
+        subtitle.textContent = `Upstox market-data candles - Last candle: ${formatChartTime(
+          latest.time
+        )} - Refreshes every 60 seconds during market hours.`;
+      }
+    } catch (error) {
+      console.error("Upstox live candle refresh failed:", error);
+
+      if (status) {
+        status.textContent = `Live error: ${error.message}`;
+      }
+
+      if (subtitle) {
+        subtitle.textContent =
+          "Live candle request failed. Open browser Console for the full error.";
+      }
+    }
+  }
+
+  function startLiveChartPolling() {
+    if (chartRefreshTimer) {
+      window.clearInterval(chartRefreshTimer);
+    }
+
+    refreshLiveChartCandles();
+
+    chartRefreshTimer = window.setInterval(() => {
+      refreshLiveChartCandles();
+    }, 60000);
+  }
+
+  function stopLiveChartPolling() {
+    if (chartRefreshTimer) {
+      window.clearInterval(chartRefreshTimer);
+      chartRefreshTimer = null;
+    }
+  }
+
+  function renderChartCandles(marketKey, timeframe) {
+    const candleContainer = document.getElementById("im-chart-candles");
+
+    if (!candleContainer) {
+      return;
+    }
+
+    const candles = createDemoCandles(marketKey, timeframe);
+
+    candleContainer.innerHTML = candles
+      .map(
+        (candle) => `
+          <span
+            class="candle ${candle.bullish ? "candle-bullish" : "candle-bearish"}"
+            style="
+              height: ${candle.height}px;
+              --wick-top: ${candle.wickTop}px;
+              --wick-bottom: ${candle.wickBottom}px;
+            "
+          ></span>
+        `
+      )
+      .join("");
+  }
+
+  function setChartLevelLabels(profile) {
+    const top = document.getElementById("im-chart-scale-top");
+    const mid = document.getElementById("im-chart-scale-mid");
+    const bottom = document.getElementById("im-chart-scale-bottom");
+    const resistanceLine = document.getElementById("im-chart-resistance-line");
+    const entryLine = document.getElementById("im-chart-entry-line");
+    const stopLine = document.getElementById("im-chart-stop-line");
+
+    if (top) top.textContent = formatNumber(profile.resistance + 40);
+    if (mid) mid.textContent = formatNumber(profile.price);
+    if (bottom) bottom.textContent = formatNumber(profile.support - 60);
+
+    if (resistanceLine) {
+      resistanceLine.querySelector("span").textContent = `Resistance ${formatNumber(profile.resistance)}`;
+    }
+
+    if (entryLine) {
+      entryLine.querySelector("span").textContent = `Entry ${profile.entry}`;
+    }
+
+    if (stopLine) {
+      stopLine.querySelector("span").textContent = `Stop ${profile.stop}`;
+    }
+  }
+
+  const MARKET_API_BASE = "https://indian-market-ai-api.onrender.com";
+
+  function formatPriceRange(from, to) {
+    if (from === null || from === undefined || to === null || to === undefined) {
+      return "Wait for confirmation";
+    }
+
+    return `${formatNumber(from)} - ${formatNumber(to)}`;
+  }
+
+  function formatPlanValue(value) {
+    if (value === null || value === undefined) {
+      return "Not active";
+    }
+
+    return formatNumber(value);
+  }
+
+  function updateChartWithBackendData(data) {
+    const profile = getDemoMarketProfile(selectedChartMarket);
+    const decisionLabel = data.decision?.label || "WAIT";
+    const tradePlan = data.trade_plan || {};
+    const levels = data.levels || {};
+
+    profile.price = data.price ?? profile.price;
+    profile.support = levels.support ?? profile.support;
+    profile.resistance = levels.resistance ?? profile.resistance;
+    profile.decision = decisionLabel;
+    profile.entry = formatPriceRange(
+      tradePlan.entry_zone?.from,
+      tradePlan.entry_zone?.to
+    );
+    profile.stop = formatPlanValue(tradePlan.stop_loss);
+    profile.target1 = formatPlanValue(tradePlan.target_1);
+    profile.target2 = formatPlanValue(tradePlan.target_2);
+    profile.exit = tradePlan.exit_rule || profile.exit;
+
+    const title = document.getElementById("im-chart-market-title");
+    const subtitle = document.getElementById("im-chart-market-subtitle");
+    const status = document.getElementById("im-chart-data-status");
+    const price = document.getElementById("im-chart-last-price");
+    const decision = document.getElementById("im-chart-decision");
+    const entry = document.getElementById("im-chart-entry-value");
+    const stop = document.getElementById("im-chart-stop-value");
+    const target1 = document.getElementById("im-chart-target-1-value");
+    const target2 = document.getElementById("im-chart-target-2-value");
+    const exit = document.getElementById("im-chart-exit-value");
+    const buyMarker = document.getElementById("im-chart-buy-marker");
+    const sellMarker = document.getElementById("im-chart-sell-marker");
+
+    if (!title) {
+      return;
+    }
+
+    title.textContent = `${data.market || profile.name} - ${selectedChartTimeframe}`;
+
+    if (!latestLiveCandleData) {
+      subtitle.textContent =
+        "Backend confirmation-engine data. Demo market values remain active until Upstox live data is connected.";
+      status.textContent = "Backend demo feed";
+      price.textContent = formatNumber(profile.price);
+      decision.textContent = profile.decision;
+      decision.className = `chart-decision ${decisionClass(profile.decision)}`;
+    }
+
+    if (entry) entry.textContent = profile.entry;
+    if (stop) stop.textContent = profile.stop;
+    if (target1) target1.textContent = profile.target1;
+    if (target2) target2.textContent = profile.target2;
+    if (exit) exit.textContent = profile.exit;
+
+    if (buyMarker) buyMarker.style.display = profile.decision.includes("BUY") ? "block" : "none";
+    if (sellMarker) sellMarker.style.display = profile.decision.includes("SELL") ? "block" : "none";
+
+    setChartLevelLabels(profile);
+
+    if (!latestLiveCandleData) {
+      renderChartCandles(selectedChartMarket, selectedChartTimeframe);
+    }
+  }
+
+  async function refreshChartFromBackend() {
+    const requestMarket = selectedChartMarket;
+
+    try {
+      const response = await fetch(
+        `${MARKET_API_BASE}/api/market/${requestMarket}`
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok || !result.data) {
+        throw new Error(result.error || "Backend market data is unavailable.");
+      }
+
+      if (requestMarket !== selectedChartMarket) {
+        return;
+      }
+
+      updateChartWithBackendData(result.data);
+    } catch (error) {
+      const status = document.getElementById("im-chart-data-status");
+
+      if (status) {
+        status.textContent = "Demo fallback";
+      }
+
+      console.error("Chart backend sync failed:", error);
+    }
+  }
+
+  function updateChartPage() {
+    const profile = getDemoMarketProfile(selectedChartMarket);
+    const title = document.getElementById("im-chart-market-title");
+    const subtitle = document.getElementById("im-chart-market-subtitle");
+    const status = document.getElementById("im-chart-data-status");
+    const price = document.getElementById("im-chart-last-price");
+    const decision = document.getElementById("im-chart-decision");
+    const entry = document.getElementById("im-chart-entry-value");
+    const stop = document.getElementById("im-chart-stop-value");
+    const target1 = document.getElementById("im-chart-target-1-value");
+    const target2 = document.getElementById("im-chart-target-2-value");
+    const exit = document.getElementById("im-chart-exit-value");
+    const buyMarker = document.getElementById("im-chart-buy-marker");
+    const sellMarker = document.getElementById("im-chart-sell-marker");
+
+    if (
+      !title || !subtitle || !status || !price || !decision ||
+      !entry || !stop || !target1 || !target2 || !exit || !buyMarker || !sellMarker
+    ) {
+      return;
+    }
+
+    title.textContent = `${profile.name} - ${selectedChartTimeframe}`;
+    subtitle.textContent = "Demo chart only. Upstox live candle feed will replace this after API setup.";
+    status.textContent = "Demo feed";
+    price.textContent = formatNumber(profile.price);
+    decision.textContent = profile.decision;
+    decision.className = `chart-decision ${decisionClass(profile.decision)}`;
+
+    entry.textContent = profile.entry;
+    stop.textContent = profile.stop;
+    target1.textContent = profile.target1;
+    target2.textContent = profile.target2;
+    exit.textContent = profile.exit;
+
+    buyMarker.style.display = profile.decision.includes("BUY") ? "block" : "none";
+    sellMarker.style.display = profile.decision.includes("SELL") ? "block" : "none";
+
+    setChartLevelLabels(profile);
+
+    if (!latestLiveCandleData) {
+      renderChartCandles(selectedChartMarket, selectedChartTimeframe);
+    }
+
+    refreshChartFromBackend();
+    startLiveChartPolling();
+  }
+
+  root.querySelectorAll("[data-chart-market]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedChartMarket = button.dataset.chartMarket;
+
+      root.querySelectorAll("[data-chart-market]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+
+      latestLiveCandleData = null;
+      updateChartPage();
+    });
+  });
+
+  root.querySelectorAll("[data-chart-timeframe]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedChartTimeframe = button.dataset.chartTimeframe;
+
+      root.querySelectorAll("[data-chart-timeframe]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+
+      latestLiveCandleData = null;
+      updateChartPage();
+    });
+  });
+
+  function renderGeminiReview(container, reviewText) {
+    const lines = String(reviewText || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    container.replaceChildren();
+
+    lines.forEach((line) => {
+      const headingMatch = line.match(/^#{1,6}\s*(.+)$/);
+      const numberedHeadingMatch = line.match(/^(\d+)\.\s+(.+)$/);
+      const bulletMatch = line.match(/^[-*]\s+(.+)$/);
+
+      const cleanText = (value) =>
+        value
+          .replace(/\*\*(.*?)\*\*/g, "$1")
+          .replace(/__(.*?)__/g, "$1")
+          .replace(/`(.*?)`/g, "$1")
+          .trim();
+
+      let element;
+
+      if (headingMatch) {
+        element = document.createElement("strong");
+        element.className = "gemini-review-heading";
+        element.textContent = cleanText(headingMatch[1]);
+      } else if (numberedHeadingMatch) {
+        element = document.createElement("strong");
+        element.className = "gemini-review-heading";
+        element.textContent = `${numberedHeadingMatch[1]}. ${cleanText(
+          numberedHeadingMatch[2]
+        )}`;
+      } else if (bulletMatch) {
+        element = document.createElement("div");
+        element.className = "gemini-review-bullet";
+        element.textContent = `- ${cleanText(bulletMatch[1])}`;
+      } else {
+        element = document.createElement("p");
+        element.className = "gemini-review-paragraph";
+        element.textContent = cleanText(line);
+      }
+
+      container.appendChild(element);
+    });
+  }
+
+  const chartAiButton = document.getElementById("im-chart-ai-button");
+
+  if (chartAiButton) {
+    chartAiButton.addEventListener("click", async () => {
+      const title = document.getElementById("im-chart-ai-title");
+      const text = document.getElementById("im-chart-ai-text");
+
+      chartAiButton.disabled = true;
+      chartAiButton.textContent = "Generating Gemini review...";
+      if (title) title.textContent = "Gemini review in progress";
+      if (text) {
+        text.textContent =
+          "Sending the selected index, timeframe, and technical research snapshot securely to the backend...";
+      }
+
+      try {
+        const response = await fetch(
+          "https://indian-market-ai-api.onrender.com/api/gemini/review",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              market: selectedChartMarket,
+              timeframe: selectedChartTimeframe
+            })
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || "Gemini review request failed.");
+        }
+
+        if (title) title.textContent = `Gemini review - ${result.market} - ${result.timeframe}`;
+        if (text) renderGeminiReview(text, result.review);
+
+        const validUntil = new Date(
+          new Date(result.generated_at).getTime() + result.valid_for_seconds * 1000
+        );
+
+        chartAiButton.textContent = `Review ready - valid until ${validUntil.toLocaleTimeString(
+          [],
+          {
+            hour: "2-digit",
+            minute: "2-digit"
+          }
+        )}`;
+      } catch (error) {
+        if (title) title.textContent = "Gemini review unavailable";
+        if (text) {
+          text.textContent =
+            error.message ||
+            "Could not generate the Gemini review. Please wait a moment and try again.";
+        }
+        chartAiButton.textContent = "Retry Gemini AI Review";
+      } finally {
+        chartAiButton.disabled = false;
+      }
+    });
+  }
+
+  updateChartPage();
+
+  // Expose start/stop hooks so the top-level mode toggle can pause background
+  // polling when this mode isn't visible, and resume it when switched back to.
+  window.IndianMarketMode = {
+    start() {
+      startTechnicalEnginePolling();
+      if (!chartRefreshTimer) startLiveChartPolling();
+    },
+    stop() {
+      stopTechnicalEnginePolling();
+      stopLiveChartPolling();
+    }
+  };
+
+  // This module loads after the mode-toggle skeleton has already applied the
+  // saved mode to the DOM, so check directly whether Indian mode is the
+  // currently visible one and start polling immediately if so.
+  const indianRootEl = document.getElementById("indianModeRoot");
+  if (indianRootEl && !indianRootEl.hidden) {
+    window.IndianMarketMode.start();
+  }
+})();
