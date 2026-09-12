@@ -92,11 +92,23 @@ def now_utc():
 
 def fetch_upstox_candles(instrument_key, unit, interval):
     """Fetches intraday candles from Upstox V3 and returns them in
-    chronological order as a list of dicts. Raises on any failure so callers
-    can decide how to fall back."""
+    chronological order as a list of dicts. If today has no data yet (market
+    closed today, e.g. weekend/holiday), falls back to the most recent
+    trading day's candles via the historical endpoint. Raises on any failure
+    so callers can decide how to fall back further (e.g. to demo data)."""
     if not UPSTOX_ACCESS_TOKEN:
         raise RuntimeError("Upstox access token is not configured on the server.")
 
+    candles = _fetch_upstox_intraday(instrument_key, unit, interval)
+    if candles:
+        return candles
+
+    # No candles for "today" (likely a non-trading day) — fetch the last
+    # available trading day's candles from the historical endpoint instead.
+    return _fetch_upstox_last_trading_day(instrument_key, unit, interval)
+
+
+def _fetch_upstox_intraday(instrument_key, unit, interval):
     encoded_instrument_key = quote(instrument_key, safe="")
     url = f"https://api.upstox.com/v3/historical-candle/intraday/{encoded_instrument_key}/{unit}/{interval}"
     headers = {
@@ -111,8 +123,44 @@ def fetch_upstox_candles(instrument_key, unit, interval):
 
     payload = response.json()
     raw_candles = (payload.get("data") or {}).get("candles") or []
+    return _parse_upstox_candles(raw_candles)
 
-    candles = [
+
+def _fetch_upstox_last_trading_day(instrument_key, unit, interval):
+    from datetime import timedelta
+
+    encoded_instrument_key = quote(instrument_key, safe="")
+    to_date = datetime.now(timezone.utc).date()
+    from_date = to_date - timedelta(days=7)
+    url = (
+        f"https://api.upstox.com/v3/historical-candle/{encoded_instrument_key}/{unit}/{interval}"
+        f"/{to_date.isoformat()}/{from_date.isoformat()}"
+    )
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+    }
+
+    response = requests.get(url, headers=headers, timeout=20)
+    if not response.ok:
+        raise RuntimeError(f"Upstox historical candle request failed: status={response.status_code}")
+
+    payload = response.json()
+    raw_candles = (payload.get("data") or {}).get("candles") or []
+    all_candles = _parse_upstox_candles(raw_candles)
+    if not all_candles:
+        return []
+
+    # Keep only the candles from the single most recent trading day present
+    # in the window, so indicators reflect one coherent session, not a
+    # multi-day blend.
+    last_day = all_candles[-1]["time"][:10]
+    return [c for c in all_candles if c["time"][:10] == last_day]
+
+
+def _parse_upstox_candles(raw_candles):
+    return [
         {
             "time": row[0],
             "open": float(row[1]),
@@ -124,7 +172,6 @@ def fetch_upstox_candles(instrument_key, unit, interval):
         for row in reversed(raw_candles)
         if isinstance(row, list) and len(row) >= 6
     ]
-    return candles
 
 
 def ema_series(values, period):
