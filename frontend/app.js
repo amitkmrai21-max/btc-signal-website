@@ -3630,6 +3630,10 @@ function clearLiveChartAiOverlay() {
       title: "Bank Nifty Research",
       subtitle: "Volatility-aware research and disciplined paper-trading preparation."
     },
+    "im-watchlist": {
+      title: "Watchlist",
+      subtitle: "Live last-traded price for popular NSE stocks."
+    },
     "im-live-chart": {
       title: "Live Market Chart",
       subtitle: "Custom chart workspace for NIFTY 50 and Bank Nifty."
@@ -3670,6 +3674,12 @@ function clearLiveChartAiOverlay() {
         if (imLiveChart) imLiveChart.applyOptions({ width: document.getElementById("im-lightweight-chart")?.clientWidth || 0 });
         if (typeof refreshLiveChartCandles === "function") refreshLiveChartCandles();
       }, 50);
+    }
+
+    if (pageId === "im-watchlist") {
+      if (typeof startWatchlistPolling === "function") startWatchlistPolling();
+    } else if (typeof stopWatchlistPolling === "function") {
+      stopWatchlistPolling();
     }
   }
 
@@ -4048,6 +4058,61 @@ function clearLiveChartAiOverlay() {
     if (technicalEngineTimer) {
       window.clearInterval(technicalEngineTimer);
       technicalEngineTimer = null;
+    }
+  }
+
+  function renderWatchlist(rows) {
+    const body = document.getElementById("im-watchlist-body");
+    const status = document.getElementById("im-watchlist-status");
+    if (!body) return;
+
+    if (!Array.isArray(rows) || !rows.length) {
+      body.innerHTML = `<tr><td colspan="2">No watchlist data available right now.</td></tr>`;
+      if (status) status.textContent = "Unavailable";
+      return;
+    }
+
+    body.innerHTML = rows
+      .map(
+        (row) => `
+          <tr>
+            <td>${escapeHtml(row.symbol)}</td>
+            <td>${formatNumber(row.last_price)}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    if (status) status.textContent = "Live";
+  }
+
+  async function fetchWatchlist() {
+    const status = document.getElementById("im-watchlist-status");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/watchlist`);
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Watchlist request failed.");
+      }
+      renderWatchlist(result.data);
+    } catch (error) {
+      console.error("Watchlist fetch failed:", error);
+      if (status) status.textContent = "Unavailable";
+    }
+  }
+
+  let watchlistTimer = null;
+
+  function startWatchlistPolling() {
+    if (watchlistTimer) return;
+    fetchWatchlist();
+    watchlistTimer = window.setInterval(fetchWatchlist, 20000);
+  }
+
+  function stopWatchlistPolling() {
+    if (watchlistTimer) {
+      window.clearInterval(watchlistTimer);
+      watchlistTimer = null;
     }
   }
 
@@ -4643,6 +4708,7 @@ function clearLiveChartAiOverlay() {
     stop() {
       stopTechnicalEnginePolling();
       stopLiveChartPolling();
+      stopWatchlistPolling();
     }
   };
 
