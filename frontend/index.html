@@ -1146,8 +1146,25 @@
   </main>
   </div>
 
-  <div id="indianModeRoot" hidden>
-    <div class="indian-market-mode">
+ <div id="indianModeRoot" hidden>
+<div class="indian-market-mode">
+  <div class="im-ticker-bar" id="im-ticker-bar">
+    <div class="im-ticker-item">
+      <span class="im-ticker-label">NIFTY 50</span>
+      <span class="im-ticker-value" id="im-ticker-nifty-price">--</span>
+      <span class="im-ticker-change" id="im-ticker-nifty-change">--</span>
+    </div>
+    <div class="im-ticker-item">
+      <span class="im-ticker-label">BANK NIFTY</span>
+      <span class="im-ticker-value" id="im-ticker-banknifty-price">--</span>
+      <span class="im-ticker-change" id="im-ticker-banknifty-change">--</span>
+    </div>
+    <div class="im-ticker-item im-ticker-status">
+      <span class="im-ticker-dot" id="im-ticker-dot"></span>
+      <span id="im-ticker-status-text">Connecting…</span>
+    </div>
+  </div>
+
   <div class="app-shell">
     <aside class="sidebar">
 
