@@ -2936,6 +2936,20 @@ body {
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+.app-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.app-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-tabs::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
 }
 
 .nav-action-group {
