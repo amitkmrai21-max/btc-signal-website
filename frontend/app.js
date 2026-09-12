@@ -3584,6 +3584,8 @@ function clearLiveChartAiOverlay() {
   const btcRoot = document.getElementById("btcModeRoot");
   const indianRoot = document.getElementById("indianModeRoot");
   const slider = document.getElementById("modeSliderToggle");
+  const brandTitle = document.getElementById("brandTitle");
+  const brandSubtitle = document.getElementById("brandSubtitle");
   if (!btcRoot || !indianRoot || !slider) return;
 
   function setMode(mode) {
@@ -3591,6 +3593,12 @@ function clearLiveChartAiOverlay() {
     btcRoot.hidden = isIndian;
     indianRoot.hidden = !isIndian;
     slider.dataset.mode = mode;
+    if (brandTitle) brandTitle.textContent = isIndian ? "Indian Market AI" : "BTC AI Signal";
+    if (brandSubtitle) {
+      brandSubtitle.textContent = isIndian
+        ? "NIFTY 50 and Bank Nifty research dashboard with paper-trading workflow"
+        : "Live market analysis, virtual paper trading and Gemini/Groq AI signals";
+    }
     try { localStorage.setItem("btcAiSignalActiveMode", mode); } catch (error) { /* ignore */ }
     if (window.IndianMarketMode) {
       if (isIndian) window.IndianMarketMode.start();
