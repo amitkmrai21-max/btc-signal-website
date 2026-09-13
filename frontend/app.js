@@ -3681,6 +3681,10 @@ function clearLiveChartAiOverlay() {
     } else if (typeof stopWatchlistPolling === "function") {
       stopWatchlistPolling();
     }
+
+    if (pageId === "im-dashboard" && typeof fetchAllTopMovers === "function") {
+      fetchAllTopMovers();
+    }
   }
 
   navButtons.forEach((button) => {
@@ -4100,6 +4104,50 @@ function clearLiveChartAiOverlay() {
       if (status) status.textContent = "Unavailable";
     }
   }
+
+  function renderTopMover(indexKey, mover) {
+    const nameEl = document.getElementById(`im-${indexKey}-mover-symbol`);
+    const priceEl = document.getElementById(`im-${indexKey}-mover-price`);
+    const changeEl = document.getElementById(`im-${indexKey}-mover-change`);
+    if (!nameEl || !priceEl || !changeEl) return;
+
+    if (!mover) {
+      nameEl.textContent = "Unavailable";
+      priceEl.textContent = "--";
+      changeEl.textContent = "--";
+      return;
+    }
+
+    const changePercent = mover.change_percent;
+    const isPositive = changePercent >= 0;
+    const arrow = isPositive ? "\u25B2" : "\u25BC";
+
+    nameEl.textContent = mover.symbol;
+    priceEl.textContent = formatNumber(mover.last_price);
+    changeEl.textContent = `${arrow} ${isPositive ? "+" : ""}${changePercent}%`;
+    changeEl.className = `im-mover-change ${isPositive ? "positive" : "negative"}`;
+  }
+
+  async function fetchTopMover(indexKey) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/top-mover/${indexKey}`);
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Top mover request failed.");
+      }
+      renderTopMover(indexKey, result.data.mover);
+    } catch (error) {
+      console.error(`Top mover fetch failed for ${indexKey}:`, error);
+      renderTopMover(indexKey, null);
+    }
+  }
+
+  function fetchAllTopMovers() {
+    fetchTopMover("nifty");
+    fetchTopMover("banknifty");
+  }
+
+  fetchAllTopMovers();
 
   let watchlistTimer = null;
 
