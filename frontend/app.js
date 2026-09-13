@@ -3978,8 +3978,16 @@ function clearLiveChartAiOverlay() {
     const tickerDot = document.getElementById("im-ticker-dot");
     const tickerStatusText = document.getElementById("im-ticker-status-text");
     if (tickerDot && tickerStatusText) {
-      tickerDot.classList.toggle("im-ticker-live", isLiveData);
-      tickerStatusText.textContent = isLiveData ? "Live" : "Demo";
+      const sessionStatus = data.session_status;
+      const isSessionLive = isLiveData && sessionStatus === "live";
+      tickerDot.classList.toggle("im-ticker-live", isSessionLive);
+      if (!isLiveData) {
+        tickerStatusText.textContent = "Demo";
+      } else if (sessionStatus === "live") {
+        tickerStatusText.textContent = "Live";
+      } else {
+        tickerStatusText.textContent = "Closed";
+      }
     }
 
     const dashPrice = document.getElementById(`im-dash-${marketKey}-price`);
