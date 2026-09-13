@@ -1,7 +1,7 @@
 import os
 import time
 from urllib.parse import quote
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -378,6 +378,10 @@ def get_real_market_snapshot(market_key):
     candles_15m = resample_candles(candles_5m, 3)
     candles_1h = resample_candles(candles_5m, 12)
 
+    latest_candle_date = candles_5m[-1]["time"][:10]
+    today_ist = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date().isoformat()
+    session_status = "live" if latest_candle_date == today_ist else "closed"
+
     snapshot = {
         "name": market["name"],
         "price": round(price, 2),
@@ -399,6 +403,7 @@ def get_real_market_snapshot(market_key):
         "trend_15m": classify_trend(candles_15m) if len(candles_15m) >= 21 else "neutral",
         "trend_1h": classify_trend(candles_1h) if len(candles_1h) >= 21 else "neutral",
         "data_source": "upstox_live",
+        "session_status": session_status,
     }
     _live_snapshot_cache[market_key] = {"data": snapshot, "fetched_at": time.time()}
     return snapshot
@@ -664,6 +669,7 @@ def calculate_confirmation_engine(market):
         "market": market["name"],
         "updated_at": now_utc(),
         "data_source": market.get("data_source", "demo_fallback"),
+        "session_status": market.get("session_status", "closed"),
         "price": price,
         "open": open_price,
         "high": market["high"],
