@@ -754,9 +754,110 @@ DEFAULT_WATCHLIST_SYMBOLS = [
     "SBIN", "BHARTIARTL", "ITC", "KOTAKBANK", "LT",
 ]
 
+# Not the complete official 50/12 — Upstox does not provide an index
+# constituents API, so this is a well-known, stable subset of large,
+# long-standing constituents used only to find a representative "biggest
+# mover" for each index. Reviewed twice a year by NSE (Mar/Sep), so this
+# list can drift slightly out of date over time.
+NIFTY50_TOP_MOVER_SYMBOLS = [
+    "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN",
+    "BHARTIARTL", "ITC", "KOTAKBANK", "LT", "HINDUNILVR", "TITAN",
+    "SUNPHARMA", "BAJFINANCE", "MARUTI", "ASIANPAINT", "AXISBANK",
+    "NTPC", "ULTRACEMCO", "WIPRO", "ADANIENT", "TATAMOTORS",
+    "TATASTEEL", "POWERGRID", "ONGC",
+]
+
+BANKNIFTY_TOP_MOVER_SYMBOLS = [
+    "HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK",
+    "INDUSINDBK", "BANKBARODA", "PNB", "FEDERALBNK", "IDFCFIRSTB",
+    "AUBANK", "CANBK",
+]
+
 _instrument_key_cache = {}
 _watchlist_cache = {}
 WATCHLIST_CACHE_SECONDS = 20
+TOP_MOVER_CACHE_SECONDS = 30
+_top_mover_cache = {}
+
+
+def fetch_quotes_with_change(symbols):
+    """Resolves symbols to instrument keys and fetches LTP + previous close
+    (via the LTP V3 endpoint's `cp` field) in one batched call, returning
+    each symbol's price and change percent."""
+    key_map = {}
+    for symbol in symbols:
+        try:
+            key_map[symbol] = resolve_instrument_key(symbol)
+        except Exception as error:
+            app.logger.warning("Could not resolve %s: %s", symbol, error)
+
+    if not key_map:
+        return []
+
+    instrument_keys = ",".join(key_map.values())
+    url = f"https://api.upstox.com/v3/market-quote/ltp?instrument_key={quote(instrument_keys, safe=',')}"
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+    }
+
+    response = requests.get(url, headers=headers, timeout=20)
+    if not response.ok:
+        raise RuntimeError(f"LTP quote request failed: status={response.status_code}")
+
+    quote_data = (response.json().get("data") or {})
+    reverse_map = {v: k for k, v in key_map.items()}
+
+    results = []
+    for info in quote_data.values():
+        instrument_key = info.get("instrument_token", "")
+        symbol = reverse_map.get(instrument_key)
+        if not symbol:
+            continue
+        last_price = info.get("last_price")
+        previous_close = info.get("cp")
+        change_percent = None
+        if last_price is not None and previous_close:
+            change_percent = round(((last_price - previous_close) / previous_close) * 100, 2)
+        results.append(
+            {
+                "symbol": symbol,
+                "last_price": last_price,
+                "previous_close": previous_close,
+                "change_percent": change_percent,
+            }
+        )
+    return results
+
+
+@app.get("/api/top-mover/<index_key>")
+def top_mover(index_key):
+    index_key = index_key.lower().strip()
+    symbol_lists = {"nifty": NIFTY50_TOP_MOVER_SYMBOLS, "banknifty": BANKNIFTY_TOP_MOVER_SYMBOLS}
+
+    if index_key not in symbol_lists:
+        return jsonify({"ok": False, "error": "Unknown index. Use: nifty or banknifty."}), 404
+
+    if not UPSTOX_ACCESS_TOKEN:
+        return jsonify({"ok": False, "error": "Upstox access token is not configured on the server."}), 503
+
+    cached = _top_mover_cache.get(index_key)
+    if cached and time.time() - cached["fetched_at"] < TOP_MOVER_CACHE_SECONDS:
+        return jsonify({"ok": True, "data": cached["data"]})
+
+    try:
+        quotes = fetch_quotes_with_change(symbol_lists[index_key])
+        rated = [q for q in quotes if q["change_percent"] is not None]
+        if not rated:
+            return jsonify({"ok": False, "error": "No quote data available right now."}), 502
+
+        biggest_mover = max(rated, key=lambda q: abs(q["change_percent"]))
+        result = {"index": index_key, "mover": biggest_mover, "updated_at": now_utc()}
+        _top_mover_cache[index_key] = {"data": result, "fetched_at": time.time()}
+        return jsonify({"ok": True, "data": result})
+    except Exception as error:
+        app.logger.warning("Top mover fetch failed for %s: %s", index_key, error)
+        return jsonify({"ok": False, "error": "Could not fetch top mover data right now."}), 502
 
 
 def resolve_instrument_key(trading_symbol, exchange="NSE", segment="EQ"):
